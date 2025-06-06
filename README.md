@@ -5,18 +5,18 @@
 
 <div align="center">
   <!-- GitHub License -->
-  <a href="https://github.com/PurpleCHOIms/Decepticon/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/PurpleCHOIms/Decepticon?style=for-the-badge&color=blue" alt="License: Apache 2.0">
+  <a href="https://github.com/PurpleAILAB/Decepticon/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/PurpleAILAB/Decepticon?style=for-the-badge&color=blue" alt="License: Apache 2.0">
   </a>
 
   <!-- GitHub Stars -->
-  <a href="https://github.com/PurpleCHOIms/Decepticon/stargazers">
+  <a href="https://github.com/PurpleAILAB/Decepticon/stargazers">
     <img src="https://img.shields.io/github/stars/PurpleCHOIms/Decepticon?style=for-the-badge&color=yellow" alt="Stargazers">
   </a>
 
   <!-- GitHub Contributors -->
-  <a href="https://github.com/PurpleCHOIms/Decepticon/graphs/contributors">
-    <img src="https://img.shields.io/github/contributors/PurpleCHOIms/Decepticon?style=for-the-badge&color=orange" alt="Contributors">
+  <a href="https://github.com/PurpleAILAB/Decepticon/graphs/contributors">
+    <img src="https://img.shields.io/github/contributors/PurpleAILAB/Decepticon?style=for-the-badge&color=orange" alt="Contributors">
   </a>
 
   <br/>
