@@ -1,0 +1,27 @@
+{
+    "planner": {
+
+    },
+
+    "summary": {
+        
+    },
+
+    "reconnaissance": {
+        "reconnaissance": {
+            "url": "http://localhost:3001/mcp",
+            "transport": "streamable_http"
+        }
+    },
+    "initial_access": {
+        "initial_access": {
+            "url": "http://localhost:3002/mcp",
+            "transport": "streamable_http"
+        },
+        "interactive_exec": {
+            "url": "http://localhost:3003/mcp",
+            "transport": "streamable_http"
+        }
+    }
+
+}

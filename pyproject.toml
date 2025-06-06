@@ -1,0 +1,39 @@
+[project]
+name = "decepticon"
+version = "0.1.0"
+description = "Automated red team testing framework"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+dependencies = [
+    "fastapi>=0.95.0",
+    "ipython>=8.18.1",
+    "langchain-anthropic>=0.3.13",
+    "langchain-deepseek>=0.1.3",
+    "langchain-google-genai>=2.1.4",
+    "langchain-groq>=0.3.2",
+    "langchain-mcp-adapters==0.1.0",
+    "langchain-ollama>=0.3.3",
+    "langchain-openai>=0.3.16",
+    "langchain-perplexity>=0.1.1",
+    "langchain-teddynote>=0.3.45",
+    "langchain-xai>=0.2.3",
+    "langchain[anthropic,google-genai,groq,mistralai,openai]>=0.3.25",
+    "langgraph>=0.4.3",
+    "langgraph-cli[inmem]>=0.2.10",
+    "langgraph-prebuilt>=0.1.8",
+    "langgraph-supervisor>=0.0.21",
+    "langgraph-swarm>=0.0.11",
+    "langmem>=0.0.25",
+    "mcp>=1.8.1",
+    "pymetasploit3>=1.0.6",
+    "rich>=14.0.0",
+    "streamlit>=1.45.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
