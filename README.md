@@ -11,7 +11,7 @@
 
   <!-- GitHub Stars -->
   <a href="https://github.com/PurpleAILAB/Decepticon/stargazers">
-    <img src="https://img.shields.io/github/stars/PurpleCHOIms/Decepticon?style=for-the-badge&color=yellow" alt="Stargazers">
+    <img src="https://img.shields.io/github/stars/PurpleAILAB/Decepticon?style=for-the-badge&color=yellow" alt="Stargazers">
   </a>
 
   <!-- GitHub Contributors -->
