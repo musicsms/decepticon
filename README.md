@@ -341,14 +341,14 @@ Help us make Decepticon better by filing issues or submitting PRs (see the secti
 
 ---
 
-## 🤝 Contributing
+## 🤝 Contribution
 
 We welcome contributions from the community to make this project better, more powerful, and more secure.  
 Whether you're an experienced developer, a security researcher, or just getting started in open-source, there are many ways to get involved.
 
 ### What You Can Contribute
 
-#### Migrate Security Tools to MCP Format
+#### 1. Migrate Security Tools to MCP Format
 
 Help transform existing security tools into modular, LangGraph-compatible **MCP (Modular Command Protocol) tools**.
 
@@ -356,7 +356,7 @@ Help transform existing security tools into modular, LangGraph-compatible **MCP 
 - Ensure compatibility with `langgraph-mcp-adapter`
 - Place them under the `src/tools/mcp/`
 
-#### Develop ReAct-style Red Team Agents
+#### 2. Develop ReAct-style Red Team Agents
 
 Design and refine ReAct-style agents for Red Team operations:
 
@@ -371,7 +371,7 @@ Contribute by:
 - Implementing new agents with specific capabilities
 - Improving task planning and memory usage
 
-#### Architect Multi-Agent Flows
+#### 3. Architect Multi-Agent Flows
 
 Contribute to the design and optimization of the multi-agent orchestration layer:
 
