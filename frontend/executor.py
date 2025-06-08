@@ -106,7 +106,7 @@ class DirectExecutor:
             self._swarm = None
             raise Exception(f"Swarm initialization failed: {str(e)}")
     
-    async def execute_workflow(self, user_input: str) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute_workflow(self, user_input: str, config: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         워크플로우 실행 
         """
@@ -114,6 +114,10 @@ class DirectExecutor:
             raise Exception("Executor not ready - swarm not initialized")
         
         print(f"[DEBUG] Starting workflow execution: {user_input[:50]}...")
+        
+        # config가 제공되면 사용, 없으면 기본 config 사용
+        execution_config = config if config else self._config
+        print(f"[DEBUG] Using config: {execution_config}")
         
         # 메시지 ID 추적 초기화
         self._processed_message_ids = set()
@@ -126,7 +130,7 @@ class DirectExecutor:
             async for namespace, output in self._swarm.astream(
                 inputs,
                 stream_mode="updates",
-                config=self._config,
+                config=execution_config,  # 업데이트된 config 사용
                 subgraphs=True
             ):
                 step_count += 1

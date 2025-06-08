@@ -7,9 +7,25 @@ import json
 from pathlib import Path
 import re
 from dotenv import load_dotenv
+import hashlib
 
 # .env 파일 로드
 load_dotenv()
+
+# persistence 설정 추가
+from src.utils.memory import (
+    get_persistence_status, 
+    get_debug_info, 
+    create_thread_config,
+    create_memory_namespace
+)
+
+# 로깅 시스템 추가
+from src.utils.logging.conversation_logger import (
+    get_conversation_logger,
+    EventType
+)
+from src.utils.logging.data_collector import get_data_collector
 
 ICON = "assets\logo.png"
 ICON_TEXT = "assets\logo_text1.png"
@@ -40,6 +56,8 @@ from frontend.message import CLIMessageProcessor
 from frontend.chat_ui import ChatUI
 from frontend.terminal_ui import TerminalUI
 from frontend.model import ModelSelectionUI  # 새로운 모델 선택 UI
+from frontend.components.simple_log_manager import SimpleLogManagerUI  # 간단한 로그 관리 UI
+from frontend.components.chat_replay_manager import ChatReplayManager  # 채팅 재생 기능
 
 # 터미널 UI CSS 적용
 terminal_ui = TerminalUI()
@@ -79,7 +97,14 @@ class DecepticonApp:
         # 모델 선택 UI 초기화
         self.model_ui = ModelSelectionUI(self.theme_manager)
         
+        # 간단한 로그 관리 UI 초기화
+        self.log_manager_ui = SimpleLogManagerUI()
+        
+        # 채팅 재생 기능 초기화
+        self.chat_replay = ChatReplayManager()
+        
         self._initialize_session_state()
+        self._initialize_user_session()
         self._setup_executor()
         
         log_debug("App initialized", {"config": self.env_config})
@@ -103,7 +128,7 @@ class DecepticonApp:
             "agent_status_placeholders": {},
             "terminal_placeholder": None,
             "event_history": [],
-            "app_stage": "model_selection",  # 앱 단계: model_selection, main_app
+            "app_stage": "model_selection",  # 앱 단계: model_selection, main_app, log_manager
         }
         
         defaults["debug_mode"] = self.env_config.get("debug_mode", False)
@@ -111,6 +136,38 @@ class DecepticonApp:
         for key, default_value in defaults.items():
             if key not in st.session_state:
                 st.session_state[key] = default_value
+    
+    def _initialize_user_session(self):
+        """사용자 세션 및 thread config 초기화"""
+        # 사용자 ID 생성 (브라우저 기반)
+        if "user_id" not in st.session_state:
+            # 브라우저 세션 기반 고유 ID 생성
+            browser_info = f"{st.session_state.get('_session_id', '')}{datetime.now().strftime('%Y%m%d')}"
+            user_hash = hashlib.md5(browser_info.encode()).hexdigest()[:8]
+            st.session_state.user_id = f"user_{user_hash}"
+            log_debug(f"Generated user ID: {st.session_state.user_id}")
+        
+        # Thread configuration 생성
+        if "thread_config" not in st.session_state:
+            st.session_state.thread_config = create_thread_config(
+                user_id=st.session_state.user_id,
+                conversation_id=None  # 기본 대화
+            )
+            log_debug(f"Created thread config: {st.session_state.thread_config}")
+        
+        # 메모리 네임스페이스 생성
+        if "memory_namespace" not in st.session_state:
+            st.session_state.memory_namespace = create_memory_namespace(
+                user_id=st.session_state.user_id,
+                namespace_type="memories"
+            )
+            log_debug(f"Created memory namespace: {st.session_state.memory_namespace}")
+        
+        # 로깅 시스템 초기화
+        if "conversation_logger" not in st.session_state:
+            st.session_state.conversation_logger = get_conversation_logger()
+            st.session_state.data_collector = get_data_collector()
+            log_debug("Conversation logger initialized")
     
     def _setup_executor(self):
         """DirectExecutor 설정"""
@@ -165,6 +222,16 @@ class DecepticonApp:
         try:
             log_debug(f"Starting async executor initialization with model: {model_info}")
             
+            # 로깅 세션 시작
+            session_id = st.session_state.conversation_logger.start_session(
+                user_id=st.session_state.user_id,
+                thread_id=st.session_state.thread_config["configurable"]["thread_id"],
+                platform="web",
+                model_info=model_info
+            )
+            st.session_state.logging_session_id = session_id
+            log_debug(f"Started logging session: {session_id}")
+            
             if model_info:
                 await self.executor.initialize_swarm(model_info)
                 st.session_state.current_model = model_info
@@ -183,6 +250,10 @@ class DecepticonApp:
         except Exception as e:
             error_msg = f"Failed to initialize AI agents: {str(e)}"
             log_debug(f"Executor initialization failed: {error_msg}")
+            
+            # 에러 로깅
+            if hasattr(st.session_state, 'conversation_logger'):
+                st.session_state.conversation_logger.log_workflow_error(error_msg)
             
             st.session_state.executor_ready = False
             st.session_state.initialization_in_progress = False
@@ -247,6 +318,11 @@ class DecepticonApp:
         
         log_debug(f"Executing workflow: {user_input[:50]}...")
         
+        # 워크플로우 시작 로깅
+        workflow_start_time = time.time()
+        workflow_id = st.session_state.conversation_logger.log_workflow_start(user_input)
+        st.session_state.conversation_logger.log_user_input(user_input)
+        
         user_message = self.message_processor._create_user_message(user_input)
         st.session_state.structured_messages.append(user_message)
         
@@ -260,7 +336,10 @@ class DecepticonApp:
                 event_count = 0
                 agent_activity = {}
                 
-                async for event in self.executor.execute_workflow(user_input):
+                async for event in self.executor.execute_workflow(
+                    user_input,
+                    config=st.session_state.thread_config  # ✅ thread config 전달
+                ):
                     event_count += 1
                     st.session_state.event_history.append(event)
                     
@@ -280,6 +359,22 @@ class DecepticonApp:
                                 st.session_state.structured_messages.append(frontend_message)
                                 
                                 agent_name = event.get("agent_name", "Unknown")
+                                message_type = event.get("message_type", "unknown")
+                                content = event.get("content", "")
+                                
+                                # 상세 로깅
+                                if message_type == "ai":
+                                    st.session_state.conversation_logger.log_agent_response(
+                                        agent_name=agent_name,
+                                        content=content
+                                    )
+                                elif message_type == "tool":
+                                    tool_name = event.get("tool_name", "Unknown Tool")
+                                    st.session_state.conversation_logger.log_tool_execution(
+                                        tool_name=tool_name,
+                                        content=content
+                                    )
+                                
                                 if agent_name not in agent_activity:
                                     agent_activity[agent_name] = 0
                                 agent_activity[agent_name] += 1
@@ -299,12 +394,24 @@ class DecepticonApp:
                         
                         elif event_type == "workflow_complete":
                             status.update(label="Workflow completed!", state="complete")
+                            
+                            # 워크플로우 완료 로깅
+                            execution_time = time.time() - workflow_start_time
+                            st.session_state.conversation_logger.log_workflow_complete(
+                                step_count=event_count,
+                                execution_time=execution_time
+                            )
+                            
                             log_debug(f"Workflow completed. Processed {event_count} events")
                         
                         elif event_type == "error":
                             error_msg = event.get("error", "Unknown error")
                             status.update(label=f"Error: {error_msg}", state="error")
                             st.error(f"Workflow error: {error_msg}")
+                            
+                            # 에러 로깅
+                            st.session_state.conversation_logger.log_workflow_error(error_msg)
+                            
                             log_debug(f"Workflow error: {error_msg}")
                         
                         self._update_agent_status_from_events(agents_container)
@@ -320,6 +427,10 @@ class DecepticonApp:
         
         except Exception as e:
             st.error(f"Workflow execution error: {str(e)}")
+            
+            # 예외 로깅
+            st.session_state.conversation_logger.log_workflow_error(str(e))
+            
             log_debug(f"Workflow execution error: {str(e)}")
         
         finally:
@@ -429,6 +540,10 @@ class DecepticonApp:
                         st.rerun()
                     if st.button("Reset Session"):
                         self.reset_session()
+                    # 로그 관리 버튼 추가
+                    if st.button("📊 View Logs", use_container_width=True):
+                        st.session_state.app_stage = "log_manager"
+                        st.rerun()
                 elif st.session_state.initialization_in_progress:
                     st.info("Initializing...")
                 elif st.session_state.initialization_error:
@@ -446,6 +561,36 @@ class DecepticonApp:
                 st.text(f"Messages: {len(st.session_state.structured_messages)}")
                 st.text(f"Events: {len(st.session_state.event_history)}")
                 st.text(f"Step: {st.session_state.current_step}")
+                
+                # Persistence 상태 정보 추가
+                if st.session_state.debug_mode:
+                    st.subheader("Persistence Info")
+                    persistence_status = get_persistence_status()
+                    st.json(persistence_status)
+                    
+                    st.subheader("Session Info")
+                    session_info = {
+                        "user_id": st.session_state.get("user_id", "Not set"),
+                        "thread_config": st.session_state.get("thread_config", {}),
+                        "memory_namespace": st.session_state.get("memory_namespace", "Not set")
+                    }
+                    st.json(session_info)
+                    
+                    st.subheader("Logging Info")
+                    if hasattr(st.session_state, 'conversation_logger'):
+                        current_session = st.session_state.conversation_logger.current_session
+                        if current_session:
+                            logging_info = {
+                                "session_id": current_session.session_id,
+                                "total_events": current_session.total_events,
+                                "total_messages": current_session.total_messages,
+                                "agents_used": current_session.agents_used
+                            }
+                            st.json(logging_info)
+                        else:
+                            st.text("No active logging session")
+                    else:
+                        st.text("Logger not initialized")
         
         # 레이아웃: 두 개의 열로 분할 (채팅과 터미널) - 메인 앱에서만 표시
         chat_column, terminal_column = st.columns([2, 1])
@@ -460,31 +605,62 @@ class DecepticonApp:
         
         # 채팅 영역 처리
         with chat_column:
-            chat_height = self.env_config.get("chat_height", 700)
-            chat_container = st.container(height=chat_height, border=False)
+            # 재생 모드 처리
+            if self.chat_replay.is_replay_mode():
+                # 재생 모드 시작 (세션 로드)
+                if not self.chat_replay.start_replay_mode():
+                    st.error("Failed to start replay mode")
+                    return
+                
+                # 재생 컨트롤 표시
+                self.chat_replay.display_replay_controls(st.container())
+                
+                # 재생 메시지들 표시
+                chat_height = self.env_config.get("chat_height", 700)
+                chat_container = st.container(height=chat_height, border=False)
+                
+                with chat_container:
+                    messages_area = st.container()
+                    
+                    with messages_area:
+                        replay_messages = self.chat_replay.get_replay_messages()
+                        for message in replay_messages:
+                            self.chat_replay.display_replay_message(message, messages_area)
             
-            with chat_container:
-                # 메시지 표시 영역
-                messages_area = st.container()
+            else:
+                # 일반 모드
+                chat_height = self.env_config.get("chat_height", 700)
+                chat_container = st.container(height=chat_height, border=False)
                 
-                # 입력창 영역
-                input_container = st.container()
-                
-                # 기존 메시지 표시
-                with messages_area:
-                    if st.session_state.debug_mode:
-                        st.warning("Debug Mode: Event data will be displayed during processing")
+                with chat_container:
+                    # 메시지 표시 영역
+                    messages_area = st.container()
                     
-                    # 저장된 구조화 메시지 표시
-                    if not st.session_state.workflow_running:
-                        self.chat_ui.display_messages(st.session_state.structured_messages, messages_area)
-                
-                # 사용자 입력 처리
-                with input_container:
-                    user_input = st.chat_input("Type your red team request here...")
+                    # 입력창 영역
+                    input_container = st.container()
                     
-                    if user_input and not st.session_state.workflow_running:
-                        asyncio.run(self.execute_workflow(user_input, messages_area, agents_container))
+                    # 기존 메시지 표시
+                    with messages_area:
+                        if st.session_state.debug_mode:
+                            st.warning("Debug Mode: Event data will be displayed during processing")
+                        
+                        # 저장된 구조화 메시지 표시
+                        if not st.session_state.workflow_running:
+                            self.chat_ui.display_messages(st.session_state.structured_messages, messages_area)
+                    
+                    # 사용자 입력 처리 (재생 모드가 아닐 때만)
+                    with input_container:
+                        if not self.chat_replay.is_replay_mode():
+                            user_input = st.chat_input("Type your red team request here...")
+                            
+                            if user_input and not st.session_state.workflow_running:
+                                asyncio.run(self.execute_workflow(user_input, messages_area, agents_container))
+                        else:
+                            st.info("💡 Replay mode active. Use controls above to navigate through the session.")
+    
+    def run_log_manager(self):
+        """간단한 로그 관리 화면 실행"""
+        self.log_manager_ui.display_simple_log_page()
     
     def run(self):
         """애플리케이션 실행 - 단계별 라우팅"""
@@ -493,6 +669,8 @@ class DecepticonApp:
             self.run_model_selection()
         elif st.session_state.app_stage == "main_app":
             self.run_main_app()
+        elif st.session_state.app_stage == "log_manager":
+            self.run_log_manager()
         else:
             # 기본값: 모델 선택
             st.session_state.app_stage = "model_selection"
