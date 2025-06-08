@@ -35,7 +35,7 @@ async def create_agents():
     return [recon, initaccess, planner, summary]
 
 async def create_dynamic_swarm():
-    """동적으로 swarm 생성 - 모델 선택 후 호출"""
+    """동적으lang로 swarm 생성 - 모델 선택 후 호출"""
     agents = await create_agents()
     workflow = create_swarm(
         agents=agents,

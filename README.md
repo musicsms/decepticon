@@ -100,7 +100,6 @@ Delegate repetitive and manual tasks to agents, and focus on intuition and decis
 
 > ### *Prepare before AI Hacks First.*
 
----
 
 ## Quick Start
 
@@ -143,9 +142,10 @@ python cli.py
 streamlit run app.py
 ```
 
----
 
-## Agents
+## Key features
+### Agents
+
 
 #### 🔴 Red Team Agents
 - **Reconnaissance Agent**: Network scanning, service enumeration, vulnerability discovery
@@ -160,9 +160,8 @@ streamlit run app.py
 - **Summary Agent**: Analysis compilation, reporting, and documentation
 - **Supervisor Agent**(Planned): Workflow orchestration and decision routing
 
----
 
-## Multi-Architecture
+### Multi-Agent-System Architecture
 
 **Flexible Architecture Options:**
 - **Swarm Architecture**: Direct peer-to-peer agent communication and collaboration
@@ -170,7 +169,6 @@ streamlit run app.py
 - **Hybrid Architecture**(Planned): Combined approach with both direct communication and centralized oversight
 - **your custom Architecture**
 
----
 
 ## Installation
 
@@ -219,7 +217,7 @@ LANGGRAPH_API_URL=http://127.0.0.1:2024
 docker-compose up -d
 ```
 
-### 5. Start MCP Server
+### 5. Run MCP Server
 ```bash
 python src/tools/mcp/Inital_Access.py
 python src/tools/mcp/Recoonaissance.py
@@ -227,9 +225,6 @@ python src/tools/mcp/Recoonaissance.py
 
 ### 6. CLI 
 ```bash
-# Activate virtual environment (if not already active)
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
 # Run CLI
 python cli.py
 ```
@@ -242,7 +237,6 @@ streamlit run app.py
 ```
 **Access the interface at:** http://localhost:8501
 
----
 
 ## Advanced AI Models
 
@@ -264,7 +258,7 @@ Support for **15+ AI providers** and **30+ models**:
 - **Alibaba**: Qwen 3 models
 - **Mistral**: Mistral Small 3.1 (24B)
 
----
+
 
 ## MCP Support
 
@@ -324,7 +318,6 @@ Tools are grouped by **agent names**, and each agent can have multiple MCP serve
 2. Add the corresponding entry in `mcp_config.json`
 3. Restart the application to load the new tool
 
----
 
 ## ⚠️ Experimental Technology Disclaimer
 
@@ -339,7 +332,7 @@ We're building this project openly with the community and warmly welcome:
 
 Help us make Decepticon better by filing issues or submitting PRs (see the section below for how to contribute)!
 
----
+
 
 ## 🤝 Contribution
 
@@ -396,7 +389,7 @@ Join our [Discord server](https://discord.gg/XGytzHZU) to connect with other dev
 
 Whether you're looking for help with contributions, want to discuss new features, or just want to chat about cybersecurity and AI, our community is here to support you.
 
----
+
 
 ## 📝 License
 

@@ -6,18 +6,17 @@ from src.prompts.prompt_loader import load_initaccess_prompt
 from src.tools.handoff import handoff_to_planner, handoff_to_reconnaissance, handoff_to_summary
 from src.utils.llm.config_manager import get_current_llm
 
-# store = InMemoryStore(
-#     index={
-#         "dims": 1536,
-#         "embed": "openai:text-embedding-3-small",
-#     }
-# ) 
+store = InMemoryStore(
+    index={
+        "dims": 1536,
+        "embed": "openai:text-embedding-3-small",
+    }
+) 
 
 from src.utils.mcp.mcp_loader import load_mcp_tools
 
 async def make_initaccess_agent():
-    # 'initial_access' 서버명으로 MCP 도구 로드 (mcp_config.json에 맞게 키 이름 맞추기)
-    # 메모리에서 LLM 로드 (없으면 기본값 사용)
+
     llm = get_current_llm()
     if llm is None:
         from langchain_anthropic import ChatAnthropic
@@ -31,14 +30,14 @@ async def make_initaccess_agent():
         handoff_to_reconnaissance,
         handoff_to_planner,
         handoff_to_summary,
-        # create_manage_memory_tool(namespace=("memories",)),
-        # create_search_memory_tool(namespace=("memories",))
+        create_manage_memory_tool(namespace=("memories",)),
+        create_search_memory_tool(namespace=("memories",))
     ]
 
     agent = create_react_agent(
         llm,
         tools=swarm_tools,
-        # store=store,
+        store=store,
         name="Initial_Access",
         prompt=load_initaccess_prompt("swarm")
     )

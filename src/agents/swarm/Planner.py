@@ -6,12 +6,12 @@ from src.prompts.prompt_loader import load_planner_prompt
 from src.tools.handoff import handoff_to_initial_access, handoff_to_reconnaissance, handoff_to_summary
 from src.utils.llm.config_manager import get_current_llm
 
-# store = InMemoryStore(
-#     index={
-#         "dims": 1536,
-#         "embed": "openai:text-embedding-3-small",
-#     }
-# ) 
+store = InMemoryStore(
+    index={
+        "dims": 1536,
+        "embed": "openai:text-embedding-3-small",
+    }
+) 
 
 from src.utils.mcp.mcp_loader import load_mcp_tools
 
@@ -29,15 +29,15 @@ async def make_planner_agent():
     swarm_tools = mcp_tools + [
         handoff_to_reconnaissance, 
         handoff_to_initial_access, 
-        handoff_to_summary
-        # create_manage_memory_tool(namespace=("memories",)),
-        # create_search_memory_tool(namespace=("memories",))
+        handoff_to_summary,
+        create_manage_memory_tool(namespace=("memories",)),
+        create_search_memory_tool(namespace=("memories",))
     ]
 
     agent = create_react_agent(
         llm,
         tools=swarm_tools,
-        # store=store,
+        store=store,
         name="Planner",
         prompt=load_planner_prompt("swarm")
     )
