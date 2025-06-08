@@ -236,7 +236,6 @@ python cli.py
 # Run web interface
 streamlit run app.py
 ```
-**Access the interface at:** http://localhost:8501
 
 
 ## Advanced AI Models
