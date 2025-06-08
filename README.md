@@ -37,9 +37,9 @@
 
 <div align="center">
 
-| | Preview | Full |
+| |  |  |
 |---|---------|------|
-| **Web** | ![web](.github/web.gif) | [Full Demo](https://github.com/user-attachments/assets/a5286b0f-9b54-4e00-942d-ad3f8a1e7a5d) |
+| **Web** | ![web](.github/web.gif) | [Full Demo](https://github.com/user-attachments/assets/da398ad3-e692-47e3-b0e7-47f01b24e0cc) |
 | **CLI** | ![cli](.github/cli.gif) | [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
 
 </div>
@@ -72,7 +72,7 @@
     - [Develop ReAct-style Red Team Agents](#-develop-react-style-red-team-agents)
     - [Architect Multi-Agent Flows](#-architect-multi-agent-flows)
   - [How to Contribute](#-how-to-contribute)
-  - [Join the Community](#-join-the-community)
+- [Join the Community](#-join-the-community)
 - [📝 License](#-license)
 
 </details>
@@ -243,21 +243,14 @@ streamlit run app.py
 Support for **15+ AI providers** and **30+ models**:
 
 ### ☁️ Cloud Models
-- **OpenAI**: GPT-4o, GPT-4o Mini, O1 Preview, O1 Mini
-- **Anthropic**: Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3.7 Sonnet
-- **Google**: Gemini 2.0 Flash, Gemini 2.5 Pro  
-- **Groq**: Ultra-fast Llama 4 models (Scout, Maverick)
-- **Mistral**: Mistral Large, Mistral Small
-- **xAI**: Grok Beta
-- **Perplexity**: Sonar models with web search
+- **OpenAI**: 4.1, 4o, 4o Mini, o4 Mini, o3 Mini, o1 Mini, o1, o3
+- **Anthropic**: Sonnet 4, Opus 4, Sonnet 3.7, Sonnet 3.5, Haiku 3.5, 
+- **Google**: Planned
+- **Groq**: Planned
+- **OpenRouter**
 
 ### 🏠 Local Models (Ollama)
-- **Meta**: Llama 3.3 70B, Llama 3.1 models
-- **DeepSeek**: DeepSeek-R1 variants  
-- **Google**: Gemma 3 models (4B, 12B, 27B)
-- **Alibaba**: Qwen 3 models
-- **Mistral**: Mistral Small 3.1 (24B)
-
+- your installed Models
 
 
 ## MCP Support
@@ -283,7 +276,7 @@ Tools are grouped by **agent names**, and each agent can have multiple MCP serve
       "transport": "stdio"
     },
     "another_mcp_server_streamable_HTTP": {
-      "url": "https://your-cloud-function/mcp?api_key=your-api-key"
+      "url": "mcp-url"
     }
   }
 }
@@ -383,9 +376,9 @@ Contribute to the design and optimization of the multi-agent orchestration layer
 We encourage clean, well-tested code with documentation.  
 Feel free to open issues to discuss ideas before jumping into a PR!
 
-### Join the Community
+## Join the Community
 
-Join our [Discord server](https://discord.gg/XGytzHZU) to connect with other developers, share ideas, ask questions, and collaborate on building the future of AI-powered red teaming!
+Join our [Discord](https://discord.gg/XGytzHZU) to connect with other developers, share ideas, ask questions, and collaborate on building the future of AI-powered red teaming!
 
 Whether you're looking for help with contributions, want to discuss new features, or just want to chat about cybersecurity and AI, our community is here to support you.
 
