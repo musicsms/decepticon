@@ -51,27 +51,28 @@
 
 - [💡 What is Vibe Hacking ?](#-what-is-vibe-hacking-)
 - [💡 Why Decepticon?](#-why-decepticon)
-- [🚀 Quick Start](#-quick-start)
-- [🤖 Agents](#-agents)
-  - [🔴 Red Team Agents](#-red-team-agents)
-  - [🔵 Utility Agents](#-utility-agents)
-- [🏛️ Multi-Architecture](#️-multi-architecture)
-- [🔧 Installation](#-installation)
-- [🧠 Advanced AI Models](#-advanced-ai-models)
+- [Quick Start](#-quick-start)
+- [Key features](#key-features)
+  - [Agents](#-agents)
+    - [🔴 Red Team Agents](#-red-team-agents)
+    - [🔵 Utility Agents](#-utility-agents)
+  - [Multi-Agent-System Architecture](#multi-agent-system-architecture)
+- [Installation](#-installation)
+- [Advanced AI Models](#-advanced-ai-models)
   - [☁️ Cloud Models](#️-cloud-models)
   - [🏠 Local Models (Ollama)](#-local-models-ollama)
-- [🔧 MCP Support](#-mcp-support)
-  - [✅ Supported MCP Transports](#-supported-mcp-transports)
-  - [📁 `mcp_config.json` Structure](#-mcp_configjson-structure)
-  - [📌 Example](#-example)
+- [MCP Support](#-mcp-support)
+  - [Supported MCP Transports](#-supported-mcp-transports)
+  - [`mcp_config.json` Structure](#-mcp_configjson-structure)
+  - [Example](#-example)
 - [⚠️ Experimental Technology Disclaimer](#️-experimental-technology-disclaimer)
 - [🤝 Contributing](#-contributing)
-  - [🔧 What You Can Contribute](#-what-you-can-contribute)
-    - [🛠 Migrate Security Tools to MCP Format](#-migrate-security-tools-to-mcp-format)
-    - [🧠 Develop ReAct-style Red Team Agents](#-develop-react-style-red-team-agents)
-    - [🕸 Architect Multi-Agent Flows](#-architect-multi-agent-flows)
-  - [🚀 How to Contribute](#-how-to-contribute)
-  - [🌟 Join the Community](#-join-the-community)
+  - [What You Can Contribute](#-what-you-can-contribute)
+    - [Migrate Security Tools to MCP Format](#-migrate-security-tools-to-mcp-format)
+    - [Develop ReAct-style Red Team Agents](#-develop-react-style-red-team-agents)
+    - [Architect Multi-Agent Flows](#-architect-multi-agent-flows)
+  - [How to Contribute](#-how-to-contribute)
+  - [Join the Community](#-join-the-community)
 - [📝 License](#-license)
 
 </details>
@@ -144,8 +145,8 @@ streamlit run app.py
 
 
 ## Key features
-### Agents
 
+### Agents
 
 #### 🔴 Red Team Agents
 - **Reconnaissance Agent**: Network scanning, service enumeration, vulnerability discovery

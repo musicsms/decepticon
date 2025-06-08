@@ -721,6 +721,7 @@ class DecepticonCLI:
                                         try:
                                             # 에이전트별 색상 설정
                                             agent_color = self.get_agent_color_cli(agent_name)
+                                            content = Markdown(content)
                                             
                                             agent_panel = Panel(
                                                 content,
