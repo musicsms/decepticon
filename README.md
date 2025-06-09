@@ -37,10 +37,11 @@
 
 <div align="center">
 
-| |  |  |
-|---|---------|------|
-| **Web** | ![web](.github/web.gif) | [Full Demo](https://github.com/user-attachments/assets/da398ad3-e692-47e3-b0e7-47f01b24e0cc) |
-| **CLI** | ![cli](.github/cli.gif) | [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
+| | Demo |
+|---|------|
+| **Web** | ![web](.github/webV2.gif) • [Full Demo](https://github.com/user-attachments/assets/da398ad3-e692-47e3-b0e7-47f01b24e0cc) |
+| **CLI** | ![cli](.github/cli.gif) • [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
+
 
 </div>
 
