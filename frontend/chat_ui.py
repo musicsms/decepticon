@@ -162,13 +162,20 @@ class ChatUI:
                 self.display_tool_message(message, container)
     
     def display_agent_message(self, message, container=None, streaming=True):
-        """에이전트 메시지 표시 - 메시지 출력 후 CSS 적용"""
+        """에이전트 메시지 표시 - 재현 시스템 호환성 개선"""
         if container is None:
             container = st
             
         display_name = message.get("display_name", "Agent")
         avatar = message.get("avatar", "🤖")
-        content = message.get("content", "")
+        
+        # 재현 시스템과 일반 시스템 모두 호환
+        if "data" in message and isinstance(message["data"], dict):
+            # 재현 시스템 형식
+            content = message["data"].get("content", "")
+        else:
+            # 일반 시스템 형식
+            content = message.get("content", "")
         
         # namespace 정보에서 에이전트 이름 추출 (기존 get_agent_name 함수 사용)
         namespace = message.get("namespace", "")
@@ -192,7 +199,6 @@ class ChatUI:
         
         # 고유한 메시지 ID 생성
         st.session_state.message_counter += 1
-        # message_position = st.session_state.message_counter
         
         # 메시지 먼저 출력 (DOM 요소 생성)
         with container.chat_message("assistant", avatar=avatar):
@@ -209,7 +215,6 @@ class ChatUI:
                     text_placeholder.write(content)
             else:
                 st.write("No content available")
-        
     
     def display_tool_message(self, message, container=None):
         """도구 메시지 표시 - 메시지 출력 후 CSS 적용"""
@@ -225,7 +230,6 @@ class ChatUI:
         
         # 고유한 메시지 ID 생성
         st.session_state.message_counter += 1
-        # message_position = st.session_state.message_counter
         
         # 메시지 먼저 출력 (DOM 요소 생성)
         with container.chat_message("tool", avatar="🔧"):
@@ -241,8 +245,43 @@ class ChatUI:
                         st.text(content)
                 else:
                     st.code(content)
+    
+    def display_tool_command(self, message, container=None):
+        """도구 명령 메시지 표시 - 재현 시스템 호환성"""
+        if container is None:
+            container = st
+            
+        display_name = message.get("display_name", "Tool")
+        command = message.get("data", {}).get("command", "")
         
-
+        # 도구 색상 가져오기
+        tool_color = self.get_agent_color("tool")
+        
+        with container.chat_message("tool", avatar="🔧"):
+            st.markdown(f'<div class="agent-header tool-message"><strong style="color: {tool_color}">Command: {display_name}</strong></div>', unsafe_allow_html=True)
+            st.code(command, language="bash")
+    
+    def display_tool_output(self, message, container=None):
+        """도구 출력 메시지 표시 - 재현 시스템 호환성"""
+        if container is None:
+            container = st
+            
+        display_name = message.get("display_name", "Tool Output")
+        output = message.get("data", {}).get("content", "")
+        
+        # 도구 출력 색상 가져오기
+        tool_color = self.get_agent_color("tool")
+        
+        with container.chat_message("tool", avatar="🔧"):
+            st.markdown(f'<div class="agent-header tool-output-message"><strong style="color: {tool_color}">Output: {display_name}</strong></div>', unsafe_allow_html=True)
+            
+            # 너무 긴 출력은 제한
+            if len(output) > 5000:
+                st.code(output[:5000] + "\n[Output truncated...]")
+                with st.expander("더 보기.."):
+                    st.text(output)
+            else:
+                st.code(output)
  
     def display_user_message(self, content, container=None):
         """사용자 메시지 표시"""

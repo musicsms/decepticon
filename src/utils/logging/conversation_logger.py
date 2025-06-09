@@ -1,26 +1,24 @@
 """
-Decepticon Conversation Logger
-대화 로그 기록, 재현, 데이터 수집을 위한 시스템
+최소한의 로거 - 재현에 필요한 정보만 기록
+기존 conversation_logger.py를 간소화한 버전
 """
 
 import json
 import uuid
-import asyncio
-import hashlib
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
-from dataclasses import dataclass, asdict
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
 from enum import Enum
-import logging
-
-logger = logging.getLogger(__name__)
 
 class EventType(Enum):
-    """이벤트 타입 정의"""
+    """재현에 필요한 최소한의 이벤트 타입"""
     USER_INPUT = "user_input"
     AGENT_RESPONSE = "agent_response"
-    TOOL_EXECUTION = "tool_execution"
+    TOOL_COMMAND = "tool_command"
+    TOOL_OUTPUT = "tool_output"
+    # 기존 호환성을 위해 유지하지만 사용하지 않음
+    TOOL_EXECUTION = "tool_execution"  
     WORKFLOW_START = "workflow_start"
     WORKFLOW_COMPLETE = "workflow_complete"
     WORKFLOW_ERROR = "workflow_error"
@@ -30,188 +28,143 @@ class EventType(Enum):
 
 @dataclass
 class ConversationEvent:
-    """대화 이벤트 데이터 구조"""
-    event_id: str
+    """재현에 필요한 최소한의 이벤트 정보 - 기존 호환성 유지"""
     event_type: EventType
     timestamp: str
-    user_id: str
-    session_id: str
-    thread_id: str
-    
-    # 메시지 관련
-    content: Optional[str] = None
+    content: str
     agent_name: Optional[str] = None
     tool_name: Optional[str] = None
     
-    # 메타데이터
+    # 기존 호환성을 위한 더미 필드들
+    event_id: str = None
+    user_id: str = None
+    session_id: str = None
+    thread_id: str = None
     model_info: Optional[Dict[str, Any]] = None
     execution_time: Optional[float] = None
     step_count: Optional[int] = None
     error_message: Optional[str] = None
-    
-    # 원본 데이터 (재현용)
     raw_data: Optional[Dict[str, Any]] = None
     
+    def __post_init__(self):
+        if self.event_id is None:
+            self.event_id = str(uuid.uuid4())
+    
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
-        data = asdict(self)
-        data['event_type'] = self.event_type.value
-        return data
+        result = {
+            "event_type": self.event_type.value,
+            "timestamp": self.timestamp,
+            "content": self.content
+        }
+        if self.agent_name:
+            result["agent_name"] = self.agent_name
+        if self.tool_name:
+            result["tool_name"] = self.tool_name
+        return result
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ConversationEvent':
-        """딕셔너리에서 생성"""
-        data['event_type'] = EventType(data['event_type'])
-        return cls(**data)
+        return cls(
+            event_type=EventType(data["event_type"]),
+            timestamp=data["timestamp"],
+            content=data["content"],
+            agent_name=data.get("agent_name"),
+            tool_name=data.get("tool_name")
+        )
 
 @dataclass
 class ConversationSession:
-    """대화 세션 데이터 구조"""
+    """재현에 필요한 최소한의 세션 정보 - 기존 호환성 유지"""
     session_id: str
-    user_id: str
-    thread_id: str
     start_time: str
+    events: List[ConversationEvent]
+    
+    # 기존 호환성을 위한 더미 필드들
+    user_id: str = "unknown"
+    thread_id: str = "unknown"
     end_time: Optional[str] = None
-    
-    # 세션 메타데이터
     model_info: Optional[Dict[str, Any]] = None
-    platform: str = "unknown"  # "web", "cli"
+    platform: str = "web"
     version: str = "1.0.0"
-    
-    # 통계
     total_events: int = 0
     total_messages: int = 0
     total_tools_used: int = 0
     agents_used: List[str] = None
     
-    # 이벤트 리스트
-    events: List[ConversationEvent] = None
-    
     def __post_init__(self):
         if self.agents_used is None:
             self.agents_used = []
-        if self.events is None:
-            self.events = []
+        # 통계 자동 계산
+        self.total_events = len(self.events)
+        self.total_messages = len([e for e in self.events if e.event_type in [EventType.USER_INPUT, EventType.AGENT_RESPONSE]])
+        self.total_tools_used = len([e for e in self.events if e.event_type in [EventType.TOOL_COMMAND, EventType.TOOL_OUTPUT]])
+        self.agents_used = list(set([e.agent_name for e in self.events if e.agent_name]))
     
     def add_event(self, event: ConversationEvent):
         """이벤트 추가"""
         self.events.append(event)
-        self.total_events += 1
-        
-        # 통계 업데이트
-        if event.event_type in [EventType.USER_INPUT, EventType.AGENT_RESPONSE]:
-            self.total_messages += 1
-        elif event.event_type == EventType.TOOL_EXECUTION:
-            self.total_tools_used += 1
-        
-        if event.agent_name and event.agent_name not in self.agents_used:
-            self.agents_used.append(event.agent_name)
+        self.__post_init__()  # 통계 재계산
     
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환"""
-        data = asdict(self)
-        data['events'] = [event.to_dict() for event in self.events]
-        return data
+        return {
+            "session_id": self.session_id,
+            "start_time": self.start_time,
+            "events": [event.to_dict() for event in self.events]
+        }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ConversationSession':
-        """딕셔너리에서 생성"""
-        events_data = data.pop('events', [])
-        session = cls(**data)
-        session.events = [ConversationEvent.from_dict(event_data) for event_data in events_data]
-        return session
+        return cls(
+            session_id=data["session_id"],
+            start_time=data["start_time"],
+            events=[ConversationEvent.from_dict(e) for e in data["events"]]
+        )
 
 class ConversationLogger:
-    """대화 로거 메인 클래스"""
+    """최소한의 로거 - 재현에 필요한 정보만 기록, 기존 API 호환성 유지"""
     
     def __init__(self, base_path: str = "logs"):
         self.base_path = Path(base_path)
         self.base_path.mkdir(exist_ok=True)
-        
-        # 현재 세션
         self.current_session: Optional[ConversationSession] = None
-        self.session_start_time: Optional[datetime] = None
-        
-        # 설정
-        self.auto_save = True
-        self.compression_enabled = False
-        
-        logger.info(f"ConversationLogger initialized with base_path: {self.base_path}")
     
     def _get_session_file_path(self, session_id: str) -> Path:
         """세션 파일 경로 생성"""
-        # 날짜별 폴더 구조: logs/2025/01/15/session_abc123.json
         date_str = datetime.now().strftime("%Y/%m/%d")
         session_dir = self.base_path / date_str
         session_dir.mkdir(parents=True, exist_ok=True)
         return session_dir / f"session_{session_id}.json"
     
-    def start_session(self, user_id: str, thread_id: str, platform: str = "unknown", 
-                     model_info: Optional[Dict[str, Any]] = None) -> str:
-        """새 세션 시작"""
+    def start_session(self, user_id: str = "unknown", thread_id: str = "unknown", 
+                     platform: str = "web", model_info: Optional[Dict[str, Any]] = None) -> str:
+        """새 세션 시작 - 기존 API 호환성 유지"""
         session_id = str(uuid.uuid4())
-        current_time = datetime.now(timezone.utc).isoformat()
+        start_time = datetime.now().isoformat()
         
         self.current_session = ConversationSession(
             session_id=session_id,
-            user_id=user_id,
-            thread_id=thread_id,
-            start_time=current_time,
-            model_info=model_info,
-            platform=platform
+            start_time=start_time,
+            events=[]
         )
-        
-        self.session_start_time = datetime.now()
-        
-        # 세션 시작 이벤트 로깅
-        self.log_event(
-            event_type=EventType.SESSION_START,
-            content=f"Session started on {platform}",
-            model_info=model_info
-        )
-        
-        logger.info(f"Started new conversation session: {session_id}")
         return session_id
     
     def log_event(self, event_type: EventType, content: Optional[str] = None,
                   agent_name: Optional[str] = None, tool_name: Optional[str] = None,
-                  execution_time: Optional[float] = None, step_count: Optional[int] = None,
-                  error_message: Optional[str] = None, model_info: Optional[Dict[str, Any]] = None,
-                  raw_data: Optional[Dict[str, Any]] = None) -> str:
-        """이벤트 로깅"""
-        
+                  **kwargs) -> str:
+        """이벤트 로깅 - 기존 API 호환성 유지"""
         if not self.current_session:
-            logger.warning("No active session for logging event")
             return None
         
-        event_id = str(uuid.uuid4())
-        current_time = datetime.now(timezone.utc).isoformat()
-        
         event = ConversationEvent(
-            event_id=event_id,
             event_type=event_type,
-            timestamp=current_time,
-            user_id=self.current_session.user_id,
-            session_id=self.current_session.session_id,
-            thread_id=self.current_session.thread_id,
-            content=content,
+            timestamp=datetime.now().isoformat(),
+            content=content or "",
             agent_name=agent_name,
-            tool_name=tool_name,
-            model_info=model_info,
-            execution_time=execution_time,
-            step_count=step_count,
-            error_message=error_message,
-            raw_data=raw_data
+            tool_name=tool_name
         )
         
         self.current_session.add_event(event)
-        
-        # 자동 저장
-        if self.auto_save:
-            self._save_session_async()
-        
-        logger.debug(f"Logged event: {event_type.value} - {event_id}")
-        return event_id
+        return event.event_id
     
     def log_user_input(self, content: str) -> str:
         """사용자 입력 로깅"""
@@ -220,58 +173,53 @@ class ConversationLogger:
             content=content
         )
     
-    def log_agent_response(self, agent_name: str, content: str, 
-                          execution_time: Optional[float] = None) -> str:
+    def log_agent_response(self, agent_name: str, content: str, **kwargs) -> str:
         """에이전트 응답 로깅"""
         return self.log_event(
             event_type=EventType.AGENT_RESPONSE,
             agent_name=agent_name,
-            content=content,
-            execution_time=execution_time
+            content=content
         )
     
-    def log_tool_execution(self, tool_name: str, content: str, 
-                          execution_time: Optional[float] = None) -> str:
-        """도구 실행 로깅"""
+    def log_tool_execution(self, tool_name: str, content: str, **kwargs) -> str:
+        """도구 실행 로깅 - 호환성을 위해 tool_command로 변환"""
         return self.log_event(
-            event_type=EventType.TOOL_EXECUTION,
+            event_type=EventType.TOOL_COMMAND,
             tool_name=tool_name,
-            content=content,
-            execution_time=execution_time
+            content=content
+        )
+    
+    def log_tool_command(self, tool_name: str, command: str):
+        """도구 명령 로깅"""
+        return self.log_event(
+            event_type=EventType.TOOL_COMMAND,
+            tool_name=tool_name,
+            content=command
+        )
+    
+    def log_tool_output(self, tool_name: str, output: str):
+        """도구 출력 로깅"""
+        return self.log_event(
+            event_type=EventType.TOOL_OUTPUT,
+            tool_name=tool_name,
+            content=output
         )
     
     def log_workflow_start(self, user_input: str) -> str:
-        """워크플로우 시작 로깅"""
-        return self.log_event(
-            event_type=EventType.WORKFLOW_START,
-            content=user_input
-        )
+        """워크플로우 시작 로깅 - 호환성만 유지"""
+        return self.log_user_input(user_input)
     
-    def log_workflow_complete(self, step_count: int, execution_time: float) -> str:
-        """워크플로우 완료 로깅"""
-        return self.log_event(
-            event_type=EventType.WORKFLOW_COMPLETE,
-            content=f"Workflow completed in {step_count} steps",
-            execution_time=execution_time,
-            step_count=step_count
-        )
+    def log_workflow_complete(self, step_count: int = 0, execution_time: float = 0) -> str:
+        """워크플로우 완료 로깅 - 호환성만 유지"""
+        return str(uuid.uuid4())
     
     def log_workflow_error(self, error_message: str) -> str:
-        """워크플로우 에러 로깅"""
-        return self.log_event(
-            event_type=EventType.WORKFLOW_ERROR,
-            content="Workflow failed",
-            error_message=error_message
-        )
+        """워크플로우 에러 로깅 - 호환성만 유지"""
+        return str(uuid.uuid4())
     
     def log_model_change(self, old_model: Dict[str, Any], new_model: Dict[str, Any]) -> str:
-        """모델 변경 로깅"""
-        return self.log_event(
-            event_type=EventType.MODEL_CHANGE,
-            content=f"Model changed from {old_model.get('display_name')} to {new_model.get('display_name')}",
-            model_info=new_model,
-            raw_data={"old_model": old_model, "new_model": new_model}
-        )
+        """모델 변경 로깅 - 호환성만 유지"""
+        return str(uuid.uuid4())
     
     def end_session(self) -> Optional[str]:
         """세션 종료"""
@@ -279,168 +227,95 @@ class ConversationLogger:
             return None
         
         session_id = self.current_session.session_id
-        end_time = datetime.now(timezone.utc).isoformat()
-        self.current_session.end_time = end_time
-        
-        # 세션 종료 이벤트 로깅
-        if self.session_start_time:
-            session_duration = (datetime.now() - self.session_start_time).total_seconds()
-        else:
-            session_duration = None
-            
-        self.log_event(
-            event_type=EventType.SESSION_END,
-            content=f"Session ended",
-            execution_time=session_duration
-        )
-        
-        # 최종 저장
         self.save_session()
-        
-        logger.info(f"Ended conversation session: {session_id}")
         self.current_session = None
-        self.session_start_time = None
-        
         return session_id
     
     def save_session(self) -> bool:
-        """세션을 파일로 저장"""
+        """세션 저장"""
         if not self.current_session:
             return False
         
         try:
             file_path = self._get_session_file_path(self.current_session.session_id)
-            
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.current_session.to_dict(), f, indent=2, ensure_ascii=False)
-            
-            logger.debug(f"Session saved to: {file_path}")
             return True
-            
         except Exception as e:
-            logger.error(f"Failed to save session: {str(e)}")
+            print(f"Failed to save session: {e}")
             return False
     
     def _save_session_async(self):
-        """비동기 세션 저장 (백그라운드)"""
-        try:
-            self.save_session()
-        except Exception as e:
-            logger.error(f"Async session save failed: {str(e)}")
+        """비동기 세션 저장 - 호환성만 유지"""
+        self.save_session()
     
     def load_session(self, session_id: str) -> Optional[ConversationSession]:
         """세션 로드"""
         try:
-            # 세션 파일 찾기 - 더 안전한 방식
-            session_file = None
-            
-            # 먼저 rglob으로 직접 파일 찾기
-            for potential_file in self.base_path.rglob(f"session_{session_id}.json"):
-                if potential_file.exists():
-                    session_file = potential_file
-                    break
-            
-            if not session_file:
-                logger.warning(f"Session file not found: {session_id}")
-                print(f"[DEBUG] Session file not found for ID: {session_id}")
-                return None
-            
-            with open(session_file, 'r', encoding='utf-8') as f:
-                session_data = json.load(f)
-            
-            session = ConversationSession.from_dict(session_data)
-            logger.info(f"Loaded session: {session_id}")
-            print(f"[DEBUG] Successfully loaded session {session_id} with {len(session.events)} events")
-            return session
-            
+            for session_file in self.base_path.rglob(f"session_{session_id}.json"):
+                if session_file.exists():
+                    with open(session_file, 'r', encoding='utf-8') as f:
+                        session_data = json.load(f)
+                    return ConversationSession.from_dict(session_data)
+            return None
         except Exception as e:
-            logger.error(f"Failed to load session {session_id}: {str(e)}")
-            print(f"[DEBUG] Failed to load session {session_id}: {str(e)}")
+            print(f"Failed to load session {session_id}: {e}")
             return None
     
-    def list_sessions(self, user_id: Optional[str] = None, 
-                     days_back: int = 30) -> List[Dict[str, Any]]:
+    def list_sessions(self, user_id: Optional[str] = None, days_back: int = 30) -> List[Dict[str, Any]]:
         """세션 목록 조회"""
         sessions = []
         
         try:
-            # 날짜 범위 내의 모든 세션 파일 찾기
             for session_file in self.base_path.rglob("session_*.json"):
                 try:
                     with open(session_file, 'r', encoding='utf-8') as f:
                         session_data = json.load(f)
                     
-                    # 사용자 필터링
-                    if user_id and session_data.get('user_id') != user_id:
-                        continue
-                    
-                    # 세션 요약 정보 추가
-                    session_summary = {
+                    # 기본 정보만 추출
+                    session_info = {
                         'session_id': session_data['session_id'],
-                        'user_id': session_data['user_id'],
+                        'user_id': session_data.get('user_id', 'unknown'),
                         'start_time': session_data['start_time'],
                         'end_time': session_data.get('end_time'),
-                        'platform': session_data.get('platform', 'unknown'),
-                        'total_events': session_data.get('total_events', 0),
-                        'total_messages': session_data.get('total_messages', 0),
-                        'agents_used': session_data.get('agents_used', []),
+                        'platform': session_data.get('platform', 'web'),
+                        'total_events': len(session_data.get('events', [])),
+                        'total_messages': len([e for e in session_data.get('events', []) 
+                                             if e.get('event_type') in ['user_input', 'agent_response']]),
+                        'agents_used': list(set([e.get('agent_name') for e in session_data.get('events', []) 
+                                               if e.get('agent_name')])),
                         'model_info': session_data.get('model_info'),
                         'file_path': str(session_file)
                     }
                     
-                    sessions.append(session_summary)
+                    sessions.append(session_info)
                     
                 except Exception as e:
-                    logger.error(f"Error reading session file {session_file}: {str(e)}")
                     continue
             
             # 시간순 정렬 (최신 순)
             sessions.sort(key=lambda x: x['start_time'], reverse=True)
             
         except Exception as e:
-            logger.error(f"Failed to list sessions: {str(e)}")
+            print(f"Error listing sessions: {e}")
         
         return sessions
     
     def get_session_stats(self, user_id: Optional[str] = None) -> Dict[str, Any]:
-        """세션 통계 조회"""
+        """세션 통계 조회 - 호환성만 유지"""
         sessions = self.list_sessions(user_id=user_id)
-        
-        if not sessions:
-            return {
-                'total_sessions': 0,
-                'total_messages': 0,
-                'total_events': 0,
-                'unique_agents': [],
-                'platforms_used': [],
-                'models_used': []
-            }
-        
-        total_messages = sum(s['total_messages'] for s in sessions)
-        total_events = sum(s['total_events'] for s in sessions)
-        
-        unique_agents = set()
-        platforms_used = set()
-        models_used = set()
-        
-        for session in sessions:
-            unique_agents.update(session.get('agents_used', []))
-            platforms_used.add(session.get('platform', 'unknown'))
-            if session.get('model_info'):
-                model_name = session['model_info'].get('display_name', 'Unknown')
-                models_used.add(model_name)
         
         return {
             'total_sessions': len(sessions),
-            'total_messages': total_messages,
-            'total_events': total_events,
-            'unique_agents': list(unique_agents),
-            'platforms_used': list(platforms_used),
-            'models_used': list(models_used),
-            'avg_messages_per_session': total_messages / len(sessions) if sessions else 0
+            'total_messages': sum(s['total_messages'] for s in sessions),
+            'total_events': sum(s['total_events'] for s in sessions),
+            'unique_agents': list(set().union(*[s['agents_used'] for s in sessions])),
+            'platforms_used': list(set([s['platform'] for s in sessions])),
+            'models_used': [],
+            'avg_messages_per_session': 0
         }
 
-# 전역 로거 인스턴스
+# 전역 인스턴스 - 기존 호환성 유지
 _global_logger: Optional[ConversationLogger] = None
 
 def get_conversation_logger() -> ConversationLogger:

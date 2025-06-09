@@ -1,5 +1,5 @@
 """
-간단한 로그 관리 UI 컴포넌트 - 간소화된 버전
+최소한의 로그 관리 UI - 세션 목록과 재현 기능만 제공
 """
 
 import streamlit as st
@@ -8,80 +8,78 @@ from typing import Dict, Any, List
 
 from src.utils.logging.minimal_logger import get_minimal_logger
 
-class SimpleLogManagerUI:
-    """간단한 로그 관리 UI 클래스 - 재현 기능에 집중"""
+class MinimalLogManagerUI:
+    """최소한의 로그 관리자 - 복잡한 기능 제거"""
     
     def __init__(self):
         self.logger = get_minimal_logger()
-        
-    def display_simple_log_page(self):
-        """간단한 로그 페이지 표시"""
-        st.title("📊 :red[Session Logs]")
+    
+    def display_log_page(self):
+        """간단한 로그 페이지"""
+        st.title("📋 Session Logs")
         
         # 뒤로가기 버튼
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("← Back", use_container_width=True):
-                st.session_state.app_stage = "main_app"
-                st.rerun()
+        if st.button("← Back to Main", use_container_width=True):
+            st.session_state.app_stage = "main_app"
+            st.rerun()
         
         st.divider()
         
         # 세션 목록 로드
-        all_sessions = self.logger.list_sessions()
-        sessions = all_sessions[:20]  # 최근 20개만 표시
+        sessions = self.logger.list_sessions(limit=20)
         
         if not sessions:
             st.info("No sessions found")
             return
         
-        # 세션 목록 표시
-        st.subheader("📋 Recent Sessions")
-        st.caption(f"Showing {len(sessions)} most recent sessions")
+        st.markdown(f"**{len(sessions)} recent sessions**")
         
+        # 세션 목록을 카드 형태로 표시
         for session in sessions:
             self._display_session_card(session)
     
     def _display_session_card(self, session: Dict[str, Any]):
-        """세션 카드 표시"""
+        """세션 카드 표시 - 간단한 형태"""
         with st.container():
-            # 세션 헤더
-            col1, col2, col3 = st.columns([3, 1, 1])
+            # 세션 기본 정보
+            col1, col2 = st.columns([3, 1])
             
             with col1:
-                # 시간 포맷팅
+                # 시간 표시
                 try:
                     dt = datetime.fromisoformat(session['start_time'].replace('Z', '+00:00'))
                     time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
                 except:
                     time_str = session['start_time'][:19]
                 
-                st.markdown(f"**🕒 {time_str}**")
+                st.markdown(f"**📅 {time_str}**")
                 st.caption(f"Session: {session['session_id'][:16]}...")
                 
-                # 내용 미리보기 (첫 번째 사용자 입력 찾기)
-                preview_text = session.get('preview', "No user input found")
-                st.caption(f"💬 {preview_text}")
+                # 내용 미리보기
+                if session.get('preview'):
+                    preview_text = session['preview']
+                    st.caption(f"💬 {preview_text}")
+                
+                # 이벤트 수
+                st.caption(f"📊 {session['event_count']} events")
             
             with col2:
-                st.metric("Events", session.get('event_count', 0))
-            
-            with col3:
-                # Replay 버튼 (가장 중요한 기능)
+                # 재현 버튼 (가장 중요한 기능)
                 if st.button("🎬 Replay", key=f"replay_{session['session_id']}", use_container_width=True):
                     self._start_replay(session['session_id'])
             
             st.divider()
     
     def _start_replay(self, session_id: str):
-        """세션 재생 시작 - 메인 앱으로 이동"""
+        """세션 재현 시작"""
         try:
-            # 재생할 세션 ID를 세션 상태에 저장
+            # 재현할 세션 ID 저장
             st.session_state.replay_session_id = session_id
             st.session_state.replay_mode = True
             
             # 메인 앱으로 이동
             st.session_state.app_stage = "main_app"
+            
             st.success(f"Starting replay for session {session_id[:16]}...")
             st.rerun()
             
