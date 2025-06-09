@@ -3,6 +3,7 @@ decepticon.egg-info/
 .langgraph_api/
 .env
 load_env.bat
+logs/
 
 # Python byte-compiled files
 __pycache__/
