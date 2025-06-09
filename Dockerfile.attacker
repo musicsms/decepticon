@@ -1,0 +1,26 @@
+FROM kalilinux/kali-rolling
+
+# 패키지 업데이트 및 필수 도구 설치 (nmap, dnsutils, whois, exploitdb, hydra, metasploit-framework)
+RUN apt update && apt install -y \
+    nmap \
+    dnsutils \
+    whois \
+    exploitdb \
+    hydra \
+    metasploit-framework \
+    net-tools \
+    netcat-openbsd \
+    iputils-ping \
+    wget \
+    tmux \
+    && rm -rf /var/lib/apt/lists/*
+
+# Gotty 설치 (터미널 공유 도구)
+RUN wget https://github.com/yudai/gotty/releases/download/v1.0.1/gotty_linux_amd64.tar.gz \
+    && tar -xvf gotty_linux_amd64.tar.gz \
+    && chmod +x gotty \
+    && mv gotty /usr/local/bin/ \
+    && rm gotty_linux_amd64.tar.gz
+
+# 컨테이너 시작 시 Gotty를 통해 bash를 실행 (포트 8080에서 터미널 공유)
+CMD ["gotty", "-w", "-p", "8080", "bash"]

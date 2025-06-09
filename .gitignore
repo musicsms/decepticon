@@ -1,0 +1,10 @@
+.venv/
+decepticon.egg-info/
+.langgraph_api/
+.env
+load_env.bat
+
+# Python byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class

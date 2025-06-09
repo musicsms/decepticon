@@ -1,0 +1,55 @@
+name: "\U0001F4A1 Feature Request"
+description: Suggest a new feature or enhancement for LangChain.
+labels: ["03 Feature Request"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thank you for suggesting a feature!
+
+        Use this template to propose new features or improvements.
+
+        Before submitting, please check if a similar request already exists:
+
+        [Feature Requests](https://github.com/langchain-ai/langchain/issues?q=is%3Aissue+label%3A%2203+Feature+Request%22)
+  - type: input
+    id: title
+    validations:
+      required: true
+    attributes:
+      label: Feature Title
+      description: Provide a clear and concise title.
+      placeholder: "Support for LLM XYZ"
+  - type: textarea
+    id: motivation
+    validations:
+      required: true
+    attributes:
+      label: Motivation and Use Case
+      description: Explain why you want this feature and how it will be used.
+      placeholder: |
+        * I want to use LangChain with LLM XYZ because...
+        * This feature will help by...
+  - type: textarea
+    id: description
+    attributes:
+      label: Detailed Description
+      description: Provide more detail on the feature and how it should work.
+      placeholder: |
+        Describe the feature in detail, examples, and expected behavior.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative approaches you have considered.
+      placeholder: "Tried using ABC, but it lacks..."
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      description: Please confirm before submitting.
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I read the documentation and confirmed this feature isn't currently supported.
+          required: true
