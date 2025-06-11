@@ -1,0 +1,79 @@
+name: "\U0001F41B Bug Report"
+description: Report a bug or unexpected behavior.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thank you for taking the time to file a bug report!
+
+        Please use this template to report bugs or unexpected behavior.
+
+        Before submitting, please check if your issue has already been reported.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      description: Please confirm the following before submitting:
+      options:
+        - label: I added a descriptive title to this issue.
+          required: true
+        - label: I searched existing issues and found no duplicates.
+          required: true
+        - label: I am sure this is a bug and not an issue with my own code.
+          required: true
+        - label: The bug still occurs with the latest version.
+          required: true
+        - label: I included a minimal reproducible example.
+          required: true
+  - type: textarea
+    id: reproduction
+    validations:
+      required: true
+    attributes:
+      label: Example Code
+      description: |
+        Please provide a minimal, reproducible example that demonstrates the bug.
+
+        Use code formatting with language tags, e.g.:
+        ```python
+        # Your code here
+        ```
+      placeholder: |
+        ```python
+        # Example code demonstrating the issue
+        ```
+  - type: textarea
+    id: error
+    validations:
+      required: false
+    attributes:
+      label: Error Message and Stack Trace
+      description: If applicable, include the full error message and stack trace.
+      placeholder: "Full error message and stack trace here"
+  - type: textarea
+    id: description
+    validations:
+      required: true
+    attributes:
+      label: Description
+      description: Describe what you expected to happen and what actually happened.
+      placeholder: |
+        * What I was trying to do:
+        * What I expected:
+        * What actually happened:
+  - type: textarea
+    id: system-info
+    validations:
+      required: true
+    attributes:
+      label: System Info
+      description: |
+        Please provide details about your environment, such as OS, Python version, package versions, etc.
+
+        For example, run `pip freeze` and paste the output here.
+      placeholder: |
+        OS:
+        Python version:
+        Package versions:
+        pip freeze output:
