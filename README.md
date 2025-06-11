@@ -46,8 +46,6 @@
 </div>
 
 ---
-## Star History
-
 [![Star History Chart](https://api.star-history.com/svg?repos=PurpleAILAB/Decepticon&type=Date)](https://www.star-history.com/#PurpleAILAB/Decepticon&Date)
 
 
