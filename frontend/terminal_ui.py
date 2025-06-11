@@ -165,14 +165,6 @@ class TerminalUI:
         self.terminal_history = []
         self.processed_messages = set()
         
-        # 초기 터미널 내용 추가
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.terminal_history.append({
-            "type": "output",
-            "content": "Decepticon Terminal Ready",
-            "timestamp": timestamp
-        })
-        
         # 세션 상태에 터미널 히스토리 저장
         st.session_state.terminal_history = self.terminal_history
         

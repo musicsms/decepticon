@@ -141,7 +141,7 @@ class ChatUI:
                 time.sleep(speed)
     
     def display_messages(self, structured_messages, container=None):
-        """구조화된 메시지를 UI에 표시 - CLI와 완전히 동일한 방식"""
+        """구조화된 메시지를 UI에 표시 - 일반 워크플로우와 동일하게 처리"""
         if container is None:
             container = st
             
@@ -154,11 +154,11 @@ class ChatUI:
                     st.write(message.get("content", ""))
                     
             elif message_type == "ai":
-                # AI 에이전트 메시지 - CLI와 동일하게 단순화
-                self.display_agent_message(message, container)
+                # AI 에이전트 메시지 - 일반 워크플로우와 동일
+                self.display_agent_message(message, container, streaming=False)
                 
             elif message_type == "tool":
-                # 도구 메시지 - CLI와 동일하게 단순화
+                # 도구 메시지 - 일반 워크플로우와 동일
                 self.display_tool_message(message, container)
     
     def display_agent_message(self, message, container=None, streaming=True):
@@ -209,7 +209,9 @@ class ChatUI:
             if content:
                 text_placeholder = st.empty()
                 
-                if streaming and len(content) > 50:
+                # 재현 모드에서는 타이핑 애니메이션 비활성화
+                is_replay_mode = st.session_state.get("replay_mode", False)
+                if streaming and len(content) > 50 and not is_replay_mode:
                     self.simulate_typing(content, text_placeholder, speed=0.005)
                 else:
                     text_placeholder.write(content)

@@ -21,8 +21,8 @@ from src.utils.memory import (
 )
 
 # 최소한의 로깅 시스템 사용 - 재현에 필요한 정보만
-from src.utils.logging.minimal_logger import get_minimal_logger
-from src.utils.logging.simple_replay import get_replay_system
+from src.utils.logging.logger import get_minimal_logger
+from src.utils.logging.replay import get_replay_system
 
 ICON = "assets\logo.png"
 ICON_TEXT = "assets\logo_text1.png"
@@ -223,10 +223,11 @@ class DecepticonApp:
         try:
             log_debug(f"Starting async executor initialization with model: {model_info}")
             
-            # 최소한의 로깅 세션 시작
-            session_id = st.session_state.minimal_logger.start_session()
+            # 최소한의 로깅 세션 시작 - 모델 정보 포함
+            model_display_name = model_info.get('display_name', 'Unknown Model') if model_info else 'Default Model'
+            session_id = st.session_state.minimal_logger.start_session(model_display_name)
             st.session_state.logging_session_id = session_id
-            log_debug(f"Started logging session: {session_id}")
+            log_debug(f"Started logging session: {session_id} with model: {model_display_name}")
             
             if model_info:
                 await self.executor.initialize_swarm(model_info)
@@ -572,6 +573,11 @@ class DecepticonApp:
 
         # 터미널 영역 초기화
         with terminal_column:
+            # 터미널 플레이스홀더가 None인 경우 (새 채팅 시작 후) 터미널 히스토리 클리어
+            if st.session_state.terminal_placeholder is None and not st.session_state.terminal_messages:
+                st.session_state.terminal_history = []
+                self.terminal_ui.clear_terminal()
+                
             st.session_state.terminal_placeholder = self.terminal_ui.create_terminal(terminal_column)
 
             # 저장된 터미널 메시지 복원
@@ -589,29 +595,29 @@ class DecepticonApp:
 
                 # 재생 모드 처리
                 if self.chat_replay.is_replay_mode():
-                    log_debug("재생 모드 감지 - 재생 시작")
+                    log_debug("Replay mode detected - starting replay")
                     try:
                         replay_handled = self.chat_replay.handle_replay_in_main_app(
                             messages_area, agents_container, self.chat_ui
                         )
                         if replay_handled:
-                            log_debug("재생 완료 - 정상 모드로 복귀")
-                            st.rerun()
-                            return
+                            log_debug("Replay completed - updating terminal UI with all tool messages")
+                            # 재현 완료 후 모든 터미널 메시지를 한 번에 업데이트
+                            if st.session_state.terminal_messages and st.session_state.terminal_placeholder:
+                                # 기존 터미널 클리어 후 새 메시지들 추가
+                                self.terminal_ui.clear_terminal()
+                                self.terminal_ui.process_structured_messages(st.session_state.terminal_messages)
+                        else:
+                            # 재생 실패 시 에러 처리
+                            st.error("Failed to start replay.")
                     except Exception as e:
-                        st.error(f"재생 오류: {e}")
-                        log_debug(f"재생 오류: {e}")
+                        st.error(f"Replay error: {e}")
+                        log_debug(f"Replay error: {e}")
+                        # 에러 발생 시 재생 모드 해제
+                        st.session_state.pop("replay_mode", None)
+                        st.session_state.pop("replay_session_id", None)
 
-                    # 재생 모드 해제
-                    st.session_state.pop("replay_mode", None)
-                    st.session_state.pop("replay_session_id", None)
-                    st.rerun()
-                    return
-
-                # 입력창 영역
-                input_container = st.container()
-
-                # 기존 메시지 표시
+                # 기존 메시지 표시 (재생된 메시지 포함)
                 with messages_area:
                     if st.session_state.debug_mode:
                         st.warning("Debug Mode: Event data will be displayed during processing")
@@ -619,12 +625,82 @@ class DecepticonApp:
                     if not st.session_state.workflow_running:
                         self.chat_ui.display_messages(st.session_state.structured_messages, messages_area)
 
-                # 사용자 입력 처리
-                with input_container:
-                    user_input = st.chat_input("Type your red team request here...")
+            # 사용자 입력 처리 (chat_container 밖에서) - 디버깅 강화
+            replay_mode = self.chat_replay.is_replay_mode()
+            replay_completed = st.session_state.get("replay_completed", False)
+            
+            # 디버깅용 상태 표시
+            if st.session_state.get("debug_mode", False):
+                st.write(f"DEBUG - replay_mode: {replay_mode}, replay_completed: {replay_completed}")
+            
+            log_debug(f"Input container logic - replay_mode: {replay_mode}, replay_completed: {replay_completed}")
+            
+            if not replay_mode and not replay_completed:
+                # 정상 모드 - 사용자 입력창 표시
+                log_debug("Showing normal input container")
+                user_input = st.chat_input("Type your red team request here...")
 
-                    if user_input and not st.session_state.workflow_running:
-                        asyncio.run(self.execute_workflow(user_input, messages_area, agents_container))
+                if user_input and not st.session_state.workflow_running:
+                    asyncio.run(self.execute_workflow(user_input, messages_area, agents_container))
+                    
+            elif not replay_mode and replay_completed:
+                # 재현 완료 후 - 버튼 표시 (chat UI 밖 아래)
+                log_debug("Showing replay completed button outside chat container")
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    if st.button("🔄 Start New Chat", use_container_width=True, type="primary", key="start_new_chat_btn"):
+                        # 재현 모드 해제하고 메시지 초기화 (모델 유지)
+                        log_debug("Start New Chat button clicked - clearing messages but keeping model")
+                        
+                        # 재현 관련 플래그 제거
+                        st.session_state.pop("replay_mode", None)
+                        st.session_state.pop("replay_session_id", None)
+                        st.session_state.pop("replay_completed", None)
+                        
+                        # 메시지 및 채팅 관련 상태 초기화
+                        st.session_state.structured_messages = []
+                        st.session_state.terminal_messages = []
+                        st.session_state.event_history = []
+                        st.session_state.active_agent = None
+                        st.session_state.completed_agents = []
+                        st.session_state.current_step = 0
+                        st.session_state.workflow_running = False
+                        st.session_state.keep_initial_ui = True
+                        
+                        # 에이전트 상태 플레이스홀더 초기화
+                        st.session_state.agent_status_placeholders = {}
+                        
+                        # 터미널 플레이스홀더도 초기화 (중요!)
+                        st.session_state.terminal_placeholder = None
+                        
+                        # 터미널 히스토리도 완전 초기화
+                        st.session_state.terminal_history = []
+                        
+                        # 터미널 UI 초기화 (기존 터미널 컨텐츠 클리어)
+                        if hasattr(self, 'terminal_ui'):
+                            self.terminal_ui.clear_terminal()
+                        
+                        # 현재 로깅 세션 종료 및 새 세션 시작 - 모델 정보 포함
+                        if hasattr(st.session_state, 'minimal_logger') and st.session_state.minimal_logger.current_session:
+                            st.session_state.minimal_logger.end_session()
+                        
+                        # 현재 모델 정보 가져오기
+                        current_model = st.session_state.get('current_model', {})
+                        model_display_name = current_model.get('display_name', 'Unknown Model') if current_model else 'No Model'
+                        
+                        session_id = st.session_state.minimal_logger.start_session(model_display_name)
+                        st.session_state.logging_session_id = session_id
+                        log_debug(f"Started new logging session: {session_id} with model: {model_display_name}")
+                        
+                        st.success("New chat session started! Your model is ready.")
+                        st.rerun()
+            else:
+                # 재현 진행 중 - 빈 공간 유지
+                log_debug("Replay in progress - showing empty container")
+                if replay_mode:
+                    st.info("🎞️ Replay in progress...")
+                else:
+                    st.empty()
 
     def run_log_manager(self):
         """간소화된 로그 관리 화면 실행"""
@@ -632,6 +708,13 @@ class DecepticonApp:
     
     def run(self):
         """애플리케이션 실행 - 단계별 라우팅"""
+        # 재현 모드일 때 강제로 메인 앱으로 이동 (로그 관리자에서 벗어나기)
+        if st.session_state.get("replay_mode", False):
+            if st.session_state.app_stage != "main_app":
+                print(f"Replay mode detected, switching from {st.session_state.app_stage} to main_app")
+                st.session_state.app_stage = "main_app"
+                st.rerun()
+        
         # 현재 앱 단계에 따라 다른 화면 표시
         if st.session_state.app_stage == "model_selection":
             self.run_model_selection()

@@ -6,7 +6,7 @@ import streamlit as st
 import asyncio
 from typing import Optional
 
-from src.utils.logging.simple_replay import get_replay_system
+from src.utils.logging.replay import get_replay_system
 
 class ChatReplayManager:
     """간소화된 채팅 재현 관리자 - 기존 워크플로우와 동일한 방식"""
@@ -19,7 +19,7 @@ class ChatReplayManager:
         return st.session_state.get("replay_mode", False)
     
     def handle_replay_in_main_app(self, chat_area, agents_container, chat_ui) -> bool:
-        """메인 앱에서 재현 처리"""
+        """메인 앱에서 재현 처리 - 메시지 유지"""
         if not self.is_replay_mode():
             return False
         
@@ -33,23 +33,33 @@ class ChatReplayManager:
                 # 비동기 재현 실행
                 asyncio.run(self.replay_system.execute_replay(chat_area, agents_container, chat_ui))
                 
-                # 재현 완료 후 정리
+                # 재현 완료 후 상태 정리
                 self.replay_system.stop_replay()
-                self._cleanup_replay_state()
                 
+                # 재현 모드 플래그는 유지 (사용자가 버튼을 클릭할 때까지)
+                # st.session_state.pop("replay_mode", None) - 제거
+                # st.session_state.pop("replay_session_id", None) - 제거
+                
+                # 재현 완료 플래그 설정
+                st.session_state.replay_completed = True
+                
+                # 메시지가 유지된 상태로 정상 모드로 복귀
                 return True
             
         except Exception as e:
             st.error(f"Replay error: {e}")
-            self._cleanup_replay_state()
+            # 에러 발생 시 정리
+            self.replay_system.stop_replay()
+            st.session_state.pop("replay_mode", None)
+            st.session_state.pop("replay_session_id", None)
         
         return False
     
     def _cleanup_replay_state(self):
-        """재현 상태 정리"""
-        for key in ["replay_mode", "replay_session_id"]:
-            if key in st.session_state:
-                del st.session_state[key]
+        """재현 상태 정리 - 에러 시에만 사용"""
+        # 에러 발생 시에만 사용되는 메소드
+        # 정상 재현 완료 시에는 stop_replay만 호출
+        self.replay_system.stop_replay()
 
 # 하위 호환성을 위한 별칭
 SimpleReplayManager = ChatReplayManager

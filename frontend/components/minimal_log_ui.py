@@ -6,7 +6,7 @@ import streamlit as st
 from datetime import datetime
 from typing import Dict, Any, List
 
-from src.utils.logging.minimal_logger import get_minimal_logger
+from src.utils.logging.logger import get_minimal_logger
 
 class MinimalLogManagerUI:
     """최소한의 로그 관리자 - 복잡한 기능 제거"""

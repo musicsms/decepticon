@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from src.utils.logging.simple_replay import get_replay_system
+from src.utils.logging.replay import get_replay_system
 
 class SimpleReplayManager:
     """간단한 자동 재생 관리자 - UI 컨트롤 없음"""
@@ -36,19 +36,12 @@ class SimpleReplayManager:
                 
                 # 재현 완료 후 정리
                 self.replay_system.stop_replay()
-                if "replay_mode" in st.session_state:
-                    del st.session_state.replay_mode
-                if "replay_session_id" in st.session_state:
-                    del st.session_state.replay_session_id
                 
                 return True
             
         except Exception as e:
             st.error(f"Replay error: {e}")
             # 에러 발생 시 재현 모드 해제
-            if "replay_mode" in st.session_state:
-                del st.session_state.replay_mode
-            if "replay_session_id" in st.session_state:
-                del st.session_state.replay_session_id
+            self.replay_system.stop_replay()
         
         return False

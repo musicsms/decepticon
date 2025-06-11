@@ -54,20 +54,25 @@ class MinimalSession:
     session_id: str
     start_time: str
     events: List[MinimalEvent]
+    model: Optional[str] = None  # 사용된 모델 정보 추가
     
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "session_id": self.session_id,
             "start_time": self.start_time,
             "events": [event.to_dict() for event in self.events]
         }
+        if self.model:
+            result["model"] = self.model
+        return result
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'MinimalSession':
         return cls(
             session_id=data["session_id"],
             start_time=data["start_time"],
-            events=[MinimalEvent.from_dict(e) for e in data["events"]]
+            events=[MinimalEvent.from_dict(e) for e in data["events"]],
+            model=data.get("model")  # 모델 정보 로드 (선택적)
         )
 
 class MinimalLogger:
@@ -85,15 +90,16 @@ class MinimalLogger:
         session_dir.mkdir(parents=True, exist_ok=True)
         return session_dir / f"session_{session_id}.json"
     
-    def start_session(self) -> str:
-        """새 세션 시작"""
+    def start_session(self, model_info: Optional[str] = None) -> str:
+        """새 세션 시작 - 모델 정보 포함"""
         session_id = str(uuid.uuid4())
         start_time = datetime.now().isoformat()
         
         self.current_session = MinimalSession(
             session_id=session_id,
             start_time=start_time,
-            events=[]
+            events=[],
+            model=model_info  # 모델 정보 저장
         )
         return session_id
     
@@ -141,14 +147,20 @@ class MinimalLogger:
             self.current_session.events.append(event)
     
     def save_session(self) -> bool:
-        """세션 저장"""
+        """세션 저장 - 이벤트가 없으면 저장하지 않음"""
         if not self.current_session:
+            return False
+        
+        # 이벤트가 없으면 저장하지 않음
+        if not self.current_session.events or len(self.current_session.events) == 0:
+            print(f"Session {self.current_session.session_id} has no events, skipping save.")
             return False
         
         try:
             file_path = self._get_session_file_path(self.current_session.session_id)
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.current_session.to_dict(), f, indent=2, ensure_ascii=False)
+            print(f"Session {self.current_session.session_id} saved with {len(self.current_session.events)} events.")
             return True
         except Exception as e:
             print(f"Failed to save session: {e}")
@@ -194,6 +206,10 @@ class MinimalLogger:
                         'event_count': len(session_data.get('events', [])),
                         'file_path': str(session_file)
                     }
+                    
+                    # 모델 정보 추가 (있는 경우)
+                    if session_data.get('model'):
+                        session_info['model'] = session_data['model']
                     
                     # 첫 번째 사용자 입력으로 미리보기 생성
                     events = session_data.get('events', [])
