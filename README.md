@@ -37,20 +37,19 @@
 
 <div align="center">
 
-<<<<<<< HEAD
-| | Preview | Full |
-|---|---------|------|
-| **Web** | ![web](.github/web.gif) | [Full Demo](https://github.com/user-attachments/assets/a5286b0f-9b54-4e00-942d-ad3f8a1e7a5d) |
-| **CLI** | ![cli](.github/cli.gif) | [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
-=======
 | | Demo |
 |---|------|
 | **Web** | ![web](.github/webV2.gif) • [Full Demo](https://github.com/user-attachments/assets/da398ad3-e692-47e3-b0e7-47f01b24e0cc) |
 | **CLI** | ![cli](.github/cli.gif) • [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
 
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 </div>
+
+---
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=PurpleAILAB/Decepticon&type=Date)](https://www.star-history.com/#PurpleAILAB/Decepticon&Date)
+
 
 ---
 
@@ -59,29 +58,6 @@
 
 - [💡 What is Vibe Hacking ?](#-what-is-vibe-hacking-)
 - [💡 Why Decepticon?](#-why-decepticon)
-<<<<<<< HEAD
-- [🚀 Quick Start](#-quick-start)
-- [🤖 Agents](#-agents)
-  - [🔴 Red Team Agents](#-red-team-agents)
-  - [🔵 Utility Agents](#-utility-agents)
-- [🏛️ Multi-Architecture](#️-multi-architecture)
-- [🔧 Installation](#-installation)
-- [🧠 Advanced AI Models](#-advanced-ai-models)
-  - [☁️ Cloud Models](#️-cloud-models)
-  - [🏠 Local Models (Ollama)](#-local-models-ollama)
-- [🔧 MCP Support](#-mcp-support)
-  - [✅ Supported MCP Transports](#-supported-mcp-transports)
-  - [📁 `mcp_config.json` Structure](#-mcp_configjson-structure)
-  - [📌 Example](#-example)
-- [⚠️ Experimental Technology Disclaimer](#️-experimental-technology-disclaimer)
-- [🤝 Contributing](#-contributing)
-  - [🔧 What You Can Contribute](#-what-you-can-contribute)
-    - [🛠 Migrate Security Tools to MCP Format](#-migrate-security-tools-to-mcp-format)
-    - [🧠 Develop ReAct-style Red Team Agents](#-develop-react-style-red-team-agents)
-    - [🕸 Architect Multi-Agent Flows](#-architect-multi-agent-flows)
-  - [🚀 How to Contribute](#-how-to-contribute)
-  - [🌟 Join the Community](#-join-the-community)
-=======
 - [Quick Start](#-quick-start)
 - [Key features](#key-features)
   - [Agents](#-agents)
@@ -104,7 +80,6 @@
     - [Architect Multi-Agent Flows](#-architect-multi-agent-flows)
   - [How to Contribute](#-how-to-contribute)
 - [Join the Community](#-join-the-community)
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 - [📝 License](#-license)
 
 </details>
@@ -133,10 +108,6 @@ Delegate repetitive and manual tasks to agents, and focus on intuition and decis
 
 > ### *Prepare before AI Hacks First.*
 
-<<<<<<< HEAD
----
-=======
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 ## Quick Start
 
@@ -179,16 +150,10 @@ python cli.py
 streamlit run app.py
 ```
 
-<<<<<<< HEAD
----
-
-## Agents
-=======
 
 ## Key features
 
 ### Agents
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 #### 🔴 Red Team Agents
 - **Reconnaissance Agent**: Network scanning, service enumeration, vulnerability discovery
@@ -203,14 +168,8 @@ streamlit run app.py
 - **Summary Agent**: Analysis compilation, reporting, and documentation
 - **Supervisor Agent**(Planned): Workflow orchestration and decision routing
 
-<<<<<<< HEAD
----
-
-## Multi-Architecture
-=======
 
 ### Multi-Agent-System Architecture
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 **Flexible Architecture Options:**
 - **Swarm Architecture**: Direct peer-to-peer agent communication and collaboration
@@ -218,10 +177,6 @@ streamlit run app.py
 - **Hybrid Architecture**(Planned): Combined approach with both direct communication and centralized oversight
 - **your custom Architecture**
 
-<<<<<<< HEAD
----
-=======
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 ## Installation
 
@@ -270,11 +225,7 @@ LANGGRAPH_API_URL=http://127.0.0.1:2024
 docker-compose up -d
 ```
 
-<<<<<<< HEAD
-### 5. Start MCP Server
-=======
 ### 5. Run MCP Server
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 ```bash
 python src/tools/mcp/Inital_Access.py
 python src/tools/mcp/Recoonaissance.py
@@ -282,12 +233,6 @@ python src/tools/mcp/Recoonaissance.py
 
 ### 6. CLI 
 ```bash
-<<<<<<< HEAD
-# Activate virtual environment (if not already active)
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-=======
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 # Run CLI
 python cli.py
 ```
@@ -298,37 +243,12 @@ python cli.py
 # Run web interface
 streamlit run app.py
 ```
-<<<<<<< HEAD
-**Access the interface at:** http://localhost:8501
-
----
-=======
-
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 ## Advanced AI Models
 
 Support for **15+ AI providers** and **30+ models**:
 
 ### ☁️ Cloud Models
-<<<<<<< HEAD
-- **OpenAI**: GPT-4o, GPT-4o Mini, O1 Preview, O1 Mini
-- **Anthropic**: Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3.7 Sonnet
-- **Google**: Gemini 2.0 Flash, Gemini 2.5 Pro  
-- **Groq**: Ultra-fast Llama 4 models (Scout, Maverick)
-- **Mistral**: Mistral Large, Mistral Small
-- **xAI**: Grok Beta
-- **Perplexity**: Sonar models with web search
-
-### 🏠 Local Models (Ollama)
-- **Meta**: Llama 3.3 70B, Llama 3.1 models
-- **DeepSeek**: DeepSeek-R1 variants  
-- **Google**: Gemma 3 models (4B, 12B, 27B)
-- **Alibaba**: Qwen 3 models
-- **Mistral**: Mistral Small 3.1 (24B)
-
----
-=======
 - **OpenAI**: 4.1, 4o, 4o Mini, o4 Mini, o3 Mini, o1 Mini, o1, o3
 - **Anthropic**: Sonnet 4, Opus 4, Sonnet 3.7, Sonnet 3.5, Haiku 3.5, 
 - **Google**: Planned
@@ -338,7 +258,6 @@ Support for **15+ AI providers** and **30+ models**:
 ### 🏠 Local Models (Ollama)
 - your installed Models
 
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 ## MCP Support
 
@@ -398,10 +317,6 @@ Tools are grouped by **agent names**, and each agent can have multiple MCP serve
 2. Add the corresponding entry in `mcp_config.json`
 3. Restart the application to load the new tool
 
-<<<<<<< HEAD
----
-=======
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 ## ⚠️ Experimental Technology Disclaimer
 
@@ -416,11 +331,6 @@ We're building this project openly with the community and warmly welcome:
 
 Help us make Decepticon better by filing issues or submitting PRs (see the section below for how to contribute)!
 
-<<<<<<< HEAD
----
-=======
-
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 ## 🤝 Contribution
 
@@ -471,15 +381,6 @@ Contribute to the design and optimization of the multi-agent orchestration layer
 We encourage clean, well-tested code with documentation.  
 Feel free to open issues to discuss ideas before jumping into a PR!
 
-<<<<<<< HEAD
-### Join the Community
-
-Join our [Discord server](https://discord.gg/XGytzHZU) to connect with other developers, share ideas, ask questions, and collaborate on building the future of AI-powered red teaming!
-
-Whether you're looking for help with contributions, want to discuss new features, or just want to chat about cybersecurity and AI, our community is here to support you.
-
----
-=======
 ## Join the Community
 
 Join our [Discord](https://discord.gg/XGytzHZU) to connect with other developers, share ideas, ask questions, and collaborate on building the future of AI-powered red teaming!
@@ -487,7 +388,6 @@ Join our [Discord](https://discord.gg/XGytzHZU) to connect with other developers
 Whether you're looking for help with contributions, want to discuss new features, or just want to chat about cybersecurity and AI, our community is here to support you.
 
 
->>>>>>> d34b950fc8156b4911b6c9044fbfc170e3397ffa
 
 ## 📝 License
 
