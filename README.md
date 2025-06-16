@@ -46,6 +46,10 @@
 </div>
 
 ---
+[![Star History Chart](https://api.star-history.com/svg?repos=PurpleAILAB/Decepticon&type=Date)](https://www.star-history.com/#PurpleAILAB/Decepticon&Date)
+
+
+---
 
 <details>
 <summary><strong>📚 Table of Contents</strong></summary>
@@ -238,7 +242,6 @@ python cli.py
 streamlit run app.py
 ```
 
-
 ## Advanced AI Models
 
 Support for **15+ AI providers** and **30+ models**:
@@ -325,7 +328,6 @@ We're building this project openly with the community and warmly welcome:
 - Good vibes  
 
 Help us make Decepticon better by filing issues or submitting PRs (see the section below for how to contribute)!
-
 
 
 ## 🤝 Contribution
