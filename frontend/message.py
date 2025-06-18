@@ -7,12 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 # CLI 메시지 유틸리티 직접 import
-from src.utils.message import (
-    extract_message_content,
-    get_message_type,
-    get_agent_name,
-    parse_tool_name
-)
+from src.utils.message import parse_tool_name
 
 
 class CLIMessageProcessor:

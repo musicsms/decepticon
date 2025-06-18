@@ -1,6 +1,5 @@
 import streamlit as st
 import time
-from datetime import datetime
 
 class ModelSelectionUI:
     """Simple Dropdown Model Selection UI Class"""

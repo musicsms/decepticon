@@ -1,22 +1,6 @@
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from rich import markup
 
-# Rich imports for beautiful CLI
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.prompt import Prompt, Confirm
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.text import Text
-from rich.columns import Columns
-from rich.align import Align
-from rich import box
-from rich.status import Status
-from rich.tree import Tree
-from rich.console import Group
-from rich.syntax import Syntax
-from rich.markdown import Markdown
-
 # 도구 이름 
 def parse_tool_name(tool_name: str) -> str:
     """Parse tool name simply (no hardcoding)"""

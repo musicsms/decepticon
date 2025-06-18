@@ -161,13 +161,19 @@ class TerminalUI:
         return output
     
     def clear_terminal(self):
-        """터미널 히스토리 초기화"""
+        """터미널 히스토리 초기화 - 완전 청소"""
+        # 인스턴스 상태 초기화
         self.terminal_history = []
         self.processed_messages = set()
         
         # 세션 상태에 터미널 히스토리 저장
         st.session_state.terminal_history = self.terminal_history
         
+        # 플레이스홀더 초기화 (있는 경우)
+        if self.placeholder:
+            self.placeholder.empty()
+        
+        # 디스플레이 업데이트
         self._update_terminal_display()
     
     def process_structured_messages(self, structured_messages):

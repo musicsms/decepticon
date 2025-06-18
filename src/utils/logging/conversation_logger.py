@@ -1,6 +1,6 @@
 """
 최소한의 로거 - 재현에 필요한 정보만 기록
-기존 conversation_logger.py를 간소화한 버전
+간소화된 버전
 """
 
 import json
@@ -17,34 +17,16 @@ class EventType(Enum):
     AGENT_RESPONSE = "agent_response"
     TOOL_COMMAND = "tool_command"
     TOOL_OUTPUT = "tool_output"
-    # 기존 호환성을 위해 유지하지만 사용하지 않음
-    TOOL_EXECUTION = "tool_execution"  
-    WORKFLOW_START = "workflow_start"
-    WORKFLOW_COMPLETE = "workflow_complete"
-    WORKFLOW_ERROR = "workflow_error"
-    MODEL_CHANGE = "model_change"
-    SESSION_START = "session_start"
-    SESSION_END = "session_end"
 
 @dataclass
 class ConversationEvent:
-    """재현에 필요한 최소한의 이벤트 정보 - 기존 호환성 유지"""
+    """재현에 필요한 최소한의 이벤트 정보"""
     event_type: EventType
     timestamp: str
     content: str
     agent_name: Optional[str] = None
     tool_name: Optional[str] = None
-    
-    # 기존 호환성을 위한 더미 필드들
     event_id: str = None
-    user_id: str = None
-    session_id: str = None
-    thread_id: str = None
-    model_info: Optional[Dict[str, Any]] = None
-    execution_time: Optional[float] = None
-    step_count: Optional[int] = None
-    error_message: Optional[str] = None
-    raw_data: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
         if self.event_id is None:
@@ -74,18 +56,10 @@ class ConversationEvent:
 
 @dataclass
 class ConversationSession:
-    """재현에 필요한 최소한의 세션 정보 - 기존 호환성 유지"""
+    """재현에 필요한 최소한의 세션 정보"""
     session_id: str
     start_time: str
     events: List[ConversationEvent]
-    
-    # 기존 호환성을 위한 더미 필드들
-    user_id: str = "unknown"
-    thread_id: str = "unknown"
-    end_time: Optional[str] = None
-    model_info: Optional[Dict[str, Any]] = None
-    platform: str = "web"
-    version: str = "1.0.0"
     total_events: int = 0
     total_messages: int = 0
     total_tools_used: int = 0
@@ -121,7 +95,7 @@ class ConversationSession:
         )
 
 class ConversationLogger:
-    """최소한의 로거 - 재현에 필요한 정보만 기록, 기존 API 호환성 유지"""
+    """최소한의 로거 - 재현에 필요한 정보만 기록"""
     
     def __init__(self, base_path: str = "logs"):
         self.base_path = Path(base_path)
@@ -137,7 +111,7 @@ class ConversationLogger:
     
     def start_session(self, user_id: str = "unknown", thread_id: str = "unknown", 
                      platform: str = "web", model_info: Optional[Dict[str, Any]] = None) -> str:
-        """새 세션 시작 - 기존 API 호환성 유지"""
+        """새 세션 시작"""
         session_id = str(uuid.uuid4())
         start_time = datetime.now().isoformat()
         
@@ -151,7 +125,7 @@ class ConversationLogger:
     def log_event(self, event_type: EventType, content: Optional[str] = None,
                   agent_name: Optional[str] = None, tool_name: Optional[str] = None,
                   **kwargs) -> str:
-        """이벤트 로깅 - 기존 API 호환성 유지"""
+        """이벤트 로깅"""
         if not self.current_session:
             return None
         
@@ -182,7 +156,7 @@ class ConversationLogger:
         )
     
     def log_tool_execution(self, tool_name: str, content: str, **kwargs) -> str:
-        """도구 실행 로깅 - 호환성을 위해 tool_command로 변환"""
+        """도구 실행 로깅 - tool_command로 변환"""
         return self.log_event(
             event_type=EventType.TOOL_COMMAND,
             tool_name=tool_name,
@@ -206,19 +180,15 @@ class ConversationLogger:
         )
     
     def log_workflow_start(self, user_input: str) -> str:
-        """워크플로우 시작 로깅 - 호환성만 유지"""
+        """워크플로우 시작 로깅"""
         return self.log_user_input(user_input)
     
     def log_workflow_complete(self, step_count: int = 0, execution_time: float = 0) -> str:
-        """워크플로우 완료 로깅 - 호환성만 유지"""
+        """워크플로우 완료 로깅"""
         return str(uuid.uuid4())
     
     def log_workflow_error(self, error_message: str) -> str:
-        """워크플로우 에러 로깅 - 호환성만 유지"""
-        return str(uuid.uuid4())
-    
-    def log_model_change(self, old_model: Dict[str, Any], new_model: Dict[str, Any]) -> str:
-        """모델 변경 로깅 - 호환성만 유지"""
+        """워크플로우 에러 로깅"""
         return str(uuid.uuid4())
     
     def end_session(self) -> Optional[str]:
@@ -244,10 +214,6 @@ class ConversationLogger:
         except Exception as e:
             print(f"Failed to save session: {e}")
             return False
-    
-    def _save_session_async(self):
-        """비동기 세션 저장 - 호환성만 유지"""
-        self.save_session()
     
     def load_session(self, session_id: str) -> Optional[ConversationSession]:
         """세션 로드"""
@@ -302,20 +268,23 @@ class ConversationLogger:
         return sessions
     
     def get_session_stats(self, user_id: Optional[str] = None) -> Dict[str, Any]:
-        """세션 통계 조회 - 호환성만 유지"""
+        """세션 통계 조회"""
         sessions = self.list_sessions(user_id=user_id)
+        
+        total_messages = sum(s['total_messages'] for s in sessions)
+        avg_messages = total_messages / len(sessions) if sessions else 0
         
         return {
             'total_sessions': len(sessions),
-            'total_messages': sum(s['total_messages'] for s in sessions),
+            'total_messages': total_messages,
             'total_events': sum(s['total_events'] for s in sessions),
-            'unique_agents': list(set().union(*[s['agents_used'] for s in sessions])),
+            'unique_agents': list(set().union(*[s['agents_used'] for s in sessions if s['agents_used']])),
             'platforms_used': list(set([s['platform'] for s in sessions])),
-            'models_used': [],
-            'avg_messages_per_session': 0
+            'models_used': list(set([s['model_info'] for s in sessions if s.get('model_info')])),
+            'avg_messages_per_session': round(avg_messages, 1)
         }
 
-# 전역 인스턴스 - 기존 호환성 유지
+# 전역 인스턴스
 _global_logger: Optional[ConversationLogger] = None
 
 def get_conversation_logger() -> ConversationLogger:

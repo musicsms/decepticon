@@ -1,5 +1,5 @@
 """
-채팅 화면에서 세션 자동 재생 기능 (간단 버전)
+채팅 화면에서 세션 자동 재생 기능
 """
 
 import streamlit as st
@@ -9,8 +9,8 @@ from typing import Optional, Dict, Any
 
 from src.utils.logging.replay import get_replay_system
 
-class SimpleReplayManager:
-    """간단한 자동 재생 관리자 - UI 컨트롤 없음"""
+class ReplayManager:
+    """자동 재생 관리자 - UI 컨트롤 없음"""
     
     def __init__(self):
         self.replay_system = get_replay_system()

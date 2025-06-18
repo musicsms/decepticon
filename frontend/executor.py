@@ -5,7 +5,6 @@ Direct Executor - CLI 로직을 프론트엔드에서 직접 실행하는 모듈
 
 import asyncio
 import uuid
-import time
 from datetime import datetime
 from typing import Optional, Dict, Any, AsyncGenerator
 
@@ -50,7 +49,7 @@ class DirectExecutor:
     def current_model(self):
         return self._current_model
     
-    async def initialize_swarm(self, model_info: Optional[Dict[str, Any]] = None):
+    async def initialize_swarm(self, model_info: Optional[Dict[str, Any]] = None, thread_config: Optional[Dict[str, Any]] = None):
         """Swarm 초기화"""
         try:
             print(f"[DEBUG] Starting swarm initialization with model: {model_info}")
@@ -59,16 +58,20 @@ class DirectExecutor:
             self._initialized = False
             self._swarm = None
             
-            # 쓰레드 ID 생성
-            self._thread_id = str(uuid.uuid4())
-            print(f"[DEBUG] Generated thread ID: {self._thread_id}")
-            
-            # 설정 초기화
-            self._config = {
-                "configurable": {
-                    "thread_id": self._thread_id,
+            # Thread config 처리 - 외부에서 제공되면 사용, 없으면 새로 생성
+            if thread_config:
+                self._config = thread_config
+                self._thread_id = thread_config["configurable"]["thread_id"]
+                print(f"[DEBUG] Using provided thread config with thread_id: {self._thread_id}")
+            else:
+                # 기존 방식: 새로운 UUID 생성
+                self._thread_id = str(uuid.uuid4())
+                self._config = {
+                    "configurable": {
+                        "thread_id": self._thread_id,
+                    }
                 }
-            }
+                print(f"[DEBUG] Generated new thread ID: {self._thread_id}")
             
             # 모델 정보 설정
             if model_info:

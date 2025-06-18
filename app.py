@@ -2,10 +2,8 @@ import streamlit as st
 import time
 import os
 import asyncio
+import uuid
 from datetime import datetime
-import json
-from pathlib import Path
-import re
 from dotenv import load_dotenv
 import hashlib
 
@@ -53,8 +51,8 @@ from frontend.message import CLIMessageProcessor
 from frontend.chat_ui import ChatUI
 from frontend.terminal_ui import TerminalUI
 from frontend.model import ModelSelectionUI
-from frontend.components.simple_log_manager import SimpleLogManagerUI
-from frontend.components.chat_replay import SimpleReplayManager
+from frontend.components.log_manager import LogManagerUI
+from frontend.components.chat_replay import ReplayManager
 
 # 터미널 UI CSS 적용
 terminal_ui = TerminalUI()
@@ -94,11 +92,11 @@ class DecepticonApp:
         # 모델 선택 UI 초기화
         self.model_ui = ModelSelectionUI(self.theme_manager)
         
-        # 간소화된 로그 관리 UI 초기화
-        self.log_manager_ui = SimpleLogManagerUI()
+        # 로그 관리 UI 초기화
+        self.log_manager_ui = LogManagerUI()
         
-        # 간소화된 재생 기능 초기화
-        self.chat_replay = SimpleReplayManager()
+        # 재생 기능 초기화
+        self.chat_replay = ReplayManager()
         
         self._initialize_session_state()
         self._initialize_user_session()
@@ -133,6 +131,7 @@ class DecepticonApp:
         for key, default_value in defaults.items():
             if key not in st.session_state:
                 st.session_state[key] = default_value
+                log_debug(f"Initialized session state: {key} = {default_value}")
     
     def _initialize_user_session(self):
         """사용자 세션 및 thread config 초기화"""
@@ -179,7 +178,7 @@ class DecepticonApp:
             log_debug(f"Executor ready state synchronized: {st.session_state.executor_ready}")
     
     def reset_session(self):
-        """세션 초기화"""
+        """세션 초기화 - 터미널 UI 완전 초기화 포함"""
         log_debug("Resetting session")
         
         # 현재 로그 세션 종료
@@ -205,6 +204,25 @@ class DecepticonApp:
                 else:
                     st.session_state[key] = False if key != "current_model" else None
         
+        # 🔥 터미널 UI 완전 초기화 추가
+        # 터미널 히스토리 초기화
+        st.session_state.terminal_history = []
+        
+        # 터미널 플레이스홀더 초기화
+        st.session_state.terminal_placeholder = None
+        
+        # TerminalUI 인스턴스의 상태 초기화
+        if hasattr(self, 'terminal_ui'):
+            self.terminal_ui.clear_terminal()
+            # processed_messages도 초기화
+            self.terminal_ui.processed_messages = set()
+            self.terminal_ui.terminal_history = []
+        
+        # 재현 관련 상태 초기화 (혹시 남아있을 수 있는 재현 모드 해제)
+        for replay_key in ["replay_mode", "replay_session_id", "replay_completed"]:
+            if replay_key in st.session_state:
+                st.session_state.pop(replay_key, None)
+        
         # 모델 선택 상태 초기화
         self.model_ui.reset_selection()
         
@@ -215,7 +233,7 @@ class DecepticonApp:
         st.session_state.direct_executor = DirectExecutor()
         self.executor = st.session_state.direct_executor
         
-        log_debug("Session reset completed")
+        log_debug("Session reset completed - including terminal UI cleanup")
         st.rerun()
     
     async def initialize_executor_async(self, model_info=None):
@@ -573,14 +591,17 @@ class DecepticonApp:
 
         # 터미널 영역 초기화
         with terminal_column:
-            # 터미널 플레이스홀더가 None인 경우 (새 채팅 시작 후) 터미널 히스토리 클리어
-            if st.session_state.terminal_placeholder is None and not st.session_state.terminal_messages:
-                st.session_state.terminal_history = []
+            # 터미널 플레이스홀더가 None인 경우 (새 채팅 시작 후 또는 Reset Session 후) 터미널 히스토리 클리어
+            if st.session_state.terminal_placeholder is None:
+                # 터미널 히스토리 초기화 보장
+                if "terminal_history" not in st.session_state:
+                    st.session_state.terminal_history = []
+                # 터미널 UI 청소
                 self.terminal_ui.clear_terminal()
                 
             st.session_state.terminal_placeholder = self.terminal_ui.create_terminal(terminal_column)
 
-            # 저장된 터미널 메시지 복원
+            # 저장된 터미널 메시지 복원 (재현 모드에서도 올바르게 동작)
             if st.session_state.terminal_messages:
                 self.terminal_ui.process_structured_messages(st.session_state.terminal_messages)
 
@@ -649,8 +670,8 @@ class DecepticonApp:
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
                     if st.button("🔄 Start New Chat", use_container_width=True, type="primary", key="start_new_chat_btn"):
-                        # 재현 모드 해제하고 메시지 초기화 (모델 유지)
-                        log_debug("Start New Chat button clicked - clearing messages but keeping model")
+                        # 재현 모드 해제하고 완전히 새로운 채팅 세션 시작
+                        log_debug("Start New Chat button clicked - creating completely new chat session")
                         
                         # 재현 관련 플래그 제거
                         st.session_state.pop("replay_mode", None)
@@ -680,19 +701,41 @@ class DecepticonApp:
                         if hasattr(self, 'terminal_ui'):
                             self.terminal_ui.clear_terminal()
                         
+                        # 🔥 핵심: Thread Config 완전 초기화 (새로운 conversation_id로)
+                        new_conversation_id = str(uuid.uuid4())  # 새로운 고유 ID 생성
+                        st.session_state.thread_config = create_thread_config(
+                            user_id=st.session_state.user_id,
+                            conversation_id=new_conversation_id
+                        )
+                        log_debug(f"Created new thread config with conversation_id: {new_conversation_id}")
+                        log_debug(f"New thread_id: {st.session_state.thread_config['configurable']['thread_id']}")
+                        
+                        # DirectExecutor 재초기화 (새로운 thread_id로)
+                        st.session_state.direct_executor = DirectExecutor()
+                        self.executor = st.session_state.direct_executor
+                        
+                        # Executor를 현재 모델로 재초기화 (새로운 thread_config 사용)
+                        current_model = st.session_state.get('current_model')
+                        if current_model:
+                            asyncio.run(self.executor.initialize_swarm(
+                                model_info=current_model,
+                                thread_config=st.session_state.thread_config  # 새로운 thread_config 전달
+                            ))
+                            st.session_state.executor_ready = True
+                            log_debug(f"DirectExecutor reinitialized with new thread_config and model: {current_model['display_name']}")
+                        
                         # 현재 로깅 세션 종료 및 새 세션 시작 - 모델 정보 포함
                         if hasattr(st.session_state, 'minimal_logger') and st.session_state.minimal_logger.current_session:
                             st.session_state.minimal_logger.end_session()
                         
                         # 현재 모델 정보 가져오기
-                        current_model = st.session_state.get('current_model', {})
                         model_display_name = current_model.get('display_name', 'Unknown Model') if current_model else 'No Model'
                         
                         session_id = st.session_state.minimal_logger.start_session(model_display_name)
                         st.session_state.logging_session_id = session_id
                         log_debug(f"Started new logging session: {session_id} with model: {model_display_name}")
                         
-                        st.success("New chat session started! Your model is ready.")
+                        st.success("New chat session started! Your model is ready with fresh memory.")
                         st.rerun()
             else:
                 # 재현 진행 중 - 빈 공간 유지
@@ -703,8 +746,8 @@ class DecepticonApp:
                     st.empty()
 
     def run_log_manager(self):
-        """간소화된 로그 관리 화면 실행"""
-        self.log_manager_ui.display_simple_log_page()
+        """로그 관리 화면 실행"""
+        self.log_manager_ui.display_log_page()
     
     def run(self):
         """애플리케이션 실행 - 단계별 라우팅"""

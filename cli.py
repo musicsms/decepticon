@@ -27,7 +27,6 @@ from rich import box
 from rich.status import Status
 from rich.tree import Tree
 from rich.console import Group
-from rich.syntax import Syntax
 from rich.markdown import Markdown
 
 # Decepticon imports

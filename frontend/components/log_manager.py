@@ -1,5 +1,5 @@
 """
-간단한 로그 관리 UI 컴포넌트 - 간소화된 버전
+로그 관리 UI 컴포넌트
 """
 
 import streamlit as st
@@ -10,14 +10,14 @@ from typing import Dict, Any, List
 
 from src.utils.logging.logger import get_minimal_logger
 
-class SimpleLogManagerUI:
-    """간단한 로그 관리 UI 클래스 - 재현 기능에 집중"""
+class LogManagerUI:
+    """로그 관리 UI 클래스 - 재현 기능에 집중"""
     
     def __init__(self):
         self.logger = get_minimal_logger()
         
-    def display_simple_log_page(self):
-        """간단한 로그 페이지 표시"""
+    def display_log_page(self):
+        """로그 페이지 표시"""
         st.title("📊 :red[Session Logs]")
         
         # 뒤로가기 버튼
