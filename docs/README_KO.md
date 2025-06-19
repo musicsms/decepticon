@@ -22,7 +22,7 @@
   <br/>
 
   <!-- Discord -->
-  <a href="https://discord.gg/XGytzHZU">
+  <a href="https://discord.gg/TZUYsZgrRG">
     <img src="https://img.shields.io/badge/Discord-Join%20Us-7289DA?logo=discord&logoColor=white&style=for-the-badge" alt="Join us on Discord">
   </a>
 

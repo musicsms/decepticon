@@ -22,7 +22,7 @@
   <br/>
 
   <!-- Discord -->
-  <a href="https://discord.gg/XGytzHZU">
+  <a href="https://discord.gg/TZUYsZgrRG">
     <img src="https://img.shields.io/badge/Discord-Join%20Us-7289DA?logo=discord&logoColor=white&style=for-the-badge" alt="Join us on Discord">
   </a>
 
@@ -46,6 +46,10 @@
 </div>
 
 ---
+[![Star History Chart](https://api.star-history.com/svg?repos=PurpleAILAB/Decepticon&type=Date)](https://www.star-history.com/#PurpleAILAB/Decepticon&Date)
+
+
+---
 
 <details>
 <summary><strong>📚 Table of Contents</strong></summary>
@@ -60,6 +64,7 @@
     - [🔵 Utility Agents](#-utility-agents)
   - [Multi-Agent-System Architecture](#multi-agent-system-architecture)
   - [Replay](#replay)
+
 - [Installation](#-installation)
 - [Advanced AI Models](#-advanced-ai-models)
   - [☁️ Cloud Models](#️-cloud-models)
@@ -108,8 +113,6 @@ Built on the robust foundation of **LangChain/LangGraph**, Decepticon grows alon
 Delegate repetitive and manual tasks to agents, and focus on intuition and decision-making to fulfill the true essence of a **CyberSecurity Supervisor**.
 
 > ### *Prepare before AI Hacks First.*
-
-
 
 
 ## Quick Start
@@ -179,6 +182,7 @@ streamlit run app.py
 - **Supervisor Architecture**(Planned): Centralized control with supervisor-managed workflows
 - **Hybrid Architecture**(Planned): Combined approach with both direct communication and centralized oversight
 - **your custom Architecture**
+
 
 ### Replay
 
@@ -255,7 +259,6 @@ python cli.py
 # Run web interface
 streamlit run app.py
 ```
-
 
 ## Advanced AI Models
 
@@ -343,7 +346,6 @@ We're building this project openly with the community and warmly welcome:
 - Good vibes  
 
 Help us make Decepticon better by filing issues or submitting PRs (see the section below for how to contribute)!
-
 
 
 ## 🤝 Contribution
