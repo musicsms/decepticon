@@ -106,6 +106,8 @@ class DecepticonApp:
     
     def _initialize_session_state(self):
         """세션 상태 초기화"""
+        import time
+        
         defaults = {
             "executor_ready": False,
             "messages": [],
@@ -124,6 +126,7 @@ class DecepticonApp:
             "terminal_placeholder": None,
             "event_history": [],
             "app_stage": "model_selection",  # 앱 단계: model_selection, main_app, log_manager
+            "session_start_time": time.time(),  # 세션 시작 시간 추가
         }
         
         defaults["debug_mode"] = self.env_config.get("debug_mode", False)
@@ -182,8 +185,10 @@ class DecepticonApp:
         log_debug("Resetting session")
         
         # 현재 로그 세션 종료
-        if hasattr(st.session_state, 'logger') and st.session_state.logger.current_session:
+        if hasattr(st.session_state, 'logger') and st.session_state.logger and st.session_state.logger.current_session:
             st.session_state.logger.end_session()
+        
+        import time
         
         reset_keys = [
             "executor_ready", "messages", "structured_messages", "terminal_messages",
@@ -191,6 +196,9 @@ class DecepticonApp:
             "agent_status_placeholders", "terminal_placeholder", "event_history",
             "initialization_in_progress", "initialization_error", "current_model"
         ]
+        
+        # 세션 시작 시간 리셋
+        st.session_state.session_start_time = time.time()
         
         for key in reset_keys:
             if key in st.session_state:
@@ -241,9 +249,15 @@ class DecepticonApp:
         try:
             log_debug(f"Starting async executor initialization with model: {model_info}")
             
+            # 로거 초기화 확인 (안전 장치)
+            if "logger" not in st.session_state or st.session_state.logger is None:
+                st.session_state.logger = get_logger()
+                st.session_state.replay_system = get_replay_system()
+                log_debug("Logger initialized during executor setup")
+            
             # 최소한의 로깅 세션 시작 - 모델 정보 포함
             model_display_name = model_info.get('display_name', 'Unknown Model') if model_info else 'Default Model'
-            session_id = st.session_state.minimal_logger.start_session(model_display_name)
+            session_id = st.session_state.logger.start_session(model_display_name)
             st.session_state.logging_session_id = session_id
             log_debug(f"Started logging session: {session_id} with model: {model_display_name}")
             
@@ -272,8 +286,9 @@ class DecepticonApp:
             
             return False
     
+    # toggle_controls 메서드는 더 이상 사용하지 않으므로 제거하거나 유지
     def toggle_controls(self):
-        """컨트롤 패널 토글"""
+        """컨트롤 패널 토글 (레거시 - 새 UI에서는 사용하지 않음)"""
         st.session_state.show_controls = not st.session_state.show_controls
         log_debug(f"Controls toggled: {st.session_state.show_controls}")
     
@@ -329,8 +344,14 @@ class DecepticonApp:
         
         log_debug(f"Executing workflow: {user_input[:50]}...")
         
+        # 로거 초기화 확인 (안전 장치)
+        if "logger" not in st.session_state or st.session_state.logger is None:
+            st.session_state.logger = get_logger()
+            st.session_state.replay_system = get_replay_system()
+            log_debug("Logger initialized during workflow execution")
+        
         # 최소한의 로깅 - 재현에 필요한 정보만
-        st.session_state.minimal_logger.log_user_input(user_input)
+        st.session_state.logger.log_user_input(user_input)
         
         user_message = self.message_processor._create_user_message(user_input)
         st.session_state.structured_messages.append(user_message)
@@ -373,19 +394,19 @@ class DecepticonApp:
                                 
                                 # 최소한의 로깅 - 재현에 필요한 정보만
                                 if message_type == "ai":
-                                    st.session_state.minimal_logger.log_agent_response(
+                                    st.session_state.logger.log_agent_response(
                                         agent_name=agent_name,
                                         content=content
                                     )
                                 elif message_type == "tool":
                                     tool_name = event.get("tool_name", "Unknown Tool")
                                     if "command" in event:  # 도구 명령
-                                        st.session_state.minimal_logger.log_tool_command(
+                                        st.session_state.logger.log_tool_command(
                                             tool_name=tool_name,
                                             command=event.get("command", content)
                                         )
                                     else:  # 도구 출력
-                                        st.session_state.minimal_logger.log_tool_output(
+                                        st.session_state.logger.log_tool_output(
                                             tool_name=tool_name,
                                             output=content
                                         )
@@ -435,7 +456,7 @@ class DecepticonApp:
         finally:
             st.session_state.workflow_running = False
             # 세션 자동 저장
-            st.session_state.minimal_logger.save_session()
+            st.session_state.logger.save_session()
     
     def _display_message(self, message):
         """메시지 표시"""
@@ -498,93 +519,202 @@ class DecepticonApp:
 
         st.title(":red[Decepticon]")
 
-        # 사이드바 설정
+        # 사이드바 설정 - 현대적인 AI UI/UX 스타일
         sidebar = st.sidebar
 
-        title_container = sidebar.container()
-        title_container.title("Agent Status")
+        # 🧠 Agent Status (타이틀 없이, 최상단)
+        with sidebar.container():
+            agents_container = st.container()
+            self.chat_ui.display_agent_status(
+                agents_container,
+                st.session_state.active_agent,
+                None,
+                st.session_state.completed_agents
+            )
 
-        agents_container = sidebar.container()
-        self.chat_ui.display_agent_status(
-            agents_container,
-            st.session_state.active_agent,
-            None,
-            st.session_state.completed_agents
-        )
+        sidebar.divider()
 
-        divider_container = sidebar.container()
-        divider_container.divider()
-
-        control_container = sidebar.container()
-        cols = control_container.columns(2)
-
-        if cols[0].button("Control", use_container_width=True):
-            self.toggle_controls()
-
-        self.theme_manager.create_theme_toggle(cols[1])
-
-        control_panel_container = sidebar.container()
-        if st.session_state.show_controls:
-            with control_panel_container.expander("Control", expanded=True):
-                # AI Agent 상태
-                if st.session_state.executor_ready and self.executor.is_ready():
-                    st.success("✅ AI Agents Ready")
-                elif st.session_state.initialization_in_progress:
-                    st.info("🛠️ Initializing...")
-                elif st.session_state.initialization_error:
-                    st.error(f"❌ Init Error: {st.session_state.initialization_error}")
+        # 🤖 현재 모델 정보 (모던한 블랙테마 스타일)
+        with sidebar.container():
+            if st.session_state.current_model:
+                model_name = st.session_state.current_model.get('display_name', 'Unknown Model')
+                provider = st.session_state.current_model.get('provider', 'Unknown')
+                
+                # 테마에 따른 색상 설정
+                is_dark = st.session_state.get('dark_mode', True)
+                
+                if is_dark:
+                    bg_color = "#1a1a1a"
+                    border_color = "#333333"
+                    text_color = "#ffffff"
+                    subtitle_color = "#888888"
+                    icon_color = "#4a9eff"
                 else:
-                    st.warning("⚠️ AI Agents Not Ready")
+                    bg_color = "#f8f9fa"
+                    border_color = "#e9ecef"
+                    text_color = "#212529"
+                    subtitle_color = "#6c757d"
+                    icon_color = "#0d6efd"
+                
+                st.markdown(f"""
+                <div style="
+                    background: {bg_color};
+                    border: 1px solid {border_color};
+                    border-radius: 8px;
+                    padding: 12px 16px;
+                    margin: 8px 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    transition: all 0.2s ease;
+                ">
+                    <div style="
+                        color: {icon_color};
+                        font-size: 18px;
+                        line-height: 1;
+                    "></div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="
+                            color: {text_color};
+                            font-weight: 600;
+                            font-size: 14px;
+                            margin: 0;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                        ">{model_name}</div>
+                        <div style="
+                            color: {subtitle_color};
+                            font-size: 12px;
+                            margin: 2px 0 0 0;
+                            opacity: 0.8;
+                        ">{provider}</div>
+                    </div>
+                    <div style="
+                        width: 8px;
+                        height: 8px;
+                        background: #10b981;
+                        border-radius: 50%;
+                        flex-shrink: 0;
+                    "></div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                # 모델이 선택되지 않은 경우
+                is_dark = st.session_state.get('dark_mode', True)
+                
+                if is_dark:
+                    bg_color = "#1a1a1a"
+                    border_color = "#444444"
+                    text_color = "#888888"
+                    icon_color = "#666666"
+                else:
+                    bg_color = "#f8f9fa"
+                    border_color = "#dee2e6"
+                    text_color = "#6c757d"
+                    icon_color = "#adb5bd"
+                
+                st.markdown(f"""
+                <div style="
+                    background: {bg_color};
+                    border: 1px dashed {border_color};
+                    border-radius: 8px;
+                    padding: 12px 16px;
+                    margin: 8px 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    opacity: 0.7;
+                ">
+                    <div style="
+                        color: {icon_color};
+                        font-size: 18px;
+                        line-height: 1;
+                    ">🤖</div>
+                    <div style="flex: 1;">
+                        <div style="
+                            color: {text_color};
+                            font-weight: 500;
+                            font-size: 14px;
+                            margin: 0;
+                        ">No Model Selected</div>
+                        <div style="
+                            color: {text_color};
+                            font-size: 12px;
+                            margin: 2px 0 0 0;
+                            opacity: 0.6;
+                        ">Choose a model to start</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                # 모델 정보
-                if st.session_state.current_model:
-                    st.info(f"🧠 Model: {st.session_state.current_model.get('display_name', 'Unknown')}")
+        sidebar.divider()
 
-                # Control 버튼
-                if st.button("🔁 Change Model"):
-                    st.session_state.app_stage = "model_selection"
-                    st.rerun()
+        # 주요 액션 버튼들 (타이틀 없이, 균일한 크기)
+        with sidebar.container():
+            # 모든 버튼을 동일한 크기로
+            if st.button("🔁 Change Model", use_container_width=True, help="Switch to a different AI model"):
+                st.session_state.app_stage = "model_selection"
+                st.rerun()
+                
+            if st.button("💬 Chat History", use_container_width=True, help="View conversation history and logs"):
+                st.session_state.app_stage = "log_manager"
+                st.rerun()
+            
+            if st.button("✨ New Chat", use_container_width=True, help="Start a fresh conversation"):
+                self.reset_session()
 
-                if st.button("🔄 Reset Session"):
-                    self.reset_session()
+        sidebar.divider()
 
-                if st.button("📊 View Logs"):
-                    st.session_state.app_stage = "log_manager"
-                    st.rerun()
+        # ⚙️ Settings & Debug
+        with sidebar.container():
+            st.markdown("### ⚙️ Settings")
+            
+            # 테마 토글 (기존 방식으로 복원)
+            self.theme_manager.create_theme_toggle(st)
+            
+            # Debug 모드 토글
+            debug_mode = st.checkbox(
+                "🐞 Debug Mode", 
+                value=st.session_state.debug_mode,
+                help="Show detailed debugging information"
+            )
+            self.set_debug_mode(debug_mode)
+            
+            # 간단한 통계 정보 (컴팩트하게)
+            with st.expander("📊 Session Stats", expanded=False):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Messages", len(st.session_state.structured_messages))
+                    st.metric("Events", len(st.session_state.event_history))
+                with col2:
+                    st.metric("Steps", st.session_state.current_step)
+                    # 세션 시간 계산 (간단하게)
+                    if hasattr(st.session_state, 'session_start_time'):
+                        import time
+                        elapsed = int(time.time() - st.session_state.session_start_time)
+                        st.metric("Time", f"{elapsed}s")
+                    else:
+                        st.metric("Time", "--")
 
-                # Debug 모드
-                debug_mode = st.checkbox("🐞 Debug Mode", value=st.session_state.debug_mode)
-                self.set_debug_mode(debug_mode)
-
-                # 통계 정보
-                st.divider()
-                st.subheader("📈 Statistics")
-                st.text(f"Messages: {len(st.session_state.structured_messages)}")
-                st.text(f"Events: {len(st.session_state.event_history)}")
-                st.text(f"Step: {st.session_state.current_step}")
-
-                # Debug 모드일 때 세션 정보
-                if st.session_state.debug_mode:
-                    st.subheader("🗂️ Session Info")
+            # Debug 정보 (Debug 모드일 때만)
+            if st.session_state.debug_mode:
+                with st.expander("🔍 Debug Info", expanded=False):
+                    st.markdown("**Session Info:**")
                     session_info = {
                         "user_id": st.session_state.get("user_id", "Not set"),
-                        "thread_config": st.session_state.get("thread_config", {}),
+                        "thread_id": st.session_state.get("thread_config", {}).get("configurable", {}).get("thread_id", "Not set")[:8] + "...",
                     }
                     st.json(session_info)
-
-                    st.subheader("🧾 Logging Info")
-                    if hasattr(st.session_state, 'logger'):
+                    
+                    if hasattr(st.session_state, 'logger') and st.session_state.logger.current_session:
+                        st.markdown("**Logging Info:**")
                         current_session = st.session_state.logger.current_session
-                        if current_session:
-                            logging_info = {
-                                "session_id": current_session.session_id,
-                                "events_count": len(current_session.events),
-                            }
-                            st.json(logging_info)
-                        else:
-                            st.text("No active logging session")
-                    else:
-                        st.text("Logger not initialized")
+                        logging_info = {
+                            "session_id": current_session.session_id[:8] + "...",
+                            "events_count": len(current_session.events),
+                        }
+                        st.json(logging_info)
 
         # 레이아웃: 두 개의 열로 분할 (채팅과 터미널)
         chat_column, terminal_column = st.columns([2, 1])
@@ -669,7 +799,7 @@ class DecepticonApp:
                 log_debug("Showing replay completed button outside chat container")
                 col1, col2, col3 = st.columns([1, 2, 1])
                 with col2:
-                    if st.button("🔄 Start New Chat", use_container_width=True, type="primary", key="start_new_chat_btn"):
+                    if st.button("✨ Start New Chat", use_container_width=True, type="primary", key="start_new_chat_btn"):
                         # 재현 모드 해제하고 완전히 새로운 채팅 세션 시작
                         log_debug("Start New Chat button clicked - creating completely new chat session")
                         
@@ -710,6 +840,10 @@ class DecepticonApp:
                         log_debug(f"Created new thread config with conversation_id: {new_conversation_id}")
                         log_debug(f"New thread_id: {st.session_state.thread_config['configurable']['thread_id']}")
                         
+                        # 새 채팅 세션 시작 시간 리셋
+                        import time
+                        st.session_state.session_start_time = time.time()
+                        
                         # DirectExecutor 재초기화 (새로운 thread_id로)
                         st.session_state.direct_executor = DirectExecutor()
                         self.executor = st.session_state.direct_executor
@@ -725,8 +859,14 @@ class DecepticonApp:
                             log_debug(f"DirectExecutor reinitialized with new thread_config and model: {current_model['display_name']}")
                         
                         # 현재 로깅 세션 종료 및 새 세션 시작 - 모델 정보 포함
-                        if hasattr(st.session_state, 'logger') and st.session_state.logger.current_session:
+                        if hasattr(st.session_state, 'logger') and st.session_state.logger and st.session_state.logger.current_session:
                             st.session_state.logger.end_session()
+                        
+                        # 로거 초기화 확인 (안전 장치)
+                        if "logger" not in st.session_state or st.session_state.logger is None:
+                            st.session_state.logger = get_logger()
+                            st.session_state.replay_system = get_replay_system()
+                            log_debug("Logger initialized during new chat creation")
                         
                         # 현재 모델 정보 가져오기
                         model_display_name = current_model.get('display_name', 'Unknown Model') if current_model else 'No Model'
@@ -735,7 +875,7 @@ class DecepticonApp:
                         st.session_state.logging_session_id = session_id
                         log_debug(f"Started new logging session: {session_id} with model: {model_display_name}")
                         
-                        st.success("New chat session started! Your model is ready with fresh memory.")
+                        st.success("✨ New chat session started! Your model is ready with fresh memory.")
                         st.rerun()
             else:
                 # 재현 진행 중 - 빈 공간 유지
