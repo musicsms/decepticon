@@ -3,10 +3,16 @@ from src.agents.swarm.InitAccess import make_initaccess_agent
 from src.agents.swarm.Planner import make_planner_agent
 from src.agents.swarm.Summary import make_summary_agent
 from src.utils.swarm.swarm import create_swarm
+from src.utils.memory import get_checkpointer, get_store
 import asyncio
-from langgraph.checkpoint.memory import InMemorySaver
+import logging
 
-checkpointer = InMemorySaver()
+logger = logging.getLogger(__name__)
+
+# 중앙 집중식 persistence 인스턴스
+checkpointer = get_checkpointer()
+store = get_store() 
+
 # 비동기 함수로 workflow 선언하면 langgraph dev 는 실행안될수도있음
 
 
@@ -36,11 +42,18 @@ async def create_agents():
 
 async def create_dynamic_swarm():
     """동적으로 swarm 생성 - 모델 선택 후 호출"""
+    logger.info("Creating dynamic swarm with InMemory persistence")
+    
     agents = await create_agents()
     workflow = create_swarm(
         agents=agents,
         default_active_agent="Planner",
     )
-    return workflow.compile(
-        checkpointer=checkpointer
-        )
+    
+    compiled_workflow = workflow.compile(
+        checkpointer=checkpointer,  # ✅ InMemory 체크포인터 활성화
+        store=store  # ✅ InMemory 스토어 활성화
+    )
+    
+    logger.info("Swarm compiled with InMemory checkpointer and store")
+    return compiled_workflow

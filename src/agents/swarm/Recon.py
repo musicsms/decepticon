@@ -2,21 +2,9 @@ from langgraph.prebuilt import create_react_agent
 from src.prompts.prompt_loader import load_recon_prompt
 from src.tools.handoff import handoff_to_planner, handoff_to_initial_access, handoff_to_summary
 from langchain_mcp_adapters.client import MultiServerMCPClient
-# from langgraph.store.memory import InMemoryStore
-# from langmem import create_manage_memory_tool, create_search_memory_tool
-# from src.utils.llm.models import get_model, ModelProvider
+from langmem import create_manage_memory_tool, create_search_memory_tool
 from src.utils.llm.config_manager import get_current_llm
-
-# model_name = "claude-3-5-sonnet-latest"
-# provider = ModelProvider.OPENAI
-# AGENT_LLM = get_model(model_name=model_name, model_provider=provider)
-
-# store = InMemoryStore(
-#     index={
-#         "dims": 1536,
-#         "embed": "openai:text-embedding-3-small",
-#     }
-# ) 
+from src.utils.memory import get_store 
 
 from src.utils.mcp.mcp_loader import load_mcp_tools
 
@@ -29,6 +17,9 @@ async def make_recon_agent():
         llm = ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=0)
         print("Warning: Using default LLM model (Claude 3.5 Sonnet)")
     
+    # 중앙 집중식 store 사용
+    store = get_store()
+    
     mcp_tools = await load_mcp_tools(agent_name=["reconnaissance"])
 
         
@@ -36,14 +27,14 @@ async def make_recon_agent():
         handoff_to_initial_access,
         handoff_to_planner,
         handoff_to_summary,
-        # create_manage_memory_tool(namespace=("memories",)),
-        # create_search_memory_tool(namespace=("memories",))
+        create_manage_memory_tool(namespace=("memories",)),
+        create_search_memory_tool(namespace=("memories",))
     ]
 
     agent = create_react_agent(
         llm,
         tools=swarm_tools,
-        # store=store,
+        store=store,
         name="Reconnaissance",
         prompt=load_recon_prompt("swarm")
     )

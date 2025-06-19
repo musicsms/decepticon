@@ -141,7 +141,7 @@ class ChatUI:
                 time.sleep(speed)
     
     def display_messages(self, structured_messages, container=None):
-        """구조화된 메시지를 UI에 표시 - CLI와 완전히 동일한 방식"""
+        """구조화된 메시지를 UI에 표시 - 일반 워크플로우와 동일하게 처리"""
         if container is None:
             container = st
             
@@ -154,21 +154,28 @@ class ChatUI:
                     st.write(message.get("content", ""))
                     
             elif message_type == "ai":
-                # AI 에이전트 메시지 - CLI와 동일하게 단순화
-                self.display_agent_message(message, container)
+                # AI 에이전트 메시지 - 일반 워크플로우와 동일
+                self.display_agent_message(message, container, streaming=False)
                 
             elif message_type == "tool":
-                # 도구 메시지 - CLI와 동일하게 단순화
+                # 도구 메시지 - 일반 워크플로우와 동일
                 self.display_tool_message(message, container)
     
     def display_agent_message(self, message, container=None, streaming=True):
-        """에이전트 메시지 표시 - 메시지 출력 후 CSS 적용"""
+        """에이전트 메시지 표시 - 재현 시스템 호환성 개선"""
         if container is None:
             container = st
             
         display_name = message.get("display_name", "Agent")
         avatar = message.get("avatar", "🤖")
-        content = message.get("content", "")
+        
+        # 재현 시스템과 일반 시스템 모두 호환
+        if "data" in message and isinstance(message["data"], dict):
+            # 재현 시스템 형식
+            content = message["data"].get("content", "")
+        else:
+            # 일반 시스템 형식
+            content = message.get("content", "")
         
         # namespace 정보에서 에이전트 이름 추출 (기존 get_agent_name 함수 사용)
         namespace = message.get("namespace", "")
@@ -192,7 +199,6 @@ class ChatUI:
         
         # 고유한 메시지 ID 생성
         st.session_state.message_counter += 1
-        # message_position = st.session_state.message_counter
         
         # 메시지 먼저 출력 (DOM 요소 생성)
         with container.chat_message("assistant", avatar=avatar):
@@ -203,13 +209,14 @@ class ChatUI:
             if content:
                 text_placeholder = st.empty()
                 
-                if streaming and len(content) > 50:
+                # 재현 모드에서는 타이핑 애니메이션 비활성화
+                is_replay_mode = st.session_state.get("replay_mode", False)
+                if streaming and len(content) > 50 and not is_replay_mode:
                     self.simulate_typing(content, text_placeholder, speed=0.005)
                 else:
                     text_placeholder.write(content)
             else:
                 st.write("No content available")
-        
     
     def display_tool_message(self, message, container=None):
         """도구 메시지 표시 - 메시지 출력 후 CSS 적용"""
@@ -225,7 +232,6 @@ class ChatUI:
         
         # 고유한 메시지 ID 생성
         st.session_state.message_counter += 1
-        # message_position = st.session_state.message_counter
         
         # 메시지 먼저 출력 (DOM 요소 생성)
         with container.chat_message("tool", avatar="🔧"):
@@ -241,8 +247,43 @@ class ChatUI:
                         st.text(content)
                 else:
                     st.code(content)
+    
+    def display_tool_command(self, message, container=None):
+        """도구 명령 메시지 표시 - 재현 시스템 호환성"""
+        if container is None:
+            container = st
+            
+        display_name = message.get("display_name", "Tool")
+        command = message.get("data", {}).get("command", "")
         
-
+        # 도구 색상 가져오기
+        tool_color = self.get_agent_color("tool")
+        
+        with container.chat_message("tool", avatar="🔧"):
+            st.markdown(f'<div class="agent-header tool-message"><strong style="color: {tool_color}">Command: {display_name}</strong></div>', unsafe_allow_html=True)
+            st.code(command, language="bash")
+    
+    def display_tool_output(self, message, container=None):
+        """도구 출력 메시지 표시 - 재현 시스템 호환성"""
+        if container is None:
+            container = st
+            
+        display_name = message.get("display_name", "Tool Output")
+        output = message.get("data", {}).get("content", "")
+        
+        # 도구 출력 색상 가져오기
+        tool_color = self.get_agent_color("tool")
+        
+        with container.chat_message("tool", avatar="🔧"):
+            st.markdown(f'<div class="agent-header tool-output-message"><strong style="color: {tool_color}">Output: {display_name}</strong></div>', unsafe_allow_html=True)
+            
+            # 너무 긴 출력은 제한
+            if len(output) > 5000:
+                st.code(output[:5000] + "\n[Output truncated...]")
+                with st.expander("더 보기.."):
+                    st.text(output)
+            else:
+                st.code(output)
  
     def display_user_message(self, content, container=None):
         """사용자 메시지 표시"""

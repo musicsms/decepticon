@@ -54,6 +54,7 @@
 <details>
 <summary><strong>📚 Table of Contents</strong></summary>
 
+- [💡 Community Contribution ](#-community-contribution)
 - [💡 What is Vibe Hacking ?](#-what-is-vibe-hacking-)
 - [💡 Why Decepticon?](#-why-decepticon)
 - [Quick Start](#-quick-start)
@@ -62,6 +63,8 @@
     - [🔴 Red Team Agents](#-red-team-agents)
     - [🔵 Utility Agents](#-utility-agents)
   - [Multi-Agent-System Architecture](#multi-agent-system-architecture)
+  - [Replay](#replay)
+
 - [Installation](#-installation)
 - [Advanced AI Models](#-advanced-ai-models)
   - [☁️ Cloud Models](#️-cloud-models)
@@ -83,6 +86,11 @@
 </details>
 
 ---
+> ## **💡 Community Contribution**
+> If you have interesting penetration testing scenarios, export your **logs** and share them with the community through PR! 
+> Your experiences will greatly help other users in their learning journey.
+> Please refer to the Replay section for more details.
+
 
 ## 💡 What is **Vibe Hacking** ?
 
@@ -174,6 +182,16 @@ streamlit run app.py
 - **Supervisor Architecture**(Planned): Centralized control with supervisor-managed workflows
 - **Hybrid Architecture**(Planned): Combined approach with both direct communication and centralized oversight
 - **your custom Architecture**
+
+
+### Replay
+
+The Replay feature is implemented to maximize collaboration and knowledge sharing within Decepticon's open-source community.
+Please share your usage methods and execution results through PRs!
+
+1. **Execution results are saved** under the `logs/` folder
+2. **Replay functionality**: Click the Chat History button to replay JSON-formatted logs stored under the `logs/` folder  
+3. **Community sharing**: Use the export feature to share with the community!
 
 
 ## Installation

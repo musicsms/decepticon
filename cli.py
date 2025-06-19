@@ -10,6 +10,7 @@ import sys
 import os
 import time
 import json
+import hashlib
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Set
 
@@ -26,7 +27,6 @@ from rich import box
 from rich.status import Status
 from rich.tree import Tree
 from rich.console import Group
-from rich.syntax import Syntax
 from rich.markdown import Markdown
 
 # Decepticon imports
@@ -49,6 +49,15 @@ from src.utils.message import (
     get_agent_name,
     parse_tool_name
 )
+# Persistence 추가
+from src.utils.memory import (
+    get_persistence_status,
+    get_debug_info,
+    create_thread_config,
+    create_memory_namespace
+)
+# 로깅 시스템 사용 - 재현에 필요한 정보만
+from src.utils.logging.logger import get_logger
 
 
 from dotenv import load_dotenv
@@ -74,8 +83,23 @@ class DecepticonCLI:
         self.agents_config = {}
         self.tools_config = {}
         
+        # Persistence 초기화
+        self.user_id = self._generate_user_id()
+        self.memory_namespace = create_memory_namespace(self.user_id, "memories")
+        
+        # 로깅 시스템 초기화 - 재현에 필요한 정보만
+        self.logger = get_logger()
+        self.logging_session_id = None
+        
         # 초기화 시 설정 로드
         self._load_dynamic_config()
+    
+    def _generate_user_id(self):
+        """사용자 ID 생성 (CLI 버전)"""
+        # CLI는 터미널 세션 기반 ID 생성
+        session_info = f"{os.getpid()}_{datetime.now().strftime('%Y%m%d')}_{os.environ.get('USER', 'unknown')}"
+        user_hash = hashlib.md5(session_info.encode()).hexdigest()[:8]
+        return f"cli_user_{user_hash}"
     
     def _load_dynamic_config(self):
         """실제 설정 파일에서 동적으로 설정 로드"""
@@ -166,6 +190,8 @@ class DecepticonCLI:
             "[green]• llm[/green] - Show current LLM configuration", 
             "[green]• model-change[/green] - Change LLM model",
             "[green]• mcp-info[/green] - Show MCP tools information",
+            "[green]• memory-info[/green] - Show persistence and memory status",
+            "[green]• logs[/green] - Show conversation logs and statistics",
             "[green]• clear[/green] - Clear the screen",
             "[green]• quit/exit[/green] - Exit the program",
             "",
@@ -188,7 +214,7 @@ class DecepticonCLI:
 
 
     async def display_mcp_infrastructure(self):
-        """MCP 인프라 정보 표시 (load_mcp_tools를 직접 구현)"""
+        """MCP 인프라 정보 표시 """
         try:
             self.console.print(Panel(
                 "[bold yellow]🚀 Initializing MCP Server[/bold yellow]\n\n"
@@ -362,15 +388,12 @@ class DecepticonCLI:
         """세션 설정 - 메모리에서 모델 관리 및 동적 swarm 생성"""
         with Status("[bold green]Setting up session...", console=self.console) as status:
             try:
-                # 쓰레드 ID 생성
-                self.thread_id = str(uuid.uuid4())
-                
-                # 설정 초기화
-                self.config = {
-                    "configurable": {
-                        "thread_id": self.thread_id,
-                    }
-                }
+                # Thread configuration 생성 (persistence 사용)
+                self.config = create_thread_config(
+                    user_id=self.user_id,
+                    conversation_id="cli_session"
+                )
+                self.thread_id = self.config["configurable"]["thread_id"]
                 
                 # 메모리에서 모델 정보 저장
                 self.current_model = model_info
@@ -391,6 +414,10 @@ class DecepticonCLI:
                 status.update("[bold green]Memory configuration updated!")
                 time.sleep(0.5)
                 
+                # 로깅 세션 시작 - 모델 정보 포함
+                model_display_name = model_info.get('display_name', 'Unknown Model') if model_info else 'CLI Model'
+                self.logging_session_id = self.logger.start_session(model_display_name)
+                
                 # 동적으로 swarm 생성 (모델 선택 후)
                 status.update("[bold green]Creating AI agents with selected model...")
                 self.swarm = await create_dynamic_swarm()
@@ -407,11 +434,13 @@ class DecepticonCLI:
             f"[bold green]✅ Session Ready[/bold green]\n\n"
             f"[cyan]🤖 Model:[/cyan] [bold]{self.current_model['display_name']}[/bold]\n"
             f"[cyan]🏢 Provider:[/cyan] [bold]{self.current_model['provider']}[/bold]\n"
-            f"[cyan]🆔 Thread:[/cyan] [dim]{self.thread_id[:8]}...[/dim]\n"
+            f"[cyan]🆔 Thread:[/cyan] [dim]{self.thread_id[:25]}...[/dim]\n"
+            f"[cyan]👤 User ID:[/cyan] [dim]{self.user_id}[/dim]\n"
+            f"[cyan]🗋 Memory:[/cyan] [dim]{self.memory_namespace}[/dim]\n"
             f"[cyan]🕒 Started:[/cyan] [bold]{datetime.now().strftime('%H:%M:%S')}[/bold]\n"
-            f"[cyan]🤖 Agents:[/cyan] [bold]Dynamically created with selected model[/bold]\n\n"
+            f"[cyan]🤖 Agents:[/cyan] [bold]Dynamically created with persistence[/bold]\n\n"
             f"[yellow]🎯 Ready for red team operations![/yellow]\n"
-            f"[dim]All AI agents will use the selected model (memory-based)[/dim]",
+            f"[dim]All agents will remember your preferences and context[/dim]",
             box=box.ROUNDED,
             border_style="green",
             title="[bold green]🚀 Session Initialized[/bold green]"
@@ -488,6 +517,145 @@ class DecepticonCLI:
                 title="MCP Tools Error"
             ))
             
+    def display_memory_info(self):
+        """메모리 및 persistence 상태 정보 표시"""
+        try:
+            # Persistence 상태 가져오기
+            persistence_status = get_persistence_status()
+            debug_info = get_debug_info()
+            
+            # 메모리 정보 표시
+            memory_panel = Panel(
+                f"[bold cyan]🧠 Memory & Persistence Status[/bold cyan]\n\n"
+                f"[cyan]👤 User ID:[/cyan] [bold]{self.user_id}[/bold]\n"
+                f"[cyan]🆔 Thread ID:[/cyan] [dim]{self.thread_id[:40] if self.thread_id else 'Not set'}[/dim]\n"
+                f"[cyan]🗋 Memory Namespace:[/cyan] [dim]{self.memory_namespace}[/dim]\n\n"
+                f"[yellow]📊 Persistence System:[/yellow]\n"
+                f"[cyan]  • Checkpointer:[/cyan] [green]✅[/green] {persistence_status.get('checkpointer_type', 'N/A')}\n"
+                f"[cyan]  • Store:[/cyan] [green]✅[/green] {persistence_status.get('store_type', 'N/A')}\n"
+                f"[cyan]  • Initialized:[/cyan] [green]✅[/green] Both systems ready\n\n"
+                f"[yellow]🔧 Current Session:[/yellow]\n"
+                f"[cyan]  • Model:[/cyan] [bold]{self.current_model['display_name'] if self.current_model else 'Not set'}[/bold]\n"
+                f"[cyan]  • Agents:[/cyan] [bold]{'Ready' if self.swarm else 'Not initialized'}[/bold]\n"
+                f"[cyan]  • Conversation Count:[/cyan] [bold]{len(self.conversation_history)}[/bold]\n\n"
+                f"[green]📝 Features Available:[/green]\n"
+                f"[dim]  • Cross-session memory persistence\n"
+                f"  • Agent context sharing\n"
+                f"  • Conversation state recovery\n"
+                f"  • User preference learning[/dim]",
+                box=box.ROUNDED,
+                border_style="cyan",
+                title="[bold cyan]🧠 Memory System[/bold cyan]"
+            )
+            
+            self.console.print(memory_panel)
+            
+            # 디버그 정보 (선택적)
+            if Confirm.ask("\n[dim]Show detailed debug info?[/dim]", default=False):
+                debug_panel = Panel(
+                    json.dumps(debug_info, indent=2),
+                    box=box.ROUNDED,
+                    border_style="yellow",
+                    title="[bold yellow]🔍 Debug Information[/bold yellow]"
+                )
+                self.console.print(debug_panel)
+                
+        except Exception as e:
+            self.console.print(Panel(
+                f"[red]❌ Error displaying memory info[/red]\n\n"
+                f"[yellow]Error:[/yellow] {str(e)}",
+                box=box.ROUNDED,
+                border_style="red",
+                title="Memory Info Error"
+            ))
+            
+    def display_conversation_logs(self):
+        """대화 로그 정보 표시"""
+        try:
+            # 로깅 세션 정보
+            current_session = self.logger.current_session
+            
+            if current_session:
+                session_panel = Panel(
+                    f"[bold cyan]📝 Current Session[/bold cyan]\n\n"
+                    f"[cyan]Session ID:[/cyan] [bold]{current_session.session_id[:16]}...[/bold]\n"
+                    f"[cyan]Start Time:[/cyan] [bold]{current_session.start_time}[/bold]\n"
+                    f"[cyan]Total Events:[/cyan] [bold]{len(current_session.events)}[/bold]\n"
+                    f"[cyan]Model:[/cyan] [bold]{current_session.model or 'Unknown'}[/bold]\n\n"
+                    f"[green]🟢 Session is actively logging[/green]",
+                    box=box.ROUNDED,
+                    border_style="cyan",
+                    title="[bold cyan]📊 Active Session[/bold cyan]"
+                )
+                self.console.print(session_panel)
+            else:
+                self.console.print(Panel(
+                    "[yellow]⚠️ No active logging session[/yellow]\n\n"
+                    "[dim]Start a conversation to begin logging[/dim]",
+                    box=box.ROUNDED,
+                    border_style="yellow",
+                    title="[bold yellow]📝 Logging Status[/bold yellow]"
+                ))
+            
+            # 로깅 통계
+            sessions = self.logger.list_sessions(limit=50)
+            
+            total_events = sum(s['event_count'] for s in sessions)
+            avg_events = total_events / len(sessions) if sessions else 0
+            
+            stats_panel = Panel(
+                f"[bold magenta]📊 Overall Statistics[/bold magenta]\n\n"
+                f"[cyan]Total Sessions:[/cyan] [bold]{len(sessions)}[/bold]\n"
+                f"[cyan]Total Events:[/cyan] [bold]{total_events}[/bold]\n"
+                f"[cyan]Avg Events/Session:[/cyan] [bold]{avg_events:.1f}[/bold]\n\n"
+                f"[cyan]Platform:[/cyan] [bold]CLI[/bold]\n"
+                f"[cyan]Logging Type:[/cyan] [bold]Minimal (Replay-focused)[/bold]",
+                box=box.ROUNDED,
+                border_style="magenta",
+                title="[bold magenta]📈 User Statistics[/bold magenta]"
+            )
+            self.console.print(stats_panel)
+            
+            # 최근 세션 목록
+            recent_sessions = sessions[:10]  # 최대 10개
+            
+            if recent_sessions:
+                self.console.print(f"\n[bold green]📅 Recent Sessions ({len(recent_sessions)} sessions)[/bold green]\n")
+                
+                for i, session in enumerate(recent_sessions[:5]):  # 최대 5개만 표시
+                    start_time = session['start_time'][:19].replace('T', ' ')
+                    
+                    session_info = f"💻 [cyan]{start_time}[/cyan] - "
+                    session_info += f"[bold]{session['session_id'][:8]}...[/bold] "
+                    session_info += f"([blue]{session['event_count']} events[/blue])"
+                    
+                    if session.get('model'):
+                        session_info += f" - [yellow]{session['model']}[/yellow]"
+                    
+                    if session.get('preview'):
+                        session_info += f"\n    [dim]{session['preview']}[/dim]"
+                    
+                    self.console.print(f"  {i+1}. {session_info}")
+                
+                if len(recent_sessions) > 5:
+                    self.console.print(f"  [dim]... and {len(recent_sessions) - 5} more sessions[/dim]")
+            else:
+                self.console.print("\n[yellow]📅 No recent sessions found[/yellow]")
+            
+            # 로그 저장 위치 정보
+            base_path = self.logger.base_path
+            self.console.print(f"\n[dim]📁 Logs stored at: {base_path}[/dim]")
+            self.console.print(f"[dim]🔄 Replay-compatible logs for Streamlit[/dim]")
+            
+        except Exception as e:
+            self.console.print(Panel(
+                f"[red]❌ Error displaying conversation logs[/red]\n\n"
+                f"[yellow]Error:[/yellow] {str(e)}",
+                box=box.ROUNDED,
+                border_style="red",
+                title="Logs Error"
+            ))
+            
     async def change_model(self):
         """세션 도중 모델 변경"""
         self.console.print(Panel(
@@ -552,6 +720,13 @@ class DecepticonCLI:
                 status.update("[bold green]Recreating AI agents with new model...")
                 self.swarm = await create_dynamic_swarm()
                 
+                # 모델 변경 후 새로운 로깅 세션 시작
+                if self.logging_session_id:
+                    self.logger.end_session()
+                
+                model_display_name = new_model_info.get('display_name', 'Unknown Model')
+                self.logging_session_id = self.logger.start_session(model_display_name)
+                
                 status.update("[bold green]Model change completed!")
                 time.sleep(1)
                 
@@ -602,6 +777,8 @@ class DecepticonCLI:
     • [green]llm[/green] - Show current LLM configuration
     • [green]model-change[/green] - Change LLM model during session
     • [green]mcp-info[/green] - Show MCP tools information
+    • [green]memory-info[/green] - Show persistence and memory status
+    • [green]logs[/green] - Show conversation logs and statistics
     • [green]clear[/green] - Clear the screen
     • [green]quit/exit[/green] - Exit the program
 
@@ -674,6 +851,10 @@ class DecepticonCLI:
             
         self.conversation_history.append(("user", user_input))
         
+        # 로깅 - 사용자 입력만 기록
+        workflow_start_time = time.time()
+        self.logger.log_user_input(user_input)
+        
         # 메시지 ID 추적 초기화 (새로운 워크플로우 시작)
         self.processed_message_ids = set()
         
@@ -682,6 +863,7 @@ class DecepticonCLI:
         # 워크플로우 실행
         agent_responses = {}
         step_count = 0
+        event_count = 0  # ✅ event_count 초기화 추가
 
         with Progress(
             SpinnerColumn(),
@@ -699,6 +881,7 @@ class DecepticonCLI:
                     subgraphs=True
                 ):
                     step_count += 1
+                    event_count += 1  # ✅ 이벤트 카운트 증가
 
                     for node, value in output.items():
                         # 에이전트 이름 결정
@@ -717,10 +900,17 @@ class DecepticonCLI:
 
                                     if message_type == "ai":
                                         content = extract_message_content(latest_message)
+                                        
+                                        # 로깅 - 에이전트 응답
+                                        self.logger.log_agent_response(
+                                            agent_name=agent_name,
+                                            content=content
+                                        )
 
                                         try:
                                             # 에이전트별 색상 설정
                                             agent_color = self.get_agent_color_cli(agent_name)
+                                            content = Markdown(content)
                                             
                                             agent_panel = Panel(
                                                 content,
@@ -741,6 +931,12 @@ class DecepticonCLI:
                                         content = extract_message_content(latest_message)
                                         tool_name = getattr(latest_message, 'name', 'Unknown Tool')
                                         tool_display_name = parse_tool_name(tool_name)
+                                        
+                                        # 로깅 - 도구 출력
+                                        self.logger.log_tool_output(
+                                            tool_name=tool_name,
+                                            output=content
+                                        )
 
                                         try:
                                             # 도구는 녹색으로 고정
@@ -765,6 +961,9 @@ class DecepticonCLI:
                 progress.update(main_task, description="[bold green]✅ Workflow completed!")
                 time.sleep(1)
                 progress.stop()
+                
+                # 로깅 - 세션 자동 저장
+                self.logger.save_session()
 
                 # 완료 요약
                 completion_panel = Panel(
@@ -785,10 +984,17 @@ class DecepticonCLI:
                 progress.update(main_task, description=f"[bold red]❌ Error: {str(e)}")
                 time.sleep(2)
                 progress.stop()
+                
+                # 로깅 - 세션 저장 시도
+                try:
+                    self.logger.save_session()
+                except Exception as log_error:
+                    self.console.print(f"[yellow]Warning: Failed to save session: {log_error}[/yellow]")
 
                 error_panel = Panel(
                     f"[bold red]❌ Workflow Error[/bold red]\n\n"
                     f"[yellow]Error:[/yellow] {str(e)}\n"
+                    f"[yellow]Events processed:[/yellow] {event_count if 'event_count' in locals() else 'Unknown'}\n"
                     f"[dim]Please try again[/dim]",
                     box=box.ROUNDED,
                     border_style="red",
@@ -835,6 +1041,10 @@ class DecepticonCLI:
                     await self.change_model()
                 elif user_input.lower() == 'mcp-info':
                     await self.display_mcp_tools_info()
+                elif user_input.lower() in ['memory-info', 'memory']:
+                    self.display_memory_info()
+                elif user_input.lower() in ['logs', 'log-info', 'conversation-logs']:
+                    self.display_conversation_logs()
                 elif user_input.lower() == 'clear':
                     self.console.clear()
                     self.display_banner()
