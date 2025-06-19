@@ -18,8 +18,8 @@ from src.utils.memory import (
     create_memory_namespace
 )
 
-# 최소한의 로깅 시스템 사용 - 재현에 필요한 정보만
-from src.utils.logging.logger import get_minimal_logger
+# 로깅 시스템 사용 - 재현에 필요한 정보만
+from src.utils.logging.logger import get_logger
 from src.utils.logging.replay import get_replay_system
 
 ICON = "assets\logo.png"
@@ -159,9 +159,9 @@ class DecepticonApp:
             )
             log_debug(f"Created memory namespace: {st.session_state.memory_namespace}")
         
-        # 최소한의 로깅 시스템 초기화 - 재현에 필요한 정보만
-        if "minimal_logger" not in st.session_state:
-            st.session_state.minimal_logger = get_minimal_logger()
+        # 로깅 시스템 초기화 - 재현에 필요한 정보만
+        if "logger" not in st.session_state:
+            st.session_state.logger = get_logger()
             st.session_state.replay_system = get_replay_system()
             log_debug("Minimal logger initialized")
     
@@ -182,8 +182,8 @@ class DecepticonApp:
         log_debug("Resetting session")
         
         # 현재 로그 세션 종료
-        if hasattr(st.session_state, 'minimal_logger') and st.session_state.minimal_logger.current_session:
-            st.session_state.minimal_logger.end_session()
+        if hasattr(st.session_state, 'logger') and st.session_state.logger.current_session:
+            st.session_state.logger.end_session()
         
         reset_keys = [
             "executor_ready", "messages", "structured_messages", "terminal_messages",
@@ -573,8 +573,8 @@ class DecepticonApp:
                     st.json(session_info)
 
                     st.subheader("🧾 Logging Info")
-                    if hasattr(st.session_state, 'minimal_logger'):
-                        current_session = st.session_state.minimal_logger.current_session
+                    if hasattr(st.session_state, 'logger'):
+                        current_session = st.session_state.logger.current_session
                         if current_session:
                             logging_info = {
                                 "session_id": current_session.session_id,
@@ -725,13 +725,13 @@ class DecepticonApp:
                             log_debug(f"DirectExecutor reinitialized with new thread_config and model: {current_model['display_name']}")
                         
                         # 현재 로깅 세션 종료 및 새 세션 시작 - 모델 정보 포함
-                        if hasattr(st.session_state, 'minimal_logger') and st.session_state.minimal_logger.current_session:
-                            st.session_state.minimal_logger.end_session()
+                        if hasattr(st.session_state, 'logger') and st.session_state.logger.current_session:
+                            st.session_state.logger.end_session()
                         
                         # 현재 모델 정보 가져오기
                         model_display_name = current_model.get('display_name', 'Unknown Model') if current_model else 'No Model'
                         
-                        session_id = st.session_state.minimal_logger.start_session(model_display_name)
+                        session_id = st.session_state.logger.start_session(model_display_name)
                         st.session_state.logging_session_id = session_id
                         log_debug(f"Started new logging session: {session_id} with model: {model_display_name}")
                         

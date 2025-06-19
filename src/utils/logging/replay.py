@@ -8,16 +8,16 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from src.utils.logging.logger import get_minimal_logger, MinimalSession
+from src.utils.logging.logger import get_logger, Session
 
-class SimpleReplaySystem:
-    """간단한 재현 시스템 - 추가 UI 없이 기존 워크플로우처럼 재생"""
+class ReplaySystem:
+    """재현 시스템 - 추가 UI 없이 기존 워크플로우처럼 재생"""
     
     def __init__(self):
-        self.logger = get_minimal_logger()
+        self.logger = get_logger()
     
     def start_replay(self, session_id: str) -> bool:
-        """재현 시작 - 기존 메시지 유지하면서 재현 메시지 추가"""
+        """재현 시작 - 중복 출력 방지를 위해 기존 메시지 완전히 교체"""
         try:
             # 세션 로드
             session = self.logger.load_session(session_id)
@@ -29,11 +29,17 @@ class SimpleReplaySystem:
             st.session_state.replay_session = session
             st.session_state.replay_session_id = session_id
             
-            # 기존 메시지들 백업 (중요: 재현 후에도 유지되어야 함)
+            # 기존 메시지들 백업 (재현 완료 후 복원용)
             if "structured_messages" in st.session_state:
                 st.session_state.backup_structured_messages = st.session_state.structured_messages.copy()
             else:
                 st.session_state.backup_structured_messages = []
+            
+            # 기존 터미널 메시지들 백업
+            if "terminal_messages" in st.session_state:
+                st.session_state.backup_terminal_messages = st.session_state.terminal_messages.copy()
+            else:
+                st.session_state.backup_terminal_messages = []
             
             # 기존 이벤트 히스토리 백업
             if "event_history" in st.session_state:
@@ -45,7 +51,10 @@ class SimpleReplaySystem:
             st.session_state.backup_active_agent = st.session_state.get("active_agent")
             st.session_state.backup_completed_agents = st.session_state.get("completed_agents", []).copy()
             
-            # 에이전트 상태만 초기화 (메시지는 유지)
+            # 🔥 중복 출력 방지: 재현 시작 시 기존 메시지들 완전히 초기화
+            st.session_state.structured_messages = []
+            st.session_state.terminal_messages = []
+            st.session_state.event_history = []
             st.session_state.active_agent = None
             st.session_state.completed_agents = []
             
@@ -55,27 +64,20 @@ class SimpleReplaySystem:
             return False
     
     def stop_replay(self):
-        """재현 중지 - 기존 메시지 + 재현된 메시지 통합 유지"""
+        """재현 중지 - 재현된 메시지들만 유지 (기존 메시지는 복원 안함)"""
         st.session_state.replay_mode = False
         
         # 재현 완료 플래그 설정
         st.session_state.replay_completed = True
         
-        # 에이전트 상태 복원
-        if "backup_active_agent" in st.session_state:
-            st.session_state.active_agent = st.session_state.backup_active_agent
-            del st.session_state.backup_active_agent
+        # 재현된 에이전트 상태 유지 (재현된 에이전트들을 보여주기 위해)
+        # backup된 에이전트 상태는 복원하지 않음
         
-        if "backup_completed_agents" in st.session_state:
-            st.session_state.completed_agents = st.session_state.backup_completed_agents
-            del st.session_state.backup_completed_agents
-        
-        # 메시지들은 백업을 삭제하되 현재 메시지는 유지 (재현된 메시지들이 추가된 상태)
-        if "backup_structured_messages" in st.session_state:
-            del st.session_state.backup_structured_messages
-        
-        if "backup_event_history" in st.session_state:
-            del st.session_state.backup_event_history
+        # 백업 데이터 삭제 (복원하지 않음)
+        for backup_key in ["backup_structured_messages", "backup_terminal_messages", 
+                          "backup_event_history", "backup_active_agent", "backup_completed_agents"]:
+            if backup_key in st.session_state:
+                del st.session_state[backup_key]
         
         # 재현 관련 상태 정리
         for key in ["replay_session", "replay_session_id"]:
@@ -122,17 +124,13 @@ class SimpleReplaySystem:
                     print(f"Error processing event: {e}")
                     continue
             
-            # 메시지들을 한번에 세션 상태에 추가
+            # 메시지들을 한번에 세션 상태에 설정 (기존 메시지 대체)
             if replay_messages:
-                if "structured_messages" not in st.session_state:
-                    st.session_state.structured_messages = []
-                st.session_state.structured_messages.extend(replay_messages)
+                st.session_state.structured_messages = replay_messages
             
-            # 터미널 메시지들도 한번에 추가
+            # 터미널 메시지들도 한번에 설정 (기존 메시지 대체)
             if terminal_messages:
-                if "terminal_messages" not in st.session_state:
-                    st.session_state.terminal_messages = []
-                st.session_state.terminal_messages.extend(terminal_messages)
+                st.session_state.terminal_messages = terminal_messages
             
             # 에이전트 상태 업데이트 (마지막 에이전트 활성화)
             if agents_involved:
@@ -217,11 +215,11 @@ class SimpleReplaySystem:
         return "🤖"
 
 # 전역 인스턴스
-_replay_system: Optional[SimpleReplaySystem] = None
+_replay_system: Optional[ReplaySystem] = None
 
-def get_replay_system() -> SimpleReplaySystem:
+def get_replay_system() -> ReplaySystem:
     """전역 재현 시스템 인스턴스 반환"""
     global _replay_system
     if _replay_system is None:
-        _replay_system = SimpleReplaySystem()
+        _replay_system = ReplaySystem()
     return _replay_system

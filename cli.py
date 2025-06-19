@@ -56,11 +56,8 @@ from src.utils.memory import (
     create_thread_config,
     create_memory_namespace
 )
-# 로깅 시스템 추가
-from src.utils.logging.conversation_logger import (
-    get_conversation_logger,
-    EventType
-)
+# 로깅 시스템 사용 - 재현에 필요한 정보만
+from src.utils.logging.logger import get_logger
 
 
 from dotenv import load_dotenv
@@ -90,8 +87,8 @@ class DecepticonCLI:
         self.user_id = self._generate_user_id()
         self.memory_namespace = create_memory_namespace(self.user_id, "memories")
         
-        # 로깅 시스템 초기화
-        self.conversation_logger = get_conversation_logger()
+        # 로깅 시스템 초기화 - 재현에 필요한 정보만
+        self.logger = get_logger()
         self.logging_session_id = None
         
         # 초기화 시 설정 로드
@@ -417,13 +414,9 @@ class DecepticonCLI:
                 status.update("[bold green]Memory configuration updated!")
                 time.sleep(0.5)
                 
-                # 로깅 세션 시작
-                self.logging_session_id = self.conversation_logger.start_session(
-                    user_id=self.user_id,
-                    thread_id=self.config["configurable"]["thread_id"],
-                    platform="cli",
-                    model_info=model_info
-                )
+                # 로깅 세션 시작 - 모델 정보 포함
+                model_display_name = model_info.get('display_name', 'Unknown Model') if model_info else 'CLI Model'
+                self.logging_session_id = self.logger.start_session(model_display_name)
                 
                 # 동적으로 swarm 생성 (모델 선택 후)
                 status.update("[bold green]Creating AI agents with selected model...")
@@ -579,20 +572,16 @@ class DecepticonCLI:
     def display_conversation_logs(self):
         """대화 로그 정보 표시"""
         try:
-            # 현재 세션 정보
-            current_session = self.conversation_logger.current_session
+            # 로깅 세션 정보
+            current_session = self.logger.current_session
             
             if current_session:
                 session_panel = Panel(
                     f"[bold cyan]📝 Current Session[/bold cyan]\n\n"
                     f"[cyan]Session ID:[/cyan] [bold]{current_session.session_id[:16]}...[/bold]\n"
-                    f"[cyan]User ID:[/cyan] [bold]{current_session.user_id}[/bold]\n"
-                    f"[cyan]Platform:[/cyan] [bold]{current_session.platform}[/bold]\n"
                     f"[cyan]Start Time:[/cyan] [bold]{current_session.start_time}[/bold]\n"
-                    f"[cyan]Total Events:[/cyan] [bold]{current_session.total_events}[/bold]\n"
-                    f"[cyan]Total Messages:[/cyan] [bold]{current_session.total_messages}[/bold]\n"
-                    f"[cyan]Tools Used:[/cyan] [bold]{current_session.total_tools_used}[/bold]\n"
-                    f"[cyan]Agents Used:[/cyan] [bold]{', '.join(current_session.agents_used) if current_session.agents_used else 'None'}[/bold]\n\n"
+                    f"[cyan]Total Events:[/cyan] [bold]{len(current_session.events)}[/bold]\n"
+                    f"[cyan]Model:[/cyan] [bold]{current_session.model or 'Unknown'}[/bold]\n\n"
                     f"[green]🟢 Session is actively logging[/green]",
                     box=box.ROUNDED,
                     border_style="cyan",
@@ -608,18 +597,19 @@ class DecepticonCLI:
                     title="[bold yellow]📝 Logging Status[/bold yellow]"
                 ))
             
-            # 전체 통계
-            stats = self.conversation_logger.get_session_stats(user_id=self.user_id)
+            # 로깅 통계
+            sessions = self.logger.list_sessions(limit=50)
+            
+            total_events = sum(s['event_count'] for s in sessions)
+            avg_events = total_events / len(sessions) if sessions else 0
             
             stats_panel = Panel(
                 f"[bold magenta]📊 Overall Statistics[/bold magenta]\n\n"
-                f"[cyan]Total Sessions:[/cyan] [bold]{stats['total_sessions']}[/bold]\n"
-                f"[cyan]Total Messages:[/cyan] [bold]{stats['total_messages']}[/bold]\n"
-                f"[cyan]Total Events:[/cyan] [bold]{stats['total_events']}[/bold]\n"
-                f"[cyan]Avg Messages/Session:[/cyan] [bold]{stats['avg_messages_per_session']:.1f}[/bold]\n\n"
-                f"[cyan]Unique Agents:[/cyan] [bold]{', '.join(stats['unique_agents']) if stats['unique_agents'] else 'None'}[/bold]\n"
-                f"[cyan]Models Used:[/cyan] [bold]{', '.join(stats['models_used']) if stats['models_used'] else 'None'}[/bold]\n"
-                f"[cyan]Platforms:[/cyan] [bold]{', '.join(stats['platforms_used']) if stats['platforms_used'] else 'None'}[/bold]",
+                f"[cyan]Total Sessions:[/cyan] [bold]{len(sessions)}[/bold]\n"
+                f"[cyan]Total Events:[/cyan] [bold]{total_events}[/bold]\n"
+                f"[cyan]Avg Events/Session:[/cyan] [bold]{avg_events:.1f}[/bold]\n\n"
+                f"[cyan]Platform:[/cyan] [bold]CLI[/bold]\n"
+                f"[cyan]Logging Type:[/cyan] [bold]Minimal (Replay-focused)[/bold]",
                 box=box.ROUNDED,
                 border_style="magenta",
                 title="[bold magenta]📈 User Statistics[/bold magenta]"
@@ -627,23 +617,23 @@ class DecepticonCLI:
             self.console.print(stats_panel)
             
             # 최근 세션 목록
-            recent_sessions = self.conversation_logger.list_sessions(user_id=self.user_id, days_back=7)
+            recent_sessions = sessions[:10]  # 최대 10개
             
             if recent_sessions:
                 self.console.print(f"\n[bold green]📅 Recent Sessions ({len(recent_sessions)} sessions)[/bold green]\n")
                 
                 for i, session in enumerate(recent_sessions[:5]):  # 최대 5개만 표시
                     start_time = session['start_time'][:19].replace('T', ' ')
-                    platform_icon = "🌐" if session.get('platform') == 'web' else "💻"
                     
-                    session_info = f"{platform_icon} [cyan]{start_time}[/cyan] - "
+                    session_info = f"💻 [cyan]{start_time}[/cyan] - "
                     session_info += f"[bold]{session['session_id'][:8]}...[/bold] "
-                    session_info += f"([green]{session['total_messages']} messages[/green], "
-                    session_info += f"[blue]{session['total_events']} events[/blue])"
+                    session_info += f"([blue]{session['event_count']} events[/blue])"
                     
-                    if session.get('model_info'):
-                        model_name = session['model_info'].get('display_name', 'Unknown')
-                        session_info += f" - [yellow]{model_name}[/yellow]"
+                    if session.get('model'):
+                        session_info += f" - [yellow]{session['model']}[/yellow]"
+                    
+                    if session.get('preview'):
+                        session_info += f"\n    [dim]{session['preview']}[/dim]"
                     
                     self.console.print(f"  {i+1}. {session_info}")
                 
@@ -653,8 +643,9 @@ class DecepticonCLI:
                 self.console.print("\n[yellow]📅 No recent sessions found[/yellow]")
             
             # 로그 저장 위치 정보
-            base_path = self.conversation_logger.base_path
+            base_path = self.logger.base_path
             self.console.print(f"\n[dim]📁 Logs stored at: {base_path}[/dim]")
+            self.console.print(f"[dim]🔄 Replay-compatible logs for Streamlit[/dim]")
             
         except Exception as e:
             self.console.print(Panel(
@@ -728,6 +719,13 @@ class DecepticonCLI:
                 # 새로운 모델로 에이전트들 재생성
                 status.update("[bold green]Recreating AI agents with new model...")
                 self.swarm = await create_dynamic_swarm()
+                
+                # 모델 변경 후 새로운 로깅 세션 시작
+                if self.logging_session_id:
+                    self.logger.end_session()
+                
+                model_display_name = new_model_info.get('display_name', 'Unknown Model')
+                self.logging_session_id = self.logger.start_session(model_display_name)
                 
                 status.update("[bold green]Model change completed!")
                 time.sleep(1)
@@ -853,10 +851,9 @@ class DecepticonCLI:
             
         self.conversation_history.append(("user", user_input))
         
-        # 워크플로우 시작 로깅
+        # 로깅 - 사용자 입력만 기록
         workflow_start_time = time.time()
-        self.conversation_logger.log_workflow_start(user_input)
-        self.conversation_logger.log_user_input(user_input)
+        self.logger.log_user_input(user_input)
         
         # 메시지 ID 추적 초기화 (새로운 워크플로우 시작)
         self.processed_message_ids = set()
@@ -904,8 +901,8 @@ class DecepticonCLI:
                                     if message_type == "ai":
                                         content = extract_message_content(latest_message)
                                         
-                                        # 에이전트 응답 로깅
-                                        self.conversation_logger.log_agent_response(
+                                        # 로깅 - 에이전트 응답
+                                        self.logger.log_agent_response(
                                             agent_name=agent_name,
                                             content=content
                                         )
@@ -935,10 +932,10 @@ class DecepticonCLI:
                                         tool_name = getattr(latest_message, 'name', 'Unknown Tool')
                                         tool_display_name = parse_tool_name(tool_name)
                                         
-                                        # 도구 실행 로깅
-                                        self.conversation_logger.log_tool_execution(
+                                        # 로깅 - 도구 출력
+                                        self.logger.log_tool_output(
                                             tool_name=tool_name,
-                                            content=content
+                                            output=content
                                         )
 
                                         try:
@@ -965,12 +962,8 @@ class DecepticonCLI:
                 time.sleep(1)
                 progress.stop()
                 
-                # 워크플로우 완료 로깅
-                execution_time = time.time() - workflow_start_time
-                self.conversation_logger.log_workflow_complete(
-                    step_count=event_count,
-                    execution_time=execution_time
-                )
+                # 로깅 - 세션 자동 저장
+                self.logger.save_session()
 
                 # 완료 요약
                 completion_panel = Panel(
@@ -992,11 +985,11 @@ class DecepticonCLI:
                 time.sleep(2)
                 progress.stop()
                 
-                # 에러 로깅 - event_count 변수 안전 처리
+                # 로깅 - 세션 저장 시도
                 try:
-                    self.conversation_logger.log_workflow_error(str(e))
+                    self.logger.save_session()
                 except Exception as log_error:
-                    self.console.print(f"[yellow]Warning: Failed to log error: {log_error}[/yellow]")
+                    self.console.print(f"[yellow]Warning: Failed to save session: {log_error}[/yellow]")
 
                 error_panel = Panel(
                     f"[bold red]❌ Workflow Error[/bold red]\n\n"

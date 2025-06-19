@@ -1,21 +1,21 @@
 """
-최소한의 로그 관리 UI - 세션 목록과 재현 기능만 제공
+로그 관리 UI - 세션 목록과 재현 기능 제공
 """
 
 import streamlit as st
 from datetime import datetime
 from typing import Dict, Any, List
 
-from src.utils.logging.logger import get_minimal_logger
+from src.utils.logging.logger import get_logger
 
-class MinimalLogManagerUI:
-    """최소한의 로그 관리자 - 복잡한 기능 제거"""
+class LogManagerUI:
+    """로그 관리자"""
     
     def __init__(self):
-        self.logger = get_minimal_logger()
+        self.logger = get_logger()
     
     def display_log_page(self):
-        """간단한 로그 페이지"""
+        """로그 페이지"""
         st.title("📋 Session Logs")
         
         # 뒤로가기 버튼
@@ -39,7 +39,7 @@ class MinimalLogManagerUI:
             self._display_session_card(session)
     
     def _display_session_card(self, session: Dict[str, Any]):
-        """세션 카드 표시 - 간단한 형태"""
+        """세션 카드 표시"""
         with st.container():
             # 세션 기본 정보
             col1, col2 = st.columns([3, 1])

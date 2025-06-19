@@ -8,13 +8,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
 
-from src.utils.logging.logger import get_minimal_logger
+from src.utils.logging.logger import get_logger
 
 class LogManagerUI:
     """로그 관리 UI 클래스 - 재현 기능에 집중"""
     
     def __init__(self):
-        self.logger = get_minimal_logger()
+        self.logger = get_logger()
         
     def display_log_page(self):
         """로그 페이지 표시"""

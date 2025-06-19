@@ -18,8 +18,8 @@ class EventType(Enum):
     TOOL_OUTPUT = "tool_output"
 
 @dataclass
-class MinimalEvent:
-    """재현에 필요한 최소한의 이벤트 정보"""
+class Event:
+    """재현에 필요한 이벤트 정보"""
     event_type: EventType
     timestamp: str
     content: str
@@ -39,7 +39,7 @@ class MinimalEvent:
         return result
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MinimalEvent':
+    def from_dict(cls, data: Dict[str, Any]) -> 'Event':
         return cls(
             event_type=EventType(data["event_type"]),
             timestamp=data["timestamp"],
@@ -49,11 +49,11 @@ class MinimalEvent:
         )
 
 @dataclass
-class MinimalSession:
-    """재현에 필요한 최소한의 세션 정보"""
+class Session:
+    """재현에 필요한 세션 정보"""
     session_id: str
     start_time: str
-    events: List[MinimalEvent]
+    events: List[Event]
     model: Optional[str] = None  # 사용된 모델 정보 추가
     
     def to_dict(self) -> Dict[str, Any]:
@@ -67,21 +67,21 @@ class MinimalSession:
         return result
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MinimalSession':
+    def from_dict(cls, data: Dict[str, Any]) -> 'Session':
         return cls(
             session_id=data["session_id"],
             start_time=data["start_time"],
-            events=[MinimalEvent.from_dict(e) for e in data["events"]],
+            events=[Event.from_dict(e) for e in data["events"]],
             model=data.get("model")  # 모델 정보 로드 (선택적)
         )
 
-class MinimalLogger:
-    """최소한의 로거 - 재현에 필요한 정보만 기록"""
+class Logger:
+    """재현에 필요한 로깅 시스템"""
     
     def __init__(self, base_path: str = "logs"):
         self.base_path = Path(base_path)
         self.base_path.mkdir(exist_ok=True)
-        self.current_session: Optional[MinimalSession] = None
+        self.current_session: Optional[Session] = None
     
     def _get_session_file_path(self, session_id: str) -> Path:
         """세션 파일 경로 생성"""
@@ -95,7 +95,7 @@ class MinimalLogger:
         session_id = str(uuid.uuid4())
         start_time = datetime.now().isoformat()
         
-        self.current_session = MinimalSession(
+        self.current_session = Session(
             session_id=session_id,
             start_time=start_time,
             events=[],
@@ -106,7 +106,7 @@ class MinimalLogger:
     def log_user_input(self, content: str):
         """사용자 입력 로깅"""
         if self.current_session:
-            event = MinimalEvent(
+            event = Event(
                 event_type=EventType.USER_INPUT,
                 timestamp=datetime.now().isoformat(),
                 content=content
@@ -116,7 +116,7 @@ class MinimalLogger:
     def log_agent_response(self, agent_name: str, content: str):
         """에이전트 응답 로깅"""
         if self.current_session:
-            event = MinimalEvent(
+            event = Event(
                 event_type=EventType.AGENT_RESPONSE,
                 timestamp=datetime.now().isoformat(),
                 content=content,
@@ -127,7 +127,7 @@ class MinimalLogger:
     def log_tool_command(self, tool_name: str, command: str):
         """도구 명령 로깅"""
         if self.current_session:
-            event = MinimalEvent(
+            event = Event(
                 event_type=EventType.TOOL_COMMAND,
                 timestamp=datetime.now().isoformat(),
                 content=command,
@@ -138,7 +138,7 @@ class MinimalLogger:
     def log_tool_output(self, tool_name: str, output: str):
         """도구 출력 로깅"""
         if self.current_session:
-            event = MinimalEvent(
+            event = Event(
                 event_type=EventType.TOOL_OUTPUT,
                 timestamp=datetime.now().isoformat(),
                 content=output,
@@ -176,14 +176,14 @@ class MinimalLogger:
         self.current_session = None
         return session_id
     
-    def load_session(self, session_id: str) -> Optional[MinimalSession]:
+    def load_session(self, session_id: str) -> Optional[Session]:
         """세션 로드"""
         try:
             for session_file in self.base_path.rglob(f"session_{session_id}.json"):
                 if session_file.exists():
                     with open(session_file, 'r', encoding='utf-8') as f:
                         session_data = json.load(f)
-                    return MinimalSession.from_dict(session_data)
+                    return Session.from_dict(session_data)
             return None
         except Exception as e:
             print(f"Failed to load session {session_id}: {e}")
@@ -236,11 +236,11 @@ class MinimalLogger:
         return sessions[:limit]
 
 # 전역 인스턴스
-_minimal_logger: Optional[MinimalLogger] = None
+_logger: Optional[Logger] = None
 
-def get_minimal_logger() -> MinimalLogger:
-    """전역 최소 로거 인스턴스 반환"""
-    global _minimal_logger
-    if _minimal_logger is None:
-        _minimal_logger = MinimalLogger()
-    return _minimal_logger
+def get_logger() -> Logger:
+    """전역 로거 인스턴스 반환"""
+    global _logger
+    if _logger is None:
+        _logger = Logger()
+    return _logger
