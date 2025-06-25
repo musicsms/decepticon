@@ -1,4 +1,5 @@
 version: '3'
+
 services:
   kali:
     build:
@@ -18,10 +19,10 @@ services:
     image: tleemcjr/metasploitable2
     container_name: victim
     privileged: true
+    stdin_open: true
+    tty: true
     networks:
       - pentest_network
-    tty: true
-    stdin_open: true
     command: /bin/bash -c "/bin/services.sh && bash"
     # 내부 통신 전용이므로 ports 옵션은 생략
 
