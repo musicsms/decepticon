@@ -227,7 +227,7 @@ def load_llm_model(model_name: str, provider: str, temperature: float = 0.0):
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             model=model_name,
-            temperature=0
+            # temperature=0
         )
     
     elif provider_enum == ModelProvider.OLLAMA:
