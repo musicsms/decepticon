@@ -396,7 +396,8 @@ class DecepticonApp:
                                 if message_type == "ai":
                                     st.session_state.logger.log_agent_response(
                                         agent_name=agent_name,
-                                        content=content
+                                        content=content,
+                                        tool_calls=frontend_message.get("tool_calls")  # tool_calls 정보 포함
                                     )
                                 elif message_type == "tool":
                                     tool_name = event.get("tool_name", "Unknown Tool")

@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 # CLI 메시지 유틸리티 직접 import
-from src.utils.message import parse_tool_name
+from src.utils.message import parse_tool_name, extract_tool_calls
 
 
 class CLIMessageProcessor:
@@ -54,44 +54,8 @@ class CLIMessageProcessor:
                 "id": f"ai_{agent_name.lower()}_{hash(content[:100])}_{datetime.now().timestamp()}"
             }
             
-            # Tool calls 정보 추출 - 다양한 소스에서 시도
-            tool_calls = []
-            
-            # 1. raw_message.tool_calls에서 추출
-            if raw_message and hasattr(raw_message, 'tool_calls') and raw_message.tool_calls:
-                for tool_call in raw_message.tool_calls:
-                    tool_calls.append({
-                        "id": tool_call.get('id', ''),
-                        "name": tool_call.get('name', 'Unknown Tool'),
-                        "args": tool_call.get('args', {})
-                    })
-            
-            # 2. event_data에서 직접 추출
-            elif 'tool_calls' in event_data:
-                tool_calls = event_data['tool_calls']
-            
-            # 3. additional_kwargs에서 추출 (OpenAI 형식)
-            elif raw_message and hasattr(raw_message, 'additional_kwargs') and 'tool_calls' in raw_message.additional_kwargs:
-                for tc in raw_message.additional_kwargs['tool_calls']:
-                    if 'function' in tc:
-                        # OpenAI function call 형식
-                        try:
-                            args = eval(tc['function'].get('arguments', '{}')) if tc['function'].get('arguments') else {}
-                        except:
-                            args = {}
-                        tool_calls.append({
-                            "id": tc.get('id', ''),
-                            "name": tc['function'].get('name', 'Unknown Tool'),
-                            "args": args
-                        })
-                    else:
-                        # 일반 tool call 형식
-                        tool_calls.append({
-                            "id": tc.get('id', ''),
-                            "name": tc.get('name', 'Unknown Tool'),
-                            "args": tc.get('args', {})
-                        })
-            
+            # Tool calls 정보 추출 - 새로 만든 유틸리티 함수 사용
+            tool_calls = extract_tool_calls(raw_message, event_data)
             if tool_calls:
                 frontend_message["tool_calls"] = tool_calls
             

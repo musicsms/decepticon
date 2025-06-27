@@ -156,7 +156,7 @@ class ReplaySystem:
         
         elif event.event_type.value == "agent_response":
             # 일반 워크플로우와 동일한 AI 메시지 형식
-            return {
+            frontend_message = {
                 "type": "ai",  # 일반 워크플로우와 동일
                 "agent_id": event.agent_name.lower() if event.agent_name else "agent",
                 "display_name": event.agent_name or "Agent",
@@ -165,6 +165,12 @@ class ReplaySystem:
                 "timestamp": timestamp,
                 "id": f"replay_agent_{event.agent_name}_{timestamp}"
             }
+            
+            # Tool calls 정보 복원 (이벤트에 저장되어 있는 경우)
+            if hasattr(event, 'tool_calls') and event.tool_calls:
+                frontend_message["tool_calls"] = event.tool_calls
+            
+            return frontend_message
         
         elif event.event_type.value == "tool_command":
             # 도구 명령 - 일반 tool 메시지 형식과 동일
