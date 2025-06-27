@@ -25,6 +25,7 @@ class Event:
     content: str
     agent_name: Optional[str] = None  # agent_response에만 사용
     tool_name: Optional[str] = None   # tool_command, tool_output에만 사용
+    tool_calls: Optional[List[Dict[str, Any]]] = None  # AI 메시지의 tool calls 정보
     
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -36,6 +37,8 @@ class Event:
             result["agent_name"] = self.agent_name
         if self.tool_name:
             result["tool_name"] = self.tool_name
+        if self.tool_calls:
+            result["tool_calls"] = self.tool_calls
         return result
     
     @classmethod
@@ -45,7 +48,8 @@ class Event:
             timestamp=data["timestamp"],
             content=data["content"],
             agent_name=data.get("agent_name"),
-            tool_name=data.get("tool_name")
+            tool_name=data.get("tool_name"),
+            tool_calls=data.get("tool_calls")  # 기존 로그와 호환성을 위해 optional
         )
 
 @dataclass
@@ -113,14 +117,15 @@ class Logger:
             )
             self.current_session.events.append(event)
     
-    def log_agent_response(self, agent_name: str, content: str):
-        """에이전트 응답 로깅"""
+    def log_agent_response(self, agent_name: str, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None):
+        """에이전트 응답 로깅 - tool_calls 정보 포함"""
         if self.current_session:
             event = Event(
                 event_type=EventType.AGENT_RESPONSE,
                 timestamp=datetime.now().isoformat(),
                 content=content,
-                agent_name=agent_name
+                agent_name=agent_name,
+                tool_calls=tool_calls
             )
             self.current_session.events.append(event)
     

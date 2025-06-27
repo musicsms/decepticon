@@ -901,23 +901,67 @@ class DecepticonCLI:
                                     if message_type == "ai":
                                         content = extract_message_content(latest_message)
                                         
-                                        # 로깅 - 에이전트 응답
+                                        # Tool calls 정보 추출
+                                        from src.utils.message import extract_tool_calls
+                                        tool_calls = extract_tool_calls(latest_message)
+                                        
+                                        # 로깅 - 에이전트 응답 (tool_calls 정보 포함)
                                         self.logger.log_agent_response(
                                             agent_name=agent_name,
-                                            content=content
+                                            content=content,
+                                            tool_calls=tool_calls if tool_calls else None
                                         )
 
                                         try:
                                             # 에이전트별 색상 설정
                                             agent_color = self.get_agent_color_cli(agent_name)
-                                            content = Markdown(content)
                                             
-                                            agent_panel = Panel(
-                                                content,
-                                                box=box.ROUNDED,
-                                                border_style=agent_color,
-                                                title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
-                                            )
+                                            # Content 마크다운 형식으로 변환
+                                            content_markdown = Markdown(content)
+                                            
+                                            # Tool calls가 있으면 추가 정보 표시
+                                            if tool_calls:
+                                                # Tool calls 정보를 Rich로 표시
+                                                tool_call_info = []
+                                                for i, tool_call in enumerate(tool_calls, 1):
+                                                    tool_name = tool_call.get('name', 'Unknown Tool')
+                                                    tool_args = tool_call.get('args', {})
+                                                    
+                                                    # parse_tool_call 함수로 깔끔한 메시지 생성
+                                                    from src.utils.message import parse_tool_call
+                                                    tool_call_message = parse_tool_call(tool_call)
+                                                    
+                                                    tool_call_info.append(f"[bold cyan]⚔️ {tool_call_message}[/bold cyan]")
+                                                    
+                                                    # Arguments가 있으면 세부 정보 추가
+                                                    if tool_args:
+                                                        args_str = ", ".join([f"{k}={v}" for k, v in tool_args.items()])
+                                                        if len(args_str) > 100:  # 너무 길면 자르기
+                                                            args_str = args_str[:100] + "..."
+                                                        tool_call_info.append(f"  [dim]→ {args_str}[/dim]")
+                                                
+                                                # Content와 tool calls를 합쳐서 표시
+                                                combined_content = Group(
+                                                    content_markdown,
+                                                    "",  # 빈 줄
+                                                    "\n".join(tool_call_info)
+                                                )
+                                                
+                                                agent_panel = Panel(
+                                                    combined_content,
+                                                    box=box.ROUNDED,
+                                                    border_style=agent_color,
+                                                    title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
+                                                )
+                                            else:
+                                                # Tool calls가 없으면 기존 방식
+                                                agent_panel = Panel(
+                                                    content_markdown,
+                                                    box=box.ROUNDED,
+                                                    border_style=agent_color,
+                                                    title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
+                                                )
+                                            
                                             self.console.print(agent_panel)
                                         except Exception as panel_error:
                                             # Panel 출력 실패 시 기본 출력

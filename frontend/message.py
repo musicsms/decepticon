@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 # CLI 메시지 유틸리티 직접 import
-from src.utils.message import parse_tool_name
+from src.utils.message import parse_tool_name, extract_tool_calls
 
 
 class CLIMessageProcessor:
@@ -45,7 +45,7 @@ class CLIMessageProcessor:
         
         if message_type == "ai":
             # AI 메시지를 프론트엔드 에이전트 메시지로 변환
-            return {
+            frontend_message = {
                 "type": "ai",
                 "agent_id": agent_name.lower(),
                 "display_name": display_name,
@@ -53,6 +53,13 @@ class CLIMessageProcessor:
                 "content": content,
                 "id": f"ai_{agent_name.lower()}_{hash(content[:100])}_{datetime.now().timestamp()}"
             }
+            
+            # Tool calls 정보 추출 - 새로 만든 유틸리티 함수 사용
+            tool_calls = extract_tool_calls(raw_message, event_data)
+            if tool_calls:
+                frontend_message["tool_calls"] = tool_calls
+            
+            return frontend_message
         
         elif message_type == "tool":
             # 도구 메시지 - CLI와 동일하게 단순 처리

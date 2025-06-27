@@ -4,6 +4,7 @@ decepticon.egg-info/
 .env
 load_env.bat
 logs/
+data/
 
 # Python byte-compiled files
 __pycache__/

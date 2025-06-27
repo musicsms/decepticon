@@ -1,6 +1,6 @@
 name: "\U0001F4A1 Feature Request"
-description: Suggest a new feature or enhancement for LangChain.
-labels: ["03 Feature Request"]
+description: Suggest a new feature or enhancement.
+labels: ["feature-request"]
 body:
   - type: markdown
     attributes:
@@ -10,8 +10,7 @@ body:
         Use this template to propose new features or improvements.
 
         Before submitting, please check if a similar request already exists:
-
-        [Feature Requests](https://github.com/langchain-ai/langchain/issues?q=is%3Aissue+label%3A%2203+Feature+Request%22)
+        
   - type: input
     id: title
     validations:
