@@ -12,6 +12,63 @@ def parse_tool_name(tool_name: str) -> str:
     # 2. Convert snake_case to Title Case
     return tool_name.replace("_", " ").title()
 
+# 도구 호출 처리
+def parse_tool_call(tool_call_data: dict) -> str:
+    """Parse tool call data and generate user-friendly message - 깔끔한 형태로 개선"""
+    try:
+        tool_name = tool_call_data.get("name", "Unknown Tool")
+        tool_args = tool_call_data.get("args", {})
+        
+        # transfer_to_ 도구인 경우 특별 처리
+        if tool_name.startswith("transfer_to_"):
+            target_agent = tool_name.replace("transfer_to_", "").replace("_", " ").title()
+            return f"**Transfer to {target_agent}...**"
+        
+        # 일반 도구 호출인 경우 - 간결한 명령어 형태로
+        if tool_args:
+            # 주요 매개변수들을 순서대로 정렬해서 명령어 형태로 만들기
+            command_parts = [tool_name]
+            
+            # 일반적인 매개변수 순서: options, target, command, path, etc.
+            param_order = ['options', 'target']
+            
+            # 순서대로 매개변수 추가
+            for param in param_order:
+                if param in tool_args and tool_args[param]:
+                    value = str(tool_args[param]).strip()
+                    if value:
+                        command_parts.append(value)
+            
+            # 순서에 없는 나머지 매개변수들도 추가
+            for key, value in tool_args.items():
+                if key not in param_order and value and str(value).strip():
+                    command_parts.append(str(value).strip())
+            
+            if len(command_parts) > 1:
+                return " ".join(command_parts)
+            else:
+                return f"{tool_name}..."
+        else:
+            return f"{tool_name}..."
+            
+    except Exception as e:
+        return f"Tool call... (parsing error: {str(e)})"
+
+# 도구 호출 상태 메시지 (spinner용)
+def get_tool_call_status_message(tool_call_data: dict) -> str:
+    """Tool call을 위한 상태 메시지 생성 (spinner에 사용)"""
+    try:
+        tool_name = tool_call_data.get("name", "Unknown Tool")
+        
+        if tool_name.startswith("transfer_to_"):
+            target_agent = tool_name.replace("transfer_to_", "").replace("_", " ").title()
+            return f"Transferring to {target_agent}..."
+        else:
+            display_name = parse_tool_name(tool_name)
+            return f"Executing {display_name}..."
+    except:
+        return "Processing..."
+
 # 에이전트 이름 from namespace
 def get_agent_name(namespace):
     """Namespace에서 에이전트 이름 추출"""
@@ -39,29 +96,39 @@ def get_message_type(message):
 
 # 메시지 content 
 def extract_message_content(message):
-    """메시지에서 내용 추출 - Rich 마크업 안전 처리"""
+    """메시지에서 내용 추출 - 안전한 처리"""
     try:
         if hasattr(message, 'content'):
             content = message.content
         else:
             content = str(message)
         
+        # 디버깅용 로그 추가
+        print(f"[DEBUG] extract_message_content - raw content type: {type(content)}, length: {len(str(content)) if content else 0}")
+        
         if isinstance(content, str):
-            # Rich 마크업을 안전하게 escape 처리
-            return markup.escape(content)
+            # Rich 마크업 escape 제거 - 원본 문자열 반환
+            result = content.strip() if content else ""
+            print(f"[DEBUG] extract_message_content - string result length: {len(result)}")
+            return result
         elif isinstance(content, list):
             text_parts = []
             for item in content:
                 if isinstance(item, dict):
                     if item.get('type') == 'text' and 'text' in item:
-                        text_parts.append(markup.escape(item['text']))
+                        text_parts.append(item['text'])
                     elif 'text' in item:
-                        text_parts.append(markup.escape(item['text']))
+                        text_parts.append(item['text'])
                 elif isinstance(item, str):
-                    text_parts.append(markup.escape(item))
-            return "\n".join(text_parts) if text_parts else markup.escape(str(content))
+                    text_parts.append(item)
+            result = "\n".join(text_parts) if text_parts else str(content)
+            print(f"[DEBUG] extract_message_content - list result length: {len(result)}")
+            return result
         else:
-            return markup.escape(str(content))
+            result = str(content)
+            print(f"[DEBUG] extract_message_content - other type result length: {len(result)}")
+            return result
     except Exception as e:
         error_msg = f"Content extraction error: {str(e)}\n{str(message)}"
-        return markup.escape(error_msg)
+        print(f"[ERROR] extract_message_content - {error_msg}")
+        return error_msg

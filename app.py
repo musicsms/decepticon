@@ -383,6 +383,10 @@ class DecepticonApp:
                         if event_type == "message":
                             frontend_message = self.message_processor.process_cli_event(event)
                             
+                            # Tool call 메시지 디버깅 정보 추가
+                            if frontend_message.get("type") == "ai" and frontend_message.get("tool_calls"):
+                                print(f"[DEBUG APP] AI message with {len(frontend_message['tool_calls'])} tool calls from agent {frontend_message.get('display_name')}")
+                            
                             if not self.message_processor.is_duplicate_message(
                                 frontend_message, st.session_state.structured_messages
                             ):
