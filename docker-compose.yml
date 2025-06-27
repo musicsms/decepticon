@@ -10,8 +10,7 @@ services:
     tty: true
     volumes:
       - ./data:/root/data  # 원하는 디렉토리 마운트
-    networks:
-      - pentest_network
+    network_mode: host
     ports:
       - "8080:8080"       # 외부에서 Gotty 터미널에 접근하기 위한 포트 매핑
 
@@ -21,8 +20,7 @@ services:
     privileged: true
     stdin_open: true
     tty: true
-    networks:
-      - pentest_network
+    network_mode: host
     command: /bin/bash -c "/bin/services.sh && bash"
     # 내부 통신 전용이므로 ports 옵션은 생략
 
