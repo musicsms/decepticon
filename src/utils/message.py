@@ -103,13 +103,9 @@ def extract_message_content(message):
         else:
             content = str(message)
         
-        # 디버깅용 로그 추가
-        print(f"[DEBUG] extract_message_content - raw content type: {type(content)}, length: {len(str(content)) if content else 0}")
-        
         if isinstance(content, str):
             # Rich 마크업 escape 제거 - 원본 문자열 반환
             result = content.strip() if content else ""
-            print(f"[DEBUG] extract_message_content - string result length: {len(result)}")
             return result
         elif isinstance(content, list):
             text_parts = []
@@ -122,13 +118,10 @@ def extract_message_content(message):
                 elif isinstance(item, str):
                     text_parts.append(item)
             result = "\n".join(text_parts) if text_parts else str(content)
-            print(f"[DEBUG] extract_message_content - list result length: {len(result)}")
             return result
         else:
             result = str(content)
-            print(f"[DEBUG] extract_message_content - other type result length: {len(result)}")
             return result
     except Exception as e:
         error_msg = f"Content extraction error: {str(e)}\n{str(message)}"
-        print(f"[ERROR] extract_message_content - {error_msg}")
         return error_msg

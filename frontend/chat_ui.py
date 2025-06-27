@@ -173,9 +173,12 @@ class ChatUI:
         if "data" in message and isinstance(message["data"], dict):
             # 재현 시스템 형식
             content = message["data"].get("content", "")
+            # 재현 시스템에서도 tool_calls 확인
+            tool_calls = message.get("tool_calls", [])
         else:
             # 일반 시스템 형식
             content = message.get("content", "")
+            tool_calls = message.get("tool_calls", [])
         
         # namespace 정보에서 에이전트 이름 추출 (기존 get_agent_name 함수 사용)
         namespace = message.get("namespace", "")
@@ -215,8 +218,43 @@ class ChatUI:
                     self.simulate_typing(content, text_placeholder, speed=0.005)
                 else:
                     text_placeholder.write(content)
-            else:
+            elif not tool_calls:  # content가 없고 tool_calls도 없을 때만 오류 메시지 표시
                 st.write("No content available")
+            
+            # Tool calls 정보 표시 (클로드 데스크탑 스타일)
+            tool_calls = message.get("tool_calls", [])
+            if tool_calls:
+                for i, tool_call in enumerate(tool_calls):
+                    tool_name = tool_call.get("name", "Unknown Tool")
+                    tool_args = tool_call.get("args", {})
+                    
+                    # tool call 메시지 생성
+                    try:
+                        from src.utils.message import parse_tool_call
+                        tool_call_message = parse_tool_call(tool_call)
+                    except Exception as e:
+                        tool_call_message = f"Tool call error: {str(e)}"
+                    
+                    # 클로드 데스크탑 스타일의 확장 가능한 UI
+                    with st.expander(f"**{tool_call_message}**", expanded=False):
+                        # 도구 세부 정보 표시
+                        col1, col2 = st.columns([1, 3])
+                        
+                        with col1:
+                            st.markdown("**Tool:**")
+                            st.markdown("**ID:**")
+                            if tool_args:
+                                st.markdown("**Arguments:**")
+                        
+                        with col2:
+                            st.markdown(f"`{tool_name}`")
+                            st.markdown(f"`{tool_call.get('id', 'N/A')}`")
+                            if tool_args:
+                                # 매개변수들을 JSON 형태로 깔끔하게 표시
+                                import json
+                                st.code(json.dumps(tool_args, indent=2), language="json")
+                            else:
+                                st.markdown("`No arguments`")
     
     def display_tool_message(self, message, container=None):
         """도구 메시지 표시 - 메시지 출력 후 CSS 적용"""

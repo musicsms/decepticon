@@ -52,8 +52,6 @@ class DirectExecutor:
     async def initialize_swarm(self, model_info: Optional[Dict[str, Any]] = None, thread_config: Optional[Dict[str, Any]] = None):
         """Swarm 초기화"""
         try:
-            print(f"[DEBUG] Starting swarm initialization with model: {model_info}")
-            
             # 이전 상태 초기화
             self._initialized = False
             self._swarm = None
@@ -62,7 +60,6 @@ class DirectExecutor:
             if thread_config:
                 self._config = thread_config
                 self._thread_id = thread_config["configurable"]["thread_id"]
-                print(f"[DEBUG] Using provided thread config with thread_id: {self._thread_id}")
             else:
                 # 기존 방식: 새로운 UUID 생성
                 self._thread_id = str(uuid.uuid4())
@@ -71,12 +68,10 @@ class DirectExecutor:
                         "thread_id": self._thread_id,
                     }
                 }
-                print(f"[DEBUG] Generated new thread ID: {self._thread_id}")
             
             # 모델 정보 설정
             if model_info:
                 self._current_model = model_info
-                print(f"[DEBUG] Setting model config: {model_info['display_name']}")
                 
                 # LLM 설정 업데이트
                 update_llm_config(
@@ -85,26 +80,19 @@ class DirectExecutor:
                     display_name=model_info['display_name'],
                     temperature=0.0
                 )
-                print(f"[DEBUG] Model config updated")
             
             # LLM 인스턴스 생성
-            print(f"[DEBUG] Creating LLM instance...")
             self._current_llm = get_current_llm()
-            print(f"[DEBUG] LLM instance created")
             
             # 동적으로 swarm 생성 
-            print(f"[DEBUG] Creating dynamic swarm...")
             self._swarm = await create_dynamic_swarm()
-            print(f"[DEBUG] Swarm created successfully")
             
             # 초기화 완료
             self._initialized = True
-            print(f"[DEBUG] Swarm initialization completed successfully")
             
             return self._thread_id
             
         except Exception as e:
-            print(f"[ERROR] Swarm initialization failed: {str(e)}")
             self._initialized = False
             self._swarm = None
             raise Exception(f"Swarm initialization failed: {str(e)}")
@@ -116,11 +104,8 @@ class DirectExecutor:
         if not self.is_ready():
             raise Exception("Executor not ready - swarm not initialized")
         
-        print(f"[DEBUG] Starting workflow execution: {user_input[:50]}...")
-        
         # config가 제공되면 사용, 없으면 기본 config 사용
         execution_config = config if config else self._config
-        print(f"[DEBUG] Using config: {execution_config}")
         
         # 메시지 ID 추적 초기화
         self._processed_message_ids = set()
@@ -137,7 +122,6 @@ class DirectExecutor:
                 subgraphs=True
             ):
                 step_count += 1
-                print(f"[DEBUG] Processing step {step_count}, namespace: {namespace}")
                 
                 for node, value in output.items():
                     # 에이전트 이름 결정 
@@ -153,8 +137,6 @@ class DirectExecutor:
                             )
                             
                             if should_display:
-                                print(f"[DEBUG] Yielding message from {agent_name}, type: {message_type}")
-                                
                                 # 프론트엔드에서 처리할 수 있는 형태로 이벤트 생성
                                 event_data = {
                                     "type": "message",
@@ -176,7 +158,6 @@ class DirectExecutor:
                                 yield event_data
             
             # 완료 신호
-            print(f"[DEBUG] Workflow completed with {step_count} steps")
             yield {
                 "type": "workflow_complete",
                 "step_count": step_count,
@@ -184,7 +165,6 @@ class DirectExecutor:
             }
             
         except Exception as e:
-            print(f"[ERROR] Workflow execution error: {str(e)}")
             yield {
                 "type": "error",
                 "error": str(e),
@@ -246,8 +226,6 @@ class DirectExecutor:
     async def change_model(self, model_info: Dict[str, Any]):
         """모델 변경"""
         try:
-            print(f"[DEBUG] Changing model to: {model_info['display_name']}")
-            
             self._current_model = model_info
             
             update_llm_config(
@@ -263,22 +241,18 @@ class DirectExecutor:
             # 새로운 모델로 에이전트들 재생성
             self._swarm = await create_dynamic_swarm()
             
-            print(f"[DEBUG] Model changed successfully")
             return True
             
         except Exception as e:
-            print(f"[ERROR] Model change failed: {str(e)}")
             raise Exception(f"Model change failed: {str(e)}")
     
     def is_ready(self):
         """실행 준비 상태 확인"""
         ready = self._initialized and self._swarm is not None
-        print(f"[DEBUG] Executor ready check: initialized={self._initialized}, swarm={'exists' if self._swarm else 'None'}, result={ready}")
         return ready
     
     def reset_session(self):
         """세션 초기화"""
-        print(f"[DEBUG] Resetting executor session")
         self._thread_id = None
         self._config = None
         self._processed_message_ids = set()
