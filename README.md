@@ -39,15 +39,11 @@
 
 | | Demo |
 |---|------|
-| **Web** | ![web](.github/webV2.gif) • [Full Demo](https://github.com/user-attachments/assets/da398ad3-e692-47e3-b0e7-47f01b24e0cc) |
+| **Web** | ![web](.github/webV3.gif) • [Full Demo](https://github.com/user-attachments/assets/d4f11565-5df3-41a9-b3bc-f3cb97955b46) |
 | **CLI** | ![cli](.github/cli.gif) • [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
-
+https://github.com/user-attachments/assets/911d9a52-995e-4f81-86c1-69c2ce827ef7
 
 </div>
-
----
-[![Star History Chart](https://api.star-history.com/svg?repos=PurpleAILAB/Decepticon&type=Date)](https://www.star-history.com/#PurpleAILAB/Decepticon&Date)
-
 
 ---
 
@@ -91,6 +87,11 @@
 > Your experiences will greatly help other users in their learning journey.
 > Please refer to the Replay section for more details.
 
+<div align="center">
+
+![replay](.github/replay.gif)
+
+</div>
 
 ## 💡 What is **Vibe Hacking** ?
 
