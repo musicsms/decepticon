@@ -130,7 +130,7 @@ cp .env.example .env
 
 ### 3. Docker
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
 
 ### 4. Run MCP servers
