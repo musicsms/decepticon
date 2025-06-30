@@ -81,6 +81,13 @@
 </details>
 
 ---
+
+> ⚠️ <strong style="color:red">Disclaimer</strong>  
+> <span style="color:red">Do not attempt to use this project on any system or network without explicit authorization.</span>  
+> <span style="color:red"><strong>You are solely responsible for your actions.</strong></span>
+
+
+
 > ## **💡 Community Contribution**
 > If you have interesting penetration testing scenarios, export your **logs** and share them with the community through PR! 
 > Your experiences will greatly help other users in their learning journey.
