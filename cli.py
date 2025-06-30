@@ -931,7 +931,7 @@ class DecepticonCLI:
                                                     from src.utils.message import parse_tool_call
                                                     tool_call_message = parse_tool_call(tool_call)
                                                     
-                                                    tool_call_info.append(f"[bold cyan]⚔️ {tool_call_message}[/bold cyan]")
+                                                    tool_call_info.append(f"[bold cyan]{tool_call_message}[/bold cyan]")
                                                     
                                                     # Arguments가 있으면 세부 정보 추가
                                                     if tool_args:
@@ -941,11 +941,13 @@ class DecepticonCLI:
                                                         tool_call_info.append(f"  [dim]→ {args_str}[/dim]")
                                                 
                                                 # Content와 tool calls를 합쳐서 표시
-                                                combined_content = Group(
-                                                    content_markdown,
-                                                    "",  # 빈 줄
-                                                    "\n".join(tool_call_info)
-                                                )
+                                                if content.strip():  # content가 있는 경우
+                                                    combined_content = Group(
+                                                        content_markdown,
+                                                        "\n".join(tool_call_info)
+                                                    )
+                                                else:  # content가 비어있는 경우
+                                                    combined_content = "\n".join(tool_call_info)
                                                 
                                                 agent_panel = Panel(
                                                     combined_content,

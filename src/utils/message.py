@@ -24,7 +24,7 @@ def parse_tool_call(tool_call_data: dict) -> str:
         # transfer_to_ 도구인 경우 특별 처리
         if tool_name.startswith("transfer_to_"):
             target_agent = tool_name.replace("transfer_to_", "").replace("_", " ").title()
-            return f"**Transfer to {target_agent}...**"
+            return f"Transfer to {target_agent}..."
         
         # 일반 도구 호출인 경우 - 간결한 명령어 형태로
         if tool_args:
@@ -37,14 +37,27 @@ def parse_tool_call(tool_call_data: dict) -> str:
             # 순서대로 매개변수 추가
             for param in param_order:
                 if param in tool_args and tool_args[param]:
-                    value = str(tool_args[param]).strip()
+                    # 리스트나 배열 형태인 경우 공백으로 연결
+                    if isinstance(tool_args[param], list):
+                        # 리스트의 각 요소를 공백으로 연결 (예: ['-F', '-sS'] → '-F -sS')
+                        value = " ".join(str(opt) for opt in tool_args[param] if opt)
+                    else:
+                        value = str(tool_args[param]).strip()
+                    
                     if value:
                         command_parts.append(value)
             
             # 순서에 없는 나머지 매개변수들도 추가
             for key, value in tool_args.items():
-                if key not in param_order and value and str(value).strip():
-                    command_parts.append(str(value).strip())
+                if key not in param_order and value:
+                    # 리스트나 배열 형태인 경우 공백으로 연결
+                    if isinstance(value, list):
+                        formatted_value = " ".join(str(opt) for opt in value if opt)
+                    else:
+                        formatted_value = str(value).strip()
+                    
+                    if formatted_value:
+                        command_parts.append(formatted_value)
             
             if len(command_parts) > 1:
                 return " ".join(command_parts)
@@ -129,7 +142,7 @@ def extract_message_content(message):
         return error_msg
 
 # Tool calls 추출 함수
-def extract_tool_calls(raw_message, event_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def extract_tool_calls(message, event_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """
     AI 메시지에서 tool calls 정보를 추출합니다.
     다양한 소스에서 tool calls를 찾아 표준화된 형식으로 반환합니다.
@@ -137,38 +150,38 @@ def extract_tool_calls(raw_message, event_data: Optional[Dict[str, Any]] = None)
     tool_calls = []
     
     # 1. raw_message.tool_calls에서 추출
-    if raw_message and hasattr(raw_message, 'tool_calls') and raw_message.tool_calls:
-        for tool_call in raw_message.tool_calls:
+    if message and hasattr(message, 'tool_calls') and message.tool_calls:
+        for tool_call in message.tool_calls:
             tool_calls.append({
                 "id": tool_call.get('id', ''),
                 "name": tool_call.get('name', 'Unknown Tool'),
                 "args": tool_call.get('args', {})
             })
     
-    # 2. event_data에서 직접 추출
-    elif event_data and 'tool_calls' in event_data:
-        tool_calls = event_data['tool_calls']
+    # # 2. event_data에서 직접 추출
+    # elif event_data and 'tool_calls' in event_data:
+    #     tool_calls = event_data['tool_calls']
     
-    # 3. additional_kwargs에서 추출 (OpenAI 형식)
-    elif raw_message and hasattr(raw_message, 'additional_kwargs') and 'tool_calls' in raw_message.additional_kwargs:
-        for tc in raw_message.additional_kwargs['tool_calls']:
-            if 'function' in tc:
-                # OpenAI function call 형식
-                try:
-                    args = json.loads(tc['function'].get('arguments', '{}')) if tc['function'].get('arguments') else {}
-                except (json.JSONDecodeError, TypeError):
-                    args = {}
-                tool_calls.append({
-                    "id": tc.get('id', ''),
-                    "name": tc['function'].get('name', 'Unknown Tool'),
-                    "args": args
-                })
-            else:
-                # 일반 tool call 형식
-                tool_calls.append({
-                    "id": tc.get('id', ''),
-                    "name": tc.get('name', 'Unknown Tool'),
-                    "args": tc.get('args', {})
-                })
+    # # 3. additional_kwargs에서 추출 (OpenAI 형식)
+    # elif raw_message and hasattr(raw_message, 'additional_kwargs') and 'tool_calls' in raw_message.additional_kwargs:
+    #     for tc in raw_message.additional_kwargs['tool_calls']:
+    #         if 'function' in tc:
+    #             # OpenAI function call 형식
+    #             try:
+    #                 args = json.loads(tc['function'].get('arguments', '{}')) if tc['function'].get('arguments') else {}
+    #             except (json.JSONDecodeError, TypeError):
+    #                 args = {}
+    #             tool_calls.append({
+    #                 "id": tc.get('id', ''),
+    #                 "name": tc['function'].get('name', 'Unknown Tool'),
+    #                 "args": args
+    #             })
+    #         else:
+    #             # 일반 tool call 형식
+    #             tool_calls.append({
+    #                 "id": tc.get('id', ''),
+    #                 "name": tc.get('name', 'Unknown Tool'),
+    #                 "args": tc.get('args', {})
+    #             })
     
     return tool_calls

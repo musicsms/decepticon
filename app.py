@@ -18,7 +18,7 @@ from src.utils.memory import (
     create_memory_namespace
 )
 
-# 로깅 시스템 사용 - 재현에 필요한 정보만
+# 로깅
 from src.utils.logging.logger import get_logger
 from src.utils.logging.replay import get_replay_system
 
@@ -211,8 +211,7 @@ class DecepticonApp:
                     st.session_state[key] = 0
                 else:
                     st.session_state[key] = False if key != "current_model" else None
-        
-        # 🔥 터미널 UI 완전 초기화 추가
+  
         # 터미널 히스토리 초기화
         st.session_state.terminal_history = []
         
@@ -327,7 +326,7 @@ class DecepticonApp:
         )
     
     async def execute_workflow(self, user_input: str, chat_area, agents_container):
-        """워크플로우 실행 - 간소화된 로깅"""
+        """워크플로우 실행"""
         if not st.session_state.executor_ready:
             st.error("AI agents not ready. Please initialize first.")
             log_debug("Workflow execution rejected: executor not ready")
@@ -483,25 +482,24 @@ class DecepticonApp:
         selected_model = self.model_ui.display_model_selection_ui()
         
         if selected_model:
-            with st.spinner(f"Initializing {selected_model['display_name']}..."):
-                async def init_and_proceed():
-                    try:
-                        success = await self.initialize_executor_async(selected_model)
-                        
-                        if success:
-                            st.session_state.app_stage = "main_app"
-                            st.success(f"{selected_model['display_name']} initialized successfully!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(f"Failed to initialize {selected_model['display_name']}")
-                            if st.session_state.initialization_error:
-                                st.error(st.session_state.initialization_error)
+            # model.py에서 이미 스피너와 성공 메시지를 처리했으므로
+            # 여기서는 바로 초기화만 진행
+            async def init_and_proceed():
+                try:
+                    success = await self.initialize_executor_async(selected_model)
                     
-                    except Exception as e:
-                        st.error(f"Initialization error: {str(e)}")
+                    if success:
+                        st.session_state.app_stage = "main_app"
+                        st.rerun()
+                    else:
+                        # 실패 시에만 에러 메시지 (model.py에서 이미 표시했을 수도 있음)
+                        if st.session_state.initialization_error:
+                            st.error(st.session_state.initialization_error)
                 
-                asyncio.run(init_and_proceed())
+                except Exception as e:
+                    st.error(f"Initialization error: {str(e)}")
+            
+            asyncio.run(init_and_proceed())
 
 
 

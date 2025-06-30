@@ -36,10 +36,10 @@ def load_planner_prompt(architecture="swarm"):
 
 def load_recon_prompt(architecture="swarm"):
     """Reconnaissance 에이전트 프롬프트 로드"""
-    base_prompt = BASE_RECON_PROMPT + RECON_TOOLS_PROMPT
+    base_prompt = BASE_RECON_PROMPT + RECON_TOOLS_PROMPT + INTERACTIVE_EXEC_TOOLS_PROMPT
     
     if architecture == "swarm":
-        return base_prompt + SWARM_RECON_PROMPT + SWARM_HANDOFF_TOOLS_PROMPT
+        return base_prompt + SWARM_RECON_PROMPT
     else:
         return base_prompt
 
@@ -48,7 +48,7 @@ def load_initaccess_prompt(architecture="swarm"):
     base_prompt = BASE_INITACCESS_PROMPT + INITACCESS_TOOLS_PROMPT + INTERACTIVE_EXEC_TOOLS_PROMPT
     
     if architecture == "swarm":
-        return base_prompt + SWARM_INITACCESS_PROMPT + SWARM_HANDOFF_TOOLS_PROMPT
+        return base_prompt + SWARM_INITACCESS_PROMPT
     else:
         return base_prompt
 
