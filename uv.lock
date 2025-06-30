@@ -406,6 +406,7 @@ dependencies = [
     { name = "langchain-xai" },
     { name = "langgraph" },
     { name = "langgraph-cli", extra = ["inmem"] },
+    { name = "langgraph-cua" },
     { name = "langgraph-prebuilt" },
     { name = "langgraph-supervisor" },
     { name = "langgraph-swarm" },
@@ -433,8 +434,9 @@ requires-dist = [
     { name = "langchain-perplexity", specifier = ">=0.1.1" },
     { name = "langchain-teddynote", specifier = ">=0.3.45" },
     { name = "langchain-xai", specifier = ">=0.2.3" },
-    { name = "langgraph", specifier = ">=0.4.3" },
+    { name = "langgraph", specifier = "==0.3.23" },
     { name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.2.10" },
+    { name = "langgraph-cua" },
     { name = "langgraph-prebuilt", specifier = ">=0.1.8" },
     { name = "langgraph-supervisor", specifier = ">=0.0.21" },
     { name = "langgraph-swarm", specifier = ">=0.0.11" },
@@ -1376,24 +1378,23 @@ wheels = [
 
 [[package]]
 name = "langgraph"
-version = "0.4.3"
+version = "0.3.23"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "langchain-core", marker = "python_full_version < '4.0'" },
+    { name = "langchain-core" },
     { name = "langgraph-checkpoint" },
-    { name = "langgraph-prebuilt", marker = "python_full_version < '4.0'" },
-    { name = "langgraph-sdk", marker = "python_full_version < '4.0'" },
-    { name = "pydantic" },
+    { name = "langgraph-prebuilt" },
+    { name = "langgraph-sdk" },
     { name = "xxhash" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/9e/5a64602eff18a99d0216a80eff823051ffbdb7c11b5a16171cee8b1ccce5/langgraph-0.4.3.tar.gz", hash = "sha256:272d5d5903f2c2882dbeeba849846a0f2500bd83fb3734a3801ebe64c1a60bdd", size = 125407 }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/73/d4700fa35229618dfbb9bf1313eff8f31a43fc253bf1a989bb14e8e35dff/langgraph-0.3.23.tar.gz", hash = "sha256:054e64636be453626ea6e97be9172b2bae10d643253d0db313a0233f6a34f9dd", size = 117715 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/35/53/0a20edd9f41eb3707722444ec1b43752b792bbe904d1c8cc3ba27f8eb2c8/langgraph-0.4.3-py3-none-any.whl", hash = "sha256:dec926e034f4d440b92a3c52139cb6e9763bc1791e79a6ea53a233309cec864f", size = 151191 },
+    { url = "https://files.pythonhosted.org/packages/99/3b/86c67f1df41e321c545d19ace9eb1272ea461c091aead5cf6a6024a86278/langgraph-0.3.23-py3-none-any.whl", hash = "sha256:b089f360c8a7d7891689c04fd2918e1c1bd288b231d1e33f205d6ad2c9c5d727", size = 139736 },
 ]
 
 [[package]]
 name = "langgraph-api"
-version = "0.2.27"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cloudpickle", marker = "python_full_version < '4.0'" },
@@ -1412,13 +1413,12 @@ dependencies = [
     { name = "starlette", marker = "python_full_version < '4.0'" },
     { name = "structlog", marker = "python_full_version < '4.0'" },
     { name = "tenacity", marker = "python_full_version < '4.0'" },
-    { name = "truststore", marker = "python_full_version < '4.0'" },
     { name = "uvicorn", marker = "python_full_version < '4.0'" },
     { name = "watchfiles", marker = "python_full_version < '4.0'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/39/796960b1c6d6196f3119081e6072d5a53797003c9695d576550c5590e346/langgraph_api-0.2.27.tar.gz", hash = "sha256:d53c77456de3888164fde8f1703b050c245aebdab3ba42b1868d4bfe319343f5", size = 172523 }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/70/8a770979fcfd402b47614d91716e76adc872f7c9e9f483c4b3bb0eeeebb1/langgraph_api-0.2.1.tar.gz", hash = "sha256:5f65cb9e4b2df0b52e0e207c2eb0b018e6bc8b58314e8a9c01488d6cec9cae6d", size = 192040 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/0a/d224b694ae1033b90067096cf19ff0628f55053f267cea2c3224cd1e5417/langgraph_api-0.2.27-py3-none-any.whl", hash = "sha256:f2f6ec669e22f2ab6ebaa971573c9b3bdade8d83a968cfa3493de85b154b418b", size = 208097 },
+    { url = "https://files.pythonhosted.org/packages/e4/a4/1e1d3c6f73e4811a57fda5ef391fa920268552490bd1c1f671062d3a3b19/langgraph_api-0.2.1-py3-none-any.whl", hash = "sha256:8eee41eeceab462adc4c6f49816f69f2f452858ee373e6f3c12993e530172f78", size = 227788 },
 ]
 
 [[package]]
@@ -1451,6 +1451,21 @@ inmem = [
     { name = "langgraph-api", marker = "python_full_version < '4.0'" },
     { name = "langgraph-runtime-inmem", marker = "python_full_version < '4.0'" },
     { name = "python-dotenv" },
+]
+
+[[package]]
+name = "langgraph-cua"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "langgraph" },
+    { name = "scrapybara" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9d/74/60bc75a0cbeb9a23460389ffcaf73df7fa2ba0247a6b43186c870395b3d5/langgraph_cua-0.0.1.tar.gz", hash = "sha256:ed9b0419e0f540d8e42f598dc8ab95ed9733273a3bcc3f20cdc3f256f5f8c0de", size = 15676 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/db/7a7e48836ee7ea3683438136f6db4a6a7b8dd9ebf74a89bfe9ceea05730e/langgraph_cua-0.0.1-py3-none-any.whl", hash = "sha256:4c7d69fe695329e87a5c5f0593ec5f987a3647fea0a9e438444bf7b257ef7963", size = 15281 },
 ]
 
 [[package]]
@@ -1488,8 +1503,8 @@ name = "langgraph-sdk"
 version = "0.1.66"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "httpx", marker = "python_full_version < '4.0'" },
-    { name = "orjson", marker = "python_full_version < '4.0'" },
+    { name = "httpx" },
+    { name = "orjson" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/97/7a/5fede018d8b9100db14211cfdb94aefd0e5f2e9ae738072f3d4cc443465b/langgraph_sdk-0.1.66.tar.gz", hash = "sha256:81474ad4555a06004cc7a2f4ab477135d5eaf7db11fbcf2a69257fb2d717582e", size = 44049 }
 wheels = [
@@ -2873,6 +2888,21 @@ wheels = [
 ]
 
 [[package]]
+name = "scrapybara"
+version = "2.5.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/91/1d/be5370ee00db637d572fd65ffe2e325a5e9bc9210f712a3d1cc650999c6b/scrapybara-2.5.3.tar.gz", hash = "sha256:678de0997057943108575d9e4df73eb2da91af106d5bce86400b9b2f37f26e60", size = 45346 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/eb/e5b00cecf54a296e0629cd103c685cd6eae387a350463bf8fc6160743444/scrapybara-2.5.3-py3-none-any.whl", hash = "sha256:5124ee23b9dec506393615ac1d37599d610cab6e657bc623e9708ff46e609cec", size = 75482 },
+]
+
+[[package]]
 name = "sgmllib3k"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3181,15 +3211,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2b/72/4cdb54a31952827e8b58e11ea286bbfe2d3aa0ffb77a2f87dbc1c7ea77d3/trustcall-0.0.39.tar.gz", hash = "sha256:ec315818224501b9537ce6b7618dbc21be41210c6e8f2e239169a5a00912cd6e", size = 38637 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/3a/58de925a104ce554fc250b833fe76401c7822aa8d65f2002cb53195e6c64/trustcall-0.0.39-py3-none-any.whl", hash = "sha256:d7da42e0bba816c0539b2936dfed90ffb3ea8d789e548e73865d416f8ac4ee64", size = 30073 },
-]
-
-[[package]]
-name = "truststore"
-version = "0.10.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0f/a7/b7a43228762966a13598a404f3dfb4803ea29a906f449d8b0e73ed0bcd30/truststore-0.10.1.tar.gz", hash = "sha256:eda021616b59021812e800fa0a071e51b266721bef3ce092db8a699e21c63539", size = 26101 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/df/8ad635bdcfa8214c399e5614f7c2121dced47defb755a85ea1fa702ffb1c/truststore-0.10.1-py3-none-any.whl", hash = "sha256:b64e6025a409a43ebdd2807b0c41c8bff49ea7ae6550b5087ac6df6619352d4c", size = 18496 },
 ]
 
 [[package]]
