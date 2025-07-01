@@ -10,3 +10,5 @@ data/
 __pycache__/
 *.py[cod]
 *$py.class
+
+cliv2.py

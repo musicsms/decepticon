@@ -27,13 +27,25 @@ class ModelSelectionUI:
         return provider_info.get(provider, {"name": provider})
 
     def load_models_data(self):
-        """Load model data - returns status dict instead of displaying messages"""
+        """Load model data with optimizations - returns status dict instead of displaying messages"""
         try:
             from src.utils.llm.models import list_available_models, check_ollama_connection
+            import concurrent.futures
             
-            # Return loading status info
-            models = list_available_models()
-            ollama_info = check_ollama_connection()
+            # 병렬 처리로 모델 목록과 Ollama 연결 동시 체크
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                # 타임아웃을 짧게 설정하여 빠른 응답
+                model_future = executor.submit(list_available_models)
+                ollama_future = executor.submit(check_ollama_connection)
+                
+                try:
+                    # 최대 5초 대기 (기존보다 단축)
+                    models = model_future.result(timeout=5.0)
+                    ollama_info = ollama_future.result(timeout=2.0)  # Ollama는 더 짧게
+                except concurrent.futures.TimeoutError:
+                    # 타임아웃 시 기본값 사용
+                    models = model_future.result() if model_future.done() else []
+                    ollama_info = ollama_future.result() if ollama_future.done() else {"connected": False, "count": 0}
             
             available_models = [m for m in models if m.get("api_key_available", False)]
             
@@ -114,10 +126,21 @@ class ModelSelectionUI:
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col2:
-            # Load model data (first time only)
-            if not st.session_state.models_by_provider:
+            # 개선된 캐싱: 모델 데이터 로드 (첫 번째만 또는 캐시 만료시)
+            cache_key = "models_cache_timestamp"
+            cache_duration = 300  # 5분 캐시
+            current_time = time.time()
+            
+            # 캐시 체크: 모델 데이터가 없거나 캐시가 만료된 경우
+            needs_refresh = (
+                not st.session_state.models_by_provider or 
+                current_time - st.session_state.get(cache_key, 0) > cache_duration
+            )
+            
+            if needs_refresh:
                 with st.spinner("Loading available models..."):
                     load_result = self.load_models_data()
+                    st.session_state[cache_key] = current_time  # 캐시 시간 업데이트
                 
                 # Display messages within col2
                 if not load_result["success"]:
@@ -207,18 +230,8 @@ class ModelSelectionUI:
                     # Confirmation button
                     st.markdown("---")
                     if st.button("Initialize AI Agents", type="primary", use_container_width=True):
-                        # Initialize with spinner directly (no extra messages)
-                        with st.spinner(f"Initializing {selected_model.get('display_name', 'AI agents')} for red team operations..."):
-                            result = self.initialize_agents(selected_model)
-                        
-                        if result["success"]:
-                            st.success(result.get("message", "AI Agents initialized successfully!"))
-                            # Small delay to show success message
-                            time.sleep(1.5)
-                            return selected_model
-                        else:
-                            st.error(result.get("error", "Failed to initialize AI agents"))
-                            return None
+                        # 가짜 시뮬레이션 제거, 바로 선택된 모델 반환
+                        return selected_model
                 else:
                     st.warning(f"No models available for {selected_provider_display}")
             else:
@@ -230,36 +243,7 @@ class ModelSelectionUI:
     
 
     
-    def initialize_agents(self, selected_model):
-        """Initialize AI agents - replace this with your actual initialization logic"""
-        try:
-            # Simulate initialization time
-            time.sleep(2)
-            
-            # Here you would add your actual agent initialization code
-            # For example:
-            # from src.your_agent_module import initialize_agents
-            # success = initialize_agents(selected_model)
-            
-            # Simulate success/failure for demonstration
-            # Replace this with your actual initialization logic
-            import random
-            if random.choice([True, True, True, False]):  # 75% success rate for demo
-                return {
-                    "success": True,
-                    "message": f"Successfully initialized {selected_model.get('display_name', 'AI agents')} for red team operations!"
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": "Failed to connect to the selected model. Please check your API configuration."
-                }
-                
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Initialization error: {str(e)}"
-            }
+
 
     def show_loading_screen(self, model_info):
         """Simple loading screen"""
@@ -285,6 +269,13 @@ class ModelSelectionUI:
         return st.empty()
 
     def reset_selection(self):
-        """Reset model selection state"""
-        if "models_by_provider" in st.session_state:
-            st.session_state.models_by_provider = {}
+        """Reset model selection state including cache"""
+        # 캐시 포함 전체 리셋
+        reset_keys = ["models_by_provider", "models_cache_timestamp"]
+        
+        for key in reset_keys:
+            if key in st.session_state:
+                del st.session_state[key]
+        
+        # 기본 상태로 초기화
+        st.session_state.models_by_provider = {}

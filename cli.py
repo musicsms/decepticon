@@ -28,6 +28,7 @@ from rich.status import Status
 from rich.tree import Tree
 from rich.console import Group
 from rich.markdown import Markdown
+from rich.padding import Padding
 
 # Decepticon imports
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -757,6 +758,52 @@ class DecepticonCLI:
         
         return True
             
+    # def get_user_input_box(self):
+    #     """Claude Code 스타일의 미니멀한 입력 상자 표시"""
+    #     # 간단한 검은색 입력 상자
+    #     input_box = Panel(
+    #         "",
+    #         box=box.HEAVY,
+    #         border_style="#444444",
+    #         height=3,
+    #         expand=True,
+    #         style="white on #1e1e1e"
+    #     )
+    #     
+    #     self.console.print("\n")
+    #     self.console.print(input_box)
+    #     
+    #     try:
+    #         # 커서를 입력 상자 안으로 이동
+    #         print("\033[2A", end="", flush=True)  # 2줄 올리기
+    #         print("\033[3C", end="", flush=True)  # 3칸 오른쪽으로
+    #         
+    #         user_input = input("")
+    #         
+    #         return user_input.strip()
+    #         
+    #     except (EOFError, KeyboardInterrupt):
+    #         print("\n")
+    #         return None
+    
+    def get_user_input_box(self):
+        """Rich Prompt.ask를 사용한 기본 입력 - 패널 대신 깔끔한 프롬프트"""
+        from rich.prompt import Prompt
+        
+        try:
+            # Rich의 기본 Prompt.ask 사용 - 깔끔한 스타일
+            user_input = Prompt.ask(
+                "\n[bold blue]▶[/bold blue]",  # 간단한 화살표 프롬프트
+                console=self.console,
+                show_default=False
+            )
+            
+            return user_input.strip()
+            
+        except (EOFError, KeyboardInterrupt):
+            self.console.print("\n[dim yellow]Cancelled[/dim yellow]")
+            return None
+    
     def display_help(self):
         """도움말 표시"""
         help_content = """
@@ -1067,10 +1114,15 @@ class DecepticonCLI:
         
         while True:
             try:
-                user_input = Prompt.ask(
-                    prompt="\n[bold red] Decepticon > [/bold red]",
-                    show_default=False,
-                ).strip()
+                # 사각형 상자 스타일의 입력 받기
+                self.console.print("\n")  # 공백 추가
+                user_input = self.get_user_input_box()
+                
+                # 입력이 None인 경우 (Ctrl+C 등)
+                if user_input is None:
+                    if Confirm.ask("\n[yellow]Exit Decepticon?[/yellow]"):
+                        break
+                    continue
                 
                 if not user_input:
                     continue

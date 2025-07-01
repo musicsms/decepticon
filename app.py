@@ -244,9 +244,9 @@ class DecepticonApp:
         st.rerun()
     
     async def initialize_executor_async(self, model_info=None):
-        """비동기 실행기 초기화"""
+        """비동기 실행기 초기화 - 속도 최적화"""
         try:
-            log_debug(f"Starting async executor initialization with model: {model_info}")
+            log_debug(f"Starting optimized async executor initialization with model: {model_info}")
             
             # 로거 초기화 확인 (안전 장치)
             if "logger" not in st.session_state or st.session_state.logger is None:
@@ -260,6 +260,7 @@ class DecepticonApp:
             st.session_state.logging_session_id = session_id
             log_debug(f"Started logging session: {session_id} with model: {model_display_name}")
             
+            # 대기 시간 없이 바로 초기화 시작
             if model_info:
                 await self.executor.initialize_swarm(model_info)
                 st.session_state.current_model = model_info
@@ -272,7 +273,7 @@ class DecepticonApp:
             st.session_state.initialization_in_progress = False
             st.session_state.initialization_error = None
             
-            log_debug("Executor initialization completed successfully")
+            log_debug("Optimized executor initialization completed successfully")
             return True
             
         except Exception as e:
@@ -482,24 +483,29 @@ class DecepticonApp:
         selected_model = self.model_ui.display_model_selection_ui()
         
         if selected_model:
-            # model.py에서 이미 스피너와 성공 메시지를 처리했으므로
-            # 여기서는 바로 초기화만 진행
-            async def init_and_proceed():
-                try:
-                    success = await self.initialize_executor_async(selected_model)
+            # col2 레이아웃에 맞췄 실제 초기화 진행
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                with st.spinner(f"Initializing {selected_model['display_name']} for red team operations..."):
+                    async def init_and_proceed():
+                        try:
+                            success = await self.initialize_executor_async(selected_model)
+                            
+                            if success:
+                                st.session_state.app_stage = "main_app"
+                                st.success(f"{selected_model['display_name']} initialized successfully!")
+                                time.sleep(0.8)  # 짧은 대기 시간
+                                st.rerun()
+                            else:
+                                # 실패 시 에러 메시지
+                                st.error(f"Failed to initialize {selected_model['display_name']}")
+                                if st.session_state.initialization_error:
+                                    st.error(st.session_state.initialization_error)
+                        
+                        except Exception as e:
+                            st.error(f"Initialization error: {str(e)}")
                     
-                    if success:
-                        st.session_state.app_stage = "main_app"
-                        st.rerun()
-                    else:
-                        # 실패 시에만 에러 메시지 (model.py에서 이미 표시했을 수도 있음)
-                        if st.session_state.initialization_error:
-                            st.error(st.session_state.initialization_error)
-                
-                except Exception as e:
-                    st.error(f"Initialization error: {str(e)}")
-            
-            asyncio.run(init_and_proceed())
+                    asyncio.run(init_and_proceed())
 
 
 
