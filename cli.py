@@ -793,7 +793,7 @@ class DecepticonCLI:
         try:
             # Rich의 기본 Prompt.ask 사용 - 깔끔한 스타일
             user_input = Prompt.ask(
-                "\n[bold blue]▶[/bold blue]",  # 간단한 화살표 프롬프트
+                "\n[bold blue]Decepticon > [/bold blue]",  # 간단한 화살표 프롬프트
                 console=self.console,
                 show_default=False
             )

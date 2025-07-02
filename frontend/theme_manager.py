@@ -343,6 +343,13 @@ class ThemeManager:
                 with open(layout_css_path, "r", encoding="utf-8") as f:
                     layout_css = f.read()
             
+            # 모델 정보 CSS 로드
+            model_info_css_path = self.static_dir / "css" / "model_info.css"
+            model_info_css = ""
+            if model_info_css_path.exists():
+                with open(model_info_css_path, "r", encoding="utf-8") as f:
+                    model_info_css = f.read()
+            
             # 입력창 고정 CSS 로드 (최종 적용을 위해 마지막에 로드)
             input_fix_css_path = self.static_dir / "css" / "input_fix.css"
             input_fix_css = ""
@@ -355,6 +362,7 @@ class ThemeManager:
             st.markdown(additional_css, unsafe_allow_html=True)
             st.markdown(terminal_theme_css, unsafe_allow_html=True)
             st.markdown(f"<style>{layout_css}</style>", unsafe_allow_html=True)
+            st.markdown(f"<style>{model_info_css}</style>", unsafe_allow_html=True)
             st.markdown(f"<style>{input_fix_css}</style>", unsafe_allow_html=True)
             
             print(f"Applied {theme} theme CSS with overrides")

@@ -5,7 +5,7 @@ from datetime import datetime
 from src.utils.message import get_agent_name
 
 class ChatUI:
-    """채팅 인터페이스를 관리하는 클래스 - CLI 방식과 완전히 동일"""
+    """채팅 인터페이스를 관리하는 클래스"""
     
     def __init__(self):
         """UI 초기화"""
@@ -141,7 +141,7 @@ class ChatUI:
                 time.sleep(speed)
     
     def display_messages(self, structured_messages, container=None):
-        """구조화된 메시지를 UI에 표시 - 일반 워크플로우와 동일하게 처리"""
+        """구조화된 메시지를 UI에 표시"""
         if container is None:
             container = st
             

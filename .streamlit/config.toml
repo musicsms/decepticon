@@ -7,7 +7,7 @@ enableWebsocketCompression = true
 runOnSave = true
 
 [client]
-showErrorDetails = "none"
+showSidebarNavigation = false
 
 [theme]
 base = "dark"
