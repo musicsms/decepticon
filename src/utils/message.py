@@ -119,7 +119,6 @@ def extract_message_content(message):
             content = str(message)
         
         if isinstance(content, str):
-            # Rich 마크업 escape 제거 - 원본 문자열 반환
             result = content.strip() if content else ""
             return result
         elif isinstance(content, list):
@@ -158,30 +157,5 @@ def extract_tool_calls(message, event_data: Optional[Dict[str, Any]] = None) -> 
                 "args": tool_call.get('args', {})
             })
     
-    # # 2. event_data에서 직접 추출
-    # elif event_data and 'tool_calls' in event_data:
-    #     tool_calls = event_data['tool_calls']
-    
-    # # 3. additional_kwargs에서 추출 (OpenAI 형식)
-    # elif raw_message and hasattr(raw_message, 'additional_kwargs') and 'tool_calls' in raw_message.additional_kwargs:
-    #     for tc in raw_message.additional_kwargs['tool_calls']:
-    #         if 'function' in tc:
-    #             # OpenAI function call 형식
-    #             try:
-    #                 args = json.loads(tc['function'].get('arguments', '{}')) if tc['function'].get('arguments') else {}
-    #             except (json.JSONDecodeError, TypeError):
-    #                 args = {}
-    #             tool_calls.append({
-    #                 "id": tc.get('id', ''),
-    #                 "name": tc['function'].get('name', 'Unknown Tool'),
-    #                 "args": args
-    #             })
-    #         else:
-    #             # 일반 tool call 형식
-    #             tool_calls.append({
-    #                 "id": tc.get('id', ''),
-    #                 "name": tc.get('name', 'Unknown Tool'),
-    #                 "args": tc.get('args', {})
-    #             })
     
     return tool_calls

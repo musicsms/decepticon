@@ -24,7 +24,7 @@ from src.utils.message import (
 )
 
 
-class DirectExecutor:
+class Executor:
     """CLI의 swarm 실행 로직을 프론트엔드에서 직접 사용하는 클래스"""
     
     def __init__(self):
@@ -172,7 +172,7 @@ class DirectExecutor:
             }
     
     def _should_display_message(self, message, agent_name: str, step_count: int):
-        """메시지를 표시할지 결정"""
+        """메시지를 표시할지 결정 - CLI 로직과 완전히 동일"""
         # 메시지 ID 생성 
         message_id = None
         if hasattr(message, 'id') and message.id:

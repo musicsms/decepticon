@@ -176,6 +176,90 @@ class TerminalUI:
         # 디스플레이 업데이트
         self._update_terminal_display()
     
+    def process_frontend_messages(self, frontend_messages):
+        """프론트엔드 메시지 처리 - app.py에서 호출하는 메서드"""
+        if not frontend_messages:
+            return
+        
+        # frontend_messages는 리스트 형태
+        for message in frontend_messages:
+            message_id = message.get("id")
+            
+            # 이미 처리한 메시지는 건너뛰
+            if message_id in self.processed_messages:
+                continue
+                
+            message_type = message.get("type")
+            
+            # 도구 메시지 처리
+            if message_type == "tool":
+                tool_display_name = message.get("tool_display_name", "Tool")
+                content = message.get("content", "")
+                
+                # terminal 관련 도구를 식별하여 명령어와 출력 처리 개선
+                is_terminal_tool = (
+                    "terminal" in tool_display_name.lower() or 
+                    "command" in tool_display_name.lower() or
+                    "exec" in tool_display_name.lower() or
+                    "shell" in tool_display_name.lower()
+                )
+                
+                if is_terminal_tool:
+                    # 내용에서 명령어와 출력 분리 시도
+                    lines = content.split('\n') if content else []
+                    
+                    # 명령어 찾기 시도
+                    command_found = False
+                    for i, line in enumerate(lines):
+                        line = line.strip()
+                        # 사용자 입력 명령어를 생각하는 패턴
+                        if any(indicator in line.lower() for indicator in ['$', '#', 'command:', 'executing:', 'running:']):
+                            # 이 라인을 명령어로 처리
+                            cleaned_command = self._extract_command_from_line(line)
+                            if cleaned_command:
+                                self.add_command(cleaned_command)
+                                command_found = True
+                                # 나머지 라인들을 출력으로 처리
+                                remaining_output = '\n'.join(lines[i+1:])
+                                if remaining_output.strip():
+                                    self.add_output(remaining_output.strip())
+                                break
+                    
+                    # 명령어를 찾지 못한 경우 전체를 출력으로 처리
+                    if not command_found and content.strip():
+                        # 도구 이름을 명령어로 추가
+                        self.add_command(f"{tool_display_name.lower()}")
+                        self.add_output(content)
+                else:
+                    # 비-터미널 도구인 경우 도구 이름과 출력만 표시
+                    if content and content.strip():
+                        self.add_command(f"{tool_display_name}")
+                        self.add_output(content)
+                
+                # 처리된 메시지로 표시
+                self.processed_messages.add(message_id)
+    
+    def _extract_command_from_line(self, line):
+        """라인에서 실제 명령어 추출"""
+        line = line.strip()
+        
+        # 여러 패턴으로 명령어 추출 시도
+        patterns = [
+            r'(?:command|executing|running):\s*(.+)',
+            r'\$\s*(.+)',
+            r'#\s*(.+)',
+            r'^(.+?)\s*$'  # 마지막으로 전체 라인 사용
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                command = match.group(1).strip()
+                if command:
+                    return command
+        
+        return line
+    
     def process_structured_messages(self, structured_messages):
         """구조화된 메시지 데이터에서 명령어와 출력 처리 - 도구 메시지 반복 출력 방지"""
         if not structured_messages:

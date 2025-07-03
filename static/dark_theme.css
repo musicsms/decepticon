@@ -37,8 +37,24 @@
     color: #FAFAFA !important;
 }
 .stSidebar button {
-    color: #FAFAFA;
-    border-color: rgba(250, 250, 250, 0.2);
+    background-color: #262730 !important;
+    color: #FAFAFA !important;
+    border: 1px solid #404040 !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+.stSidebar button:hover {
+    background-color: #404040 !important;
+    color: #FFFFFF !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+.stSidebar button:active {
+    background-color: #FF4B4B !important;
+    color: #FFFFFF !important;
+    transform: translateY(0px) !important;
 }
 
 /* 터미널 스타일링 */

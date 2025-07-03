@@ -12,8 +12,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from frontend.theme_manager import ThemeManager
-from frontend.model import ModelSelectionUI
-from frontend.executor import DirectExecutor
+from frontend.model_selection_ui import ModelSelectionUI
+from src.utils.executor import Executor
 from src.utils.logging.logger import get_logger
 from src.utils.logging.replay import get_replay_system
 
@@ -65,9 +65,9 @@ async def initialize_executor_async(model_info=None):
     try:
         log_debug(f"Starting optimized async executor initialization with model: {model_info}")
         
-        # DirectExecutor 생성
+        # Executor 생성
         if "direct_executor" not in st.session_state:
-            st.session_state.direct_executor = DirectExecutor()
+            st.session_state.direct_executor = Executor()
         
         executor = st.session_state.direct_executor
         

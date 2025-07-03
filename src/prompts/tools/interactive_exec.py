@@ -6,17 +6,20 @@ interactive shell execution tools for persistent terminal session management.
 """
 
 INTERACTIVE_EXEC_TOOLS_PROMPT = """
-<interactive_shell_tools>
+<terminal_tools>
 ## important
 If interactive shell commands such as ssh, ftp, nc or msfconsole are required to be executed, the commands should be executed using the following tools.
 Use the `-o HostKeyAlgoriths=+ssh-rsa` option when connecting to the ssh
 
 ## Persistent Session Management Tools:
-### create_session() 
+### create_session()
 **When to use**: Need persistent environment for multi-step operations
 **Returns**: Session ID for subsequent commands
 
-### interactive_exec(command, session_id)
+### session_list
+session list
+
+### command_exec(command, session_id)
 **When to use**: Execute commands that require state persistence
 **Examples**: Directory navigation, environment setup, background processes
 

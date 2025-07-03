@@ -241,10 +241,6 @@ class ModelSelectionUI:
     
 
     
-
-    
-
-
     def show_loading_screen(self, model_info):
         """Simple loading screen"""
         provider_info = self.get_provider_info(model_info.get('provider', 'Unknown'))

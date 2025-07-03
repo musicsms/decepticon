@@ -37,8 +37,24 @@
     color: #31333F !important;
 }
 .stSidebar button {
-    color: #31333F;
-    border-color: rgba(49, 51, 63, 0.2);
+    background-color: #FFFFFF !important;
+    color: #31333F !important;
+    border: 1px solid #DFE2E6 !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+.stSidebar button:hover {
+    background-color: #E8EAF0 !important;
+    color: #31333F !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+.stSidebar button:active {
+    background-color: #FF4B4B !important;
+    color: #FFFFFF !important;
+    transform: translateY(0px) !important;
 }
 
 /* 터미널 스타일링 */

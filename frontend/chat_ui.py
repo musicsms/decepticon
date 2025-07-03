@@ -3,6 +3,7 @@ import re
 import time
 from datetime import datetime
 from src.utils.message import get_agent_name
+from src.utils.agents import AgentManager
 
 class ChatUI:
     """채팅 인터페이스를 관리하는 클래스"""
@@ -45,53 +46,8 @@ class ChatUI:
                 pass
         return datetime.now().strftime("%H:%M:%S")
     
-    def get_agent_class_name(self, agent_name):
-        """에이전트 이름에 따른 CSS 클래스 이름 반환 (예전 코드 방식)"""
-        if isinstance(agent_name, str):
-            if "Supervisor" in agent_name or "supervisor" in agent_name.lower():
-                return "supervisor-message"
-            elif "Planner" in agent_name or "planner" in agent_name.lower():
-                return "planner-message"
-            elif "Reconnaissance" in agent_name or "reconnaissance" in agent_name.lower():
-                return "recon-message"
-            elif "Initial_Access" in agent_name or "initial" in agent_name.lower():
-                return "initaccess-message"
-            elif "Execution" in agent_name or "execution" in agent_name.lower():
-                return "execution-message"
-            elif "Persistence" in agent_name or "persistence" in agent_name.lower():
-                return "persistence-message"
-            elif "Privilege_Escalation" in agent_name or "privilege" in agent_name.lower():
-                return "privilege-escalation-message"
-            elif "Defense_Evasion" in agent_name or "defense" in agent_name.lower() or "evasion" in agent_name.lower():
-                return "defense-evasion-message"
-            elif "tool" in agent_name.lower():
-                return "tool-message"
-        return "agent-message"  # 기본 클래스
-    
-    def get_agent_color(self, agent_name):
-        """에이전트 이름에 따른 색상 반환"""
-        if isinstance(agent_name, str):
-            agent_name = agent_name.lower()
-            if "planner" in agent_name:
-                return "#4dabf7"
-            elif "reconnaissance" in agent_name:
-                return "#7950f2"
-            elif "initial_access" in agent_name:
-                return "#fab005"
-            elif "execution" in agent_name:
-                return "#f76707"
-            elif "persistence" in agent_name:
-                return "#ae3ec9"
-            elif "privilege_escalation" in agent_name:
-                return "#d6336c"
-            elif "defense_evasion" in agent_name:
-                return "#1098ad"
-            elif "summary" in agent_name:
-                return "#fd7e14"
-            elif "tool" in agent_name:
-                return "#82c91e"
-        return "#adb5bd"  # 기본 색상
-    
+
+
     def simulate_typing(self, text, placeholder, speed=0.005):
         """타이핑 애니메이션 시뮬레이션"""
         # 코드 블록 위치 찾기
@@ -197,8 +153,8 @@ class ChatUI:
             agent_name_for_color = display_name
         
         # 에이전트 색상 및 클래스 생성
-        agent_color = self.get_agent_color(agent_name_for_color)
-        agent_class = self.get_agent_class_name(agent_name_for_color)
+        agent_color = AgentManager.get_frontend_color(agent_name_for_color)
+        agent_class = AgentManager.get_css_class(agent_name_for_color)
         
         # 고유한 메시지 ID 생성
         st.session_state.message_counter += 1
@@ -221,7 +177,7 @@ class ChatUI:
             elif not tool_calls:  # content가 없고 tool_calls도 없을 때만 오류 메시지 표시
                 st.write("No content available")
             
-            # Tool calls 정보 표시 (클로드 데스크탑 스타일)
+            # Tool calls 정보 표시
             tool_calls = message.get("tool_calls", [])
             if tool_calls:
                 for i, tool_call in enumerate(tool_calls):
@@ -265,7 +221,7 @@ class ChatUI:
         content = message.get("content", "")
         
         # tool 메시지는 항상 tool 색상 사용
-        tool_color = self.get_agent_color("tool")
+        tool_color = AgentManager.get_frontend_color("tool")
         tool_class = "tool-message"
         
         # 고유한 메시지 ID 생성
@@ -295,7 +251,7 @@ class ChatUI:
         command = message.get("data", {}).get("command", "")
         
         # 도구 색상 가져오기
-        tool_color = self.get_agent_color("tool")
+        tool_color = AgentManager.get_frontend_color("tool")
         
         with container.chat_message("tool", avatar="🔧"):
             st.markdown(f'<div class="agent-header tool-message"><strong style="color: {tool_color}">Command: {display_name}</strong></div>', unsafe_allow_html=True)
@@ -310,7 +266,7 @@ class ChatUI:
         output = message.get("data", {}).get("content", "")
         
         # 도구 출력 색상 가져오기
-        tool_color = self.get_agent_color("tool")
+        tool_color = AgentManager.get_frontend_color("tool")
         
         with container.chat_message("tool", avatar="🔧"):
             st.markdown(f'<div class="agent-header tool-output-message"><strong style="color: {tool_color}">Output: {display_name}</strong></div>', unsafe_allow_html=True)

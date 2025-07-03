@@ -58,11 +58,11 @@ theme_manager = st.session_state.theme_manager
 theme_manager.apply_theme()
 
 # 직접 실행 모듈 import
-from frontend.executor import DirectExecutor
+from src.utils.executor import Executor
 from frontend.message import CLIMessageProcessor
 from frontend.chat_ui import ChatUI
 from frontend.terminal_ui import TerminalUI
-from frontend.model import ModelSelectionUI
+from frontend.model_selection_ui import ModelSelectionUI
 from frontend.components.log_manager import LogManagerUI
 from frontend.components.chat_replay import ReplayManager
 
@@ -190,10 +190,10 @@ class DecepticonApp:
             log_debug("Minimal logger initialized")
     
     def _setup_executor(self):
-        """DirectExecutor 설정"""
+        """Executor 설정"""
         if "direct_executor" not in st.session_state:
-            st.session_state.direct_executor = DirectExecutor()
-            log_debug("DirectExecutor created and stored in session state")
+            st.session_state.direct_executor = Executor()
+            log_debug("Executor created and stored in session state")
         
         self.executor = st.session_state.direct_executor
         
@@ -254,8 +254,8 @@ class DecepticonApp:
         # 모델 선택 상태 초기화
         self.model_ui.reset_selection()
         
-        # DirectExecutor 재생성
-        st.session_state.direct_executor = DirectExecutor()
+        # Executor 재생성
+        st.session_state.direct_executor = Executor()
         self.executor = st.session_state.direct_executor
         
         log_debug("Session reset completed - including terminal UI cleanup")
@@ -739,8 +739,8 @@ with chat_column:
                 import time
                 st.session_state.session_start_time = time.time()
                 
-                # DirectExecutor 재초기화 (새로운 thread_id로)
-                st.session_state.direct_executor = DirectExecutor()
+                # Executor 재초기화 (새로운 thread_id로)
+                st.session_state.direct_executor = Executor()
                 app.executor = st.session_state.direct_executor
                 
                 # Executor를 현재 모델로 재초기화 (새로운 thread_config 사용)
@@ -751,7 +751,7 @@ with chat_column:
                         thread_config=st.session_state.thread_config  # 새로운 thread_config 전달
                     ))
                     st.session_state.executor_ready = True
-                    log_debug(f"DirectExecutor reinitialized with new thread_config and model: {current_model['display_name']}")
+                    log_debug(f"Executor reinitialized with new thread_config and model: {current_model['display_name']}")
                 
                 # 현재 로깅 세션 종료 및 새 세션 시작 - 모델 정보 포함
                 if hasattr(st.session_state, 'logger') and st.session_state.logger and st.session_state.logger.current_session:

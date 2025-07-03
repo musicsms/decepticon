@@ -8,25 +8,15 @@ from typing import Dict, Any, List
 
 # CLI 메시지 유틸리티 직접 import
 from src.utils.message import parse_tool_name, extract_tool_calls
+# 리팩토링된 에이전트 관리자
+from src.utils.agents import AgentManager
 
 
 class CLIMessageProcessor:
     """CLI 메시지 처리 로직을 프론트엔드용으로 래핑하는 클래스 - CLI와 완전히 동일"""
     
     def __init__(self):
-        # 에이전트 아바타 - 동적으로 관리
-        self.agent_avatars = {
-            "planner": "🧠",
-            "reconnaissance": "🔍", 
-            "initial_access": "🔑",
-            "execution": "💻",
-            "persistence": "🔐",
-            "privilege_escalation": "🔒",
-            "defense_evasion": "🕵️",
-            "summary": "📋",
-        }
-        
-        # 기본 아바타
+        # 기본 아바타 (리팩토링된 모듈에서 관리)
         self.default_avatar = "🤖"
     
     def process_cli_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -40,8 +30,8 @@ class CLIMessageProcessor:
         raw_message = event_data.get("raw_message")
         
         # 에이전트 표시 정보 생성
-        display_name = self._get_agent_display_name(agent_name)
-        avatar = self._get_agent_avatar(agent_name)
+        display_name = AgentManager.get_display_name(agent_name)
+        avatar = AgentManager.get_avatar(agent_name)
         
         if message_type == "ai":
             # AI 메시지를 프론트엔드 에이전트 메시지로 변환
@@ -100,34 +90,8 @@ class CLIMessageProcessor:
             "id": f"user_{hash(content)}_{datetime.now().timestamp()}"
         }
     
-    def _get_agent_display_name(self, agent_name: str) -> str:
-        """에이전트 표시 이름 생성 - CLI와 동일"""
-        if not agent_name or agent_name == "Unknown":
-            return "Unknown Agent"
-        
-        # CLI에서 오는 이름을 그대로 사용하되, 포맷팅만 적용
-        # snake_case를 Title Case로 변환
-        if "_" in agent_name:
-            return agent_name.replace("_", " ").title()
-        
-        # 첫 글자만 대문자로
-        return agent_name.capitalize()
-    
-    def _get_agent_avatar(self, agent_name: str) -> str:
-        """에이전트 아바타 반환 - 동적 매칭"""
-        if not agent_name:
-            return self.default_avatar
-        
-        # 소문자로 변환해서 매칭
-        agent_key = agent_name.lower()
-        
-        # 부분 매칭으로 아바타 찾기
-        for key, avatar in self.agent_avatars.items():
-            if key in agent_key or agent_key in key:
-                return avatar
-        
-        return self.default_avatar
-    
+
+
     def extract_agent_status(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:
         """이벤트들에서 에이전트 상태 정보 추출 - CLI와 동일"""
         status = {

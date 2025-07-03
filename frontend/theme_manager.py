@@ -135,6 +135,15 @@ class ThemeManager:
             toggle_text = "#FFFFFF" if theme == "dark" else "#31333F"  # 토글 버튼 텍스트
             toggle_border = "rgba(255, 255, 255, 0.2)" if theme == "dark" else "rgba(49, 51, 63, 0.2)"  # 테두리 색
             
+            # 사이드바 버튼 색상
+            button_bg = "#262730" if theme == "dark" else "#FFFFFF"  # 버튼 배경
+            button_text = "#FAFAFA" if theme == "dark" else "#31333F"  # 버튼 텍스트
+            button_border = "#404040" if theme == "dark" else "#DFE2E6"  # 버튼 테두리
+            button_hover_bg = "#404040" if theme == "dark" else "#E8EAF0"  # 버튼 호버 배경
+            button_hover_text = "#FFFFFF" if theme == "dark" else "#31333F"  # 버튼 호버 텍스트
+            button_active_bg = "#FF4B4B" if theme == "dark" else "#FF4B4B"  # 버튼 활성 배경
+            button_active_text = "#FFFFFF" if theme == "dark" else "#FFFFFF"  # 버튼 활성 텍스트
+            
             # 에이전트 상태 컨테이너 스타일
             agent_bg = "linear-gradient(to right, #222222, #2d2d2d, #222222)" if theme == "dark" else "linear-gradient(to right, #F0F2F6, #FFFFFF, #F0F2F6)"  # 배경
             agent_border = "transparent" if theme == "dark" else "#DFE2E6"  # 테두리 색
@@ -162,6 +171,23 @@ class ThemeManager:
             
             # 메시지 컨텐트 배경
             message_bg = "rgba(45, 45, 45, 0.5)" if theme == "dark" else "rgba(240, 242, 246, 0.5)"  # 메시지 배경
+            
+            # 터미널 색상
+            terminal_bg = "#1E1E1E" if theme == "dark" else "#F5F5F5"  # 터미널 배경
+            terminal_text = "#FFFFFF" if theme == "dark" else "#333333"  # 터미널 텍스트
+            terminal_header_bg = "#333333" if theme == "dark" else "#E0E0E0"  # 터미널 헤더 배경
+            terminal_header_text = "#FFFFFF" if theme == "dark" else "#333333"  # 터미널 헤더 텍스트
+            terminal_prompt = "#4EC9B0" if theme == "dark" else "#0B7285"  # 프롬프트 색
+            terminal_command = "#DCDCAA" if theme == "dark" else "#AD8400"  # 명령어 색
+            terminal_output = "#CCCCCC" if theme == "dark" else "#555555"  # 출력 색
+            terminal_cursor = "#FFFFFF" if theme == "dark" else "#333333"  # 커서 색
+            terminal_shadow = "rgba(0, 0, 0, 0.5)" if theme == "dark" else "rgba(0, 0, 0, 0.1)"  # 그림자
+            
+            # 채팅 UI 색상
+            chat_container_bg = "#262730" if theme == "dark" else "#FFFFFF"  # 채팅 컨테이너 배경
+            chat_input_bg = "#1E1E1E" if theme == "dark" else "#F0F2F6"  # 입력창 배경
+            chat_input_text = "#FAFAFA" if theme == "dark" else "#31333F"  # 입력창 텍스트
+            chat_border = "#404040" if theme == "dark" else "#DFE2E6"  # 채팅 테두리
             
             additional_css = f'''
             <style id="custom-theme-overrides">
@@ -191,9 +217,85 @@ class ThemeManager:
                 color: {sidebar_text} !important;
             }}
             
-            /* 토글 버튼 스타일 */
-            .stToggleButton label,
-            [data-testid="stToggleButton"] label {{
+            /* 사이드바 버튼 스타일 - 강화된 선택자 */
+            section[data-testid="stSidebar"] button,
+            section[data-testid="stSidebar"] .stButton > button,
+            section[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"],
+            section[data-testid="stSidebar"] [data-testid="stBaseButton-primary"],
+            section[data-testid="stSidebar"] .element-container button,
+            section[data-testid="stSidebar"] [data-baseweb="button"],
+            section[data-testid="stSidebar"] div[data-baseweb="button"] button {{
+                background-color: {button_bg} !important;
+                color: {button_text} !important;
+                border: 1px solid {button_border} !important;
+                border-radius: 6px !important;
+                padding: 8px 16px !important;
+                font-weight: 500 !important;
+                transition: all 0.2s ease !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+                min-height: 40px !important;
+            }}
+            
+            /* 사이드바 버튼 호버 효과 - 강화된 선택자 */
+            section[data-testid="stSidebar"] button:hover,
+            section[data-testid="stSidebar"] .stButton > button:hover,
+            section[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]:hover,
+            section[data-testid="stSidebar"] [data-testid="stBaseButton-primary"]:hover,
+            section[data-testid="stSidebar"] .element-container button:hover,
+            section[data-testid="stSidebar"] [data-baseweb="button"]:hover,
+            section[data-testid="stSidebar"] div[data-baseweb="button"] button:hover {{
+                background-color: {button_hover_bg} !important;
+                color: {button_hover_text} !important;
+                border-color: {button_border} !important;
+                transform: translateY(-1px) !important;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+            }}
+            
+            /* 사이드바 버튼 활성 상태 - 강화된 선택자 */
+            section[data-testid="stSidebar"] button:active,
+            section[data-testid="stSidebar"] .stButton > button:active,
+            section[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]:active,
+            section[data-testid="stSidebar"] [data-testid="stBaseButton-primary"]:active,
+            section[data-testid="stSidebar"] .element-container button:active,
+            section[data-testid="stSidebar"] [data-baseweb="button"]:active,
+            section[data-testid="stSidebar"] div[data-baseweb="button"] button:active {{
+                background-color: {button_active_bg} !important;
+                color: {button_active_text} !important;
+                transform: translateY(0px) !important;
+            }}
+            
+            /* 버튼 텍스트 스타일 강화 */
+            section[data-testid="stSidebar"] button p,
+            section[data-testid="stSidebar"] button span,
+            section[data-testid="stSidebar"] button div {{
+                color: {button_text} !important;
+                font-weight: 500 !important;
+            }}
+            
+            section[data-testid="stSidebar"] button:hover p,
+            section[data-testid="stSidebar"] button:hover span,
+            section[data-testid="stSidebar"] button:hover div {{
+                color: {button_hover_text} !important;
+            }}
+            
+            /* 특정 버튼 key 기반 선택자 (추가 보장) */
+            section[data-testid="stSidebar"] button[aria-label*="change_model_btn"],
+            section[data-testid="stSidebar"] button[aria-label*="chat_history_btn"],
+            section[data-testid="stSidebar"] button[aria-label*="new_chat_btn"],
+            section[data-testid="stSidebar"] [data-testid*="change_model_btn"],
+            section[data-testid="stSidebar"] [data-testid*="chat_history_btn"],
+            section[data-testid="stSidebar"] [data-testid*="new_chat_btn"] {{
+                background-color: {button_bg} !important;
+                color: {button_text} !important;
+                border: 1px solid {button_border} !important;
+            }}
+            
+            /* 토글 버튼 스타일 - 강화된 선택자 */
+            section[data-testid="stSidebar"] .stToggle label,
+            section[data-testid="stSidebar"] [data-testid="stToggle"] label,
+            section[data-testid="stSidebar"] .stCheckbox label,
+            section[data-testid="stSidebar"] [data-testid="stCheckbox"] label {{
                 background-color: {toggle_bg} !important;
                 color: {toggle_text} !important;
                 border-color: {toggle_border} !important;
@@ -291,47 +393,103 @@ class ThemeManager:
             </style>
             '''
             
-            # 터미널 UI 테마 스타일 추가
+            # 터미널 UI 테마 스타일 추가 - 강화된 버전
             terminal_theme_css = f'''
             <style id="terminal-theme-overrides">
                 /* 터미널 테마 스타일 - {theme} 모드 */
                 .terminal-container {{                
-                    background-color: {"#1E1E1E" if theme == "dark" else "#F5F5F5"} !important;
-                    color: {"#FFFFFF" if theme == "dark" else "#333333"} !important;
-                    box-shadow: {"rgba(0, 0, 0, 0.5)" if theme == "dark" else "rgba(0, 0, 0, 0.1)"} -2px 0 10px !important;
+                    background-color: {terminal_bg} !important;
+                    color: {terminal_text} !important;
+                    box-shadow: {terminal_shadow} 0 4px 12px !important;
+                    border-left: 1px solid {terminal_header_bg} !important;
+                    border-right: 1px solid {terminal_header_bg} !important;
+                    border-bottom: 1px solid {terminal_header_bg} !important;
+                    background-image: linear-gradient(to bottom, {terminal_header_bg} 0%, {terminal_bg} 20px) !important;
                 }}
                 
-                .terminal-header {{                
-                    background-color: {"#333333" if theme == "dark" else "#E0E0E0"} !important;
-                    color: {"#FFFFFF" if theme == "dark" else "#333333"} !important;
+                .mac-terminal-header {{                
+                    background: linear-gradient(to bottom, {terminal_header_bg}, {terminal_bg}) !important;
+                    color: {terminal_header_text} !important;
+                    border-left: 1px solid {terminal_header_bg} !important;
+                    border-right: 1px solid {terminal_header_bg} !important;
+                    border-top: 1px solid {terminal_header_bg} !important;
                 }}
                 
                 .terminal-prompt {{                
-                    color: {"#4EC9B0" if theme == "dark" else "#0B7285"} !important;
+                    color: {terminal_text} !important;
+                }}
+                
+                .terminal-user {{                
+                    color: {terminal_prompt} !important;
+                }}
+                
+                .terminal-prompt-text {{                
+                    color: {terminal_text} !important;
+                }}
+                
+                .terminal-command-text {{                
+                    color: {terminal_command} !important;
                 }}
                 
                 .terminal-command {{                
-                    color: {"#DCDCAA" if theme == "dark" else "#AD8400"} !important;
+                    color: {terminal_command} !important;
                 }}
                 
                 .terminal-output {{                
-                    color: {"#CCCCCC" if theme == "dark" else "#555555"} !important;
-                }}
-                
-                .terminal-success {{                
-                    color: {"#6A9955" if theme == "dark" else "#2E7D32"} !important;
-                }}
-                
-                .terminal-error {{                
-                    color: {"#F14C4C" if theme == "dark" else "#C62828"} !important;
-                }}
-                
-                .terminal-warning {{                
-                    color: {"#DCDCAA" if theme == "dark" else "#F57F17"} !important;
+                    color: {terminal_output} !important;
                 }}
                 
                 .terminal-cursor {{                
-                    background-color: {"#FFFFFF" if theme == "dark" else "#333333"} !important;
+                    background-color: {terminal_cursor} !important;
+                }}
+                
+                .terminal-container::-webkit-scrollbar-track {{
+                    background: {terminal_bg} !important;
+                }}
+                
+                .terminal-container::-webkit-scrollbar-thumb {{
+                    background-color: {terminal_header_bg} !important;
+                }}
+                
+                .terminal-container::-webkit-scrollbar-thumb:hover {{
+                    background: {terminal_prompt} !important;
+                }}
+            </style>
+            '''
+            
+            # 채팅 UI 테마 스타일 추가
+            chat_theme_css = f'''
+            <style id="chat-theme-overrides">
+                /* 채팅 UI 테마 스타일 - {theme} 모드 */
+                
+                /* 채팅 메시지 컨테이너 배경 */
+                div.stChatMessage[data-testid="stChatMessage"] .stChatMessageContent {{
+                    background-color: {message_bg} !important;
+                    border-radius: 6px;
+                    transition: background-color 0.3s ease;
+                }}
+                
+                /* 채팅 메시지 헤더 */
+                .agent-header {{
+                    color: {header_text} !important;
+                    border-bottom: 1px solid {header_border} !important;
+                }}
+                
+                /* 사용자 메시지 스타일 */
+                div.stChatMessage[data-testid="stChatMessage"][data-testid*="user"] .stChatMessageContent {{
+                    background-color: {message_bg} !important;
+                }}
+                
+                /* AI 에이전트 메시지 스타일 */
+                div.stChatMessage[data-testid="stChatMessage"][data-testid*="assistant"] .stChatMessageContent {{
+                    background-color: {message_bg} !important;
+                }}
+                
+                /* 코드 블록 스타일링 강화 */
+                pre[data-testid="stCodeBlock"] {{
+                    background-color: {terminal_bg} !important;
+                    color: {terminal_text} !important;
+                    border-left: 4px solid {terminal_prompt} !important;
                 }}
             </style>
             '''
@@ -361,6 +519,7 @@ class ThemeManager:
             st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
             st.markdown(additional_css, unsafe_allow_html=True)
             st.markdown(terminal_theme_css, unsafe_allow_html=True)
+            st.markdown(chat_theme_css, unsafe_allow_html=True)
             st.markdown(f"<style>{layout_css}</style>", unsafe_allow_html=True)
             st.markdown(f"<style>{model_info_css}</style>", unsafe_allow_html=True)
             st.markdown(f"<style>{input_fix_css}</style>", unsafe_allow_html=True)

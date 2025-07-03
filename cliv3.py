@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Decepticon CLI - Dynamic Configuration Only
-A command-line interface for penetration testing workflows with NO hardcoded values
+Decepticon CLI v3 - Using Common Executor Module
 """
 
 import asyncio
@@ -30,8 +29,7 @@ from rich.console import Group
 from rich.markdown import Markdown
 from rich.padding import Padding
 from rich.prompt import Prompt
-from rich import markup
-
+from rich.syntax import Syntax
 
 # Decepticon imports
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -41,7 +39,7 @@ from src.utils.llm.models import (
     check_ollama_connection,
     validate_api_key
 )
-from src.graphs.swarm import create_dynamic_swarm  # 동적 swarm 생성 함수 import
+from src.graphs.swarm import create_dynamic_swarm
 from src.utils.llm.config_manager import (
     update_llm_config, 
     get_current_llm_config,
@@ -54,18 +52,15 @@ from src.utils.message import (
     get_agent_name,
     parse_tool_name
 )
-# Persistence 추가
 from src.utils.memory import (
     get_persistence_status,
     get_debug_info,
     create_thread_config,
     create_memory_namespace
 )
-# 로깅 시스템 사용 - 재현에 필요한 정보만
 from src.utils.logging.logger import get_logger
-# 리팩토링된 에이전트 관리자
 from src.utils.agents import AgentManager
-
+from src.utils.executor import Executor
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -81,49 +76,41 @@ class DecepticonCLI:
         self.strat_time = None
         self.end_time = None
         
-        # 메모리에서 관리하는 모델 설정
-        self.current_model = None  # 메모리에서 관리
-        self.current_llm = None    # 실제 LLM 인스턴스
-        self.swarm = None          # 동적으로 생성될 swarm 객체
+        self.current_model = None
+        self.current_llm = None
+        self.swarm = None
         
-        # 동적으로 로드될 설정들
         self.agents_config = {}
         self.tools_config = {}
         
-        # Persistence 초기화
         self.user_id = self._generate_user_id()
         self.memory_namespace = create_memory_namespace(self.user_id, "memories")
         
-        # 로깅 시스템 초기화 - 재현에 필요한 정보만
         self.logger = get_logger()
         self.logging_session_id = None
         
-        # 초기화 시 설정 로드
+        # 공통 실행 모듈 초기화
+        self.executor = Executor()
+        
         self._load_dynamic_config()
     
     def _generate_user_id(self):
-        """사용자 ID 생성 (CLI 버전)"""
-        # CLI는 터미널 세션 기반 ID 생성
         session_info = f"{os.getpid()}_{datetime.now().strftime('%Y%m%d')}_{os.environ.get('USER', 'unknown')}"
         user_hash = hashlib.md5(session_info.encode()).hexdigest()[:8]
         return f"cli_user_{user_hash}"
     
     def _load_dynamic_config(self):
-        """실제 설정 파일에서 동적으로 설정 로드"""
         try:
-            # MCP 설정에서 에이전트 정보 로드
             self._load_agents_from_mcp_config()
         except Exception as e:
             self.console.print(f"[yellow]Warning: Could not load dynamic config: {str(e)}[/yellow]")
             self.agents_config = {}
     
     def _load_agents_from_mcp_config(self):
-        """MCP 설정에서 실제 에이전트 목록 로드"""
         try:
             with open("mcp_config.json", "r") as f:
                 mcp_config = json.load(f)
             
-            # MCP 설정에서 에이전트 목록 추출
             for agent_name, servers in mcp_config.items():
                 self.agents_config[agent_name] = {
                     "servers": servers,
@@ -132,10 +119,8 @@ class DecepticonCLI:
                 
         except FileNotFoundError:
             self.agents_config = {}
-    
 
     def display_banner(self):
-        """Decepticon 배너 표시"""
         banner_text = """
 ██████╗ ███████╗ ██████╗███████╗██████╗ ████████╗██╗ ██████╗ ██████╗ ███╗   ██║
 ██╔══██╗██╔════╝██╔════╝██╔════╝██╔══██╗╚══██╔══╝██║██╔════╝██╔═══██╗████╗  ██║
@@ -157,8 +142,6 @@ class DecepticonCLI:
             subtitle_align="center"
         )
         
-        
-        # 시스템 정보와 환영 메시지
         info_lines = [
             "[bold magenta]🚀 System Status[/bold magenta]",
             f"├── 🕒 Time: [green]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/green]",
@@ -186,7 +169,6 @@ class DecepticonCLI:
         info_panel = Panel("\n".join(info_lines), box=box.ROUNDED, border_style="cyan", title="[bold cyan]System Information[/bold cyan]", width=60)
         welcome_panel = Panel("\n".join(welcome_lines), box=box.ROUNDED, border_style="green", title="[bold green]Quick Commands[/bold green]", width=60)
 
-
         self.console.print()
         self.console.print(banner_panel)
         self.console.print()
@@ -194,11 +176,8 @@ class DecepticonCLI:
         columns = Columns([info_panel, welcome_panel], equal=True, expand=True)
         self.console.print(columns)
         self.console.print()
-    
-
 
     async def display_mcp_infrastructure(self):
-        """MCP 인프라 정보 표시 """
         try:
             self.console.print(Panel(
                 "[bold yellow]🚀 Initializing MCP Server[/bold yellow]\n\n"
@@ -208,7 +187,7 @@ class DecepticonCLI:
                 title="[bold yellow]🛠️ MCP Server[/bold yellow]"
             ))
 
-            self.tools_config = {}  # 초기화
+            self.tools_config = {}
             root = Tree("[bold cyan]📦 MCP Agents & Tools[/bold cyan]", guide_style="bold bright_blue")
 
             for agent_name, agent_info in self.agents_config.items():
@@ -258,10 +237,8 @@ class DecepticonCLI:
                 border_style="red",
                 title="[bold red]⚠️ MCP Error[/bold red]"
             ))
-
     
     def display_model_selection(self):
-        """LLM 모델 선택 화면"""
         self.console.print(Panel(
             "[bold yellow]🤖 LLM Model Selection[/bold yellow]\n\n"
             "[dim]Choose your AI model for red team operations[/dim]",
@@ -281,7 +258,6 @@ class DecepticonCLI:
                 self.console.print(f"[red]❌ Error loading models: {str(e)}[/red]")
                 return None
         
-        # 사용 가능한 모델만 필터링
         available_models = [m for m in models if m["api_key_available"]]
         
         if not available_models:
@@ -296,7 +272,6 @@ class DecepticonCLI:
             ))
             return None
         
-        # 모델 테이블 생성
         table = Table(
             title="🤖 Available LLM Models",
             box=box.ROUNDED,
@@ -310,7 +285,6 @@ class DecepticonCLI:
         table.add_column("Provider", style="bold blue", width=12)
         table.add_column("Status", style="yellow", width=10, justify="center")
         
-        # 사용 가능한 모델들을 테이블에 추가
         for i, model in enumerate(available_models, 1):
             status_icon = "✅" if model["api_key_available"] else "❌"
             
@@ -323,7 +297,6 @@ class DecepticonCLI:
         
         self.console.print(table)
         
-        # Ollama 상태 표시
         if ollama_info["connected"]:
             ollama_panel = Panel(
                 f"[green]🟢 Ollama: Running[/green] ({ollama_info['count']} models available)\n"
@@ -334,7 +307,6 @@ class DecepticonCLI:
             )
             self.console.print(ollama_panel)
         
-        # 사용자 선택
         self.console.print()
         while True:
             try:
@@ -350,7 +322,6 @@ class DecepticonCLI:
                 selected_idx = int(choice) - 1
                 selected_model = available_models[selected_idx]
                 
-                # 선택 확인
                 confirm_panel = Panel(
                     f"[bold green]Selected Model:[/bold green]\n"
                     f"[cyan]• Name:[/cyan] {selected_model['display_name']}\n"
@@ -369,42 +340,28 @@ class DecepticonCLI:
                 self.console.print("[red]❌ Invalid selection. Please try again.[/red]")
     
     async def setup_session(self, model_info: Dict[str, Any]):
-        """세션 설정 - 메모리에서 모델 관리 및 동적 swarm 생성"""
+        """Setup session using common executor module"""
         with Status("[bold green]Setting up session...", console=self.console) as status:
             try:
-                # Thread configuration 생성 (persistence 사용)
+                # Thread configuration 생성
                 self.config = create_thread_config(
                     user_id=self.user_id,
                     conversation_id="cli_session"
                 )
                 self.thread_id = self.config["configurable"]["thread_id"]
                 
-                # 메모리에서 모델 정보 저장
                 self.current_model = model_info
                 
-                # 메모리 기반 전역 설정 업데이트 (파일 저장하지 않음)
-                status.update("[bold green]Updating memory configuration...")
-                update_llm_config(
-                    model_name=model_info['model_name'],
-                    provider=model_info['provider'],
-                    display_name=model_info['display_name'],
-                    temperature=0.0  # 고정값
-                )
-                
-                # LLM 인스턴스 생성
-                status.update("[bold green]Loading LLM instance...")
-                self.current_llm = get_current_llm()
-                
-                status.update("[bold green]Memory configuration updated!")
-                time.sleep(0.5)
-                
-                # 로깅 세션 시작 - 모델 정보 포함
+                # 로깅 세션 시작
                 model_display_name = model_info.get('display_name', 'Unknown Model') if model_info else 'CLI Model'
                 self.logging_session_id = self.logger.start_session(model_display_name)
                 
-                # 동적으로 swarm 생성 (모델 선택 후)
-                status.update("[bold green]Creating AI agents with selected model...")
-                self.swarm = await create_dynamic_swarm()
+                # 공통 실행 모듈로 swarm 초기화
+                status.update("[bold green]Initializing swarm with executor...")
+                await self.executor.initialize_swarm(model_info, self.config)
+                
+                # executor에서 swarm 참조 가져오기
+                self.swarm = self.executor.swarm
                 
                 status.update("[bold green]Session setup complete!")
                 time.sleep(1)
@@ -413,7 +370,6 @@ class DecepticonCLI:
                 status.update(f"[bold red]Setup failed: {str(e)}")
                 raise
         
-        # 세션 정보 표시
         session_panel = Panel(
             f"[bold green]✅ Session Ready[/bold green]\n\n"
             f"[cyan]🤖 Model:[/cyan] [bold]{self.current_model['display_name']}[/bold]\n"
@@ -433,7 +389,6 @@ class DecepticonCLI:
         self.console.print(session_panel)
     
     def display_current_llm_config(self):
-        """현재 LLM 설정 표시"""
         try:
             current_config = get_current_llm_config()
             
@@ -461,11 +416,9 @@ class DecepticonCLI:
             ))
     
     async def display_mcp_tools_info(self):
-        """MCP 도구 정보 표시"""
         try:
             self.console.print("\n[bold cyan]🔧 MCP Tools Information[/bold cyan]\n")
             
-            # 실제 로드된 도구들 표시
             root = Tree("[bold cyan]MCP Agents & Tools[/bold cyan]")
             
             for agent_name, agent_info in self.agents_config.items():
@@ -478,11 +431,9 @@ class DecepticonCLI:
                 for server_name, server_config in agent_info["servers"].items():
                     server_node = agent_node.add(f"[bold yellow]Server:[/bold yellow] {server_name}")
                     
-                    # 서버 URL 표시
                     if "url" in server_config:
                         server_node.add(f"[dim]URL: {server_config['url']}[/dim]")
                     
-                    # 실제 도구 목록 표시
                     if self.tools_config:
                         tools_node = server_node.add("[bold magenta]Available Tools[/bold magenta]")
                         for tool_name, tool_info in self.tools_config.items():
@@ -502,13 +453,10 @@ class DecepticonCLI:
             ))
             
     def display_memory_info(self):
-        """메모리 및 persistence 상태 정보 표시"""
         try:
-            # Persistence 상태 가져오기
             persistence_status = get_persistence_status()
             debug_info = get_debug_info()
             
-            # 메모리 정보 표시
             memory_panel = Panel(
                 f"[bold cyan]🧠 Memory & Persistence Status[/bold cyan]\n\n"
                 f"[cyan]👤 User ID:[/cyan] [bold]{self.user_id}[/bold]\n"
@@ -534,7 +482,6 @@ class DecepticonCLI:
             
             self.console.print(memory_panel)
             
-            # 디버그 정보 (선택적)
             if Confirm.ask("\n[dim]Show detailed debug info?[/dim]", default=False):
                 debug_panel = Panel(
                     json.dumps(debug_info, indent=2),
@@ -554,9 +501,7 @@ class DecepticonCLI:
             ))
             
     def display_conversation_logs(self):
-        """대화 로그 정보 표시"""
         try:
-            # 로깅 세션 정보
             current_session = self.logger.current_session
             
             if current_session:
@@ -581,7 +526,6 @@ class DecepticonCLI:
                     title="[bold yellow]📝 Logging Status[/bold yellow]"
                 ))
             
-            # 로깅 통계
             sessions = self.logger.list_sessions(limit=50)
             
             total_events = sum(s['event_count'] for s in sessions)
@@ -600,13 +544,12 @@ class DecepticonCLI:
             )
             self.console.print(stats_panel)
             
-            # 최근 세션 목록
-            recent_sessions = sessions[:10]  # 최대 10개
+            recent_sessions = sessions[:10]
             
             if recent_sessions:
                 self.console.print(f"\n[bold green]📅 Recent Sessions ({len(recent_sessions)} sessions)[/bold green]\n")
                 
-                for i, session in enumerate(recent_sessions[:5]):  # 최대 5개만 표시
+                for i, session in enumerate(recent_sessions[:5]):
                     start_time = session['start_time'][:19].replace('T', ' ')
                     
                     session_info = f"💻 [cyan]{start_time}[/cyan] - "
@@ -626,7 +569,6 @@ class DecepticonCLI:
             else:
                 self.console.print("\n[yellow]📅 No recent sessions found[/yellow]")
             
-            # 로그 저장 위치 정보
             base_path = self.logger.base_path
             self.console.print(f"\n[dim]📁 Logs stored at: {base_path}[/dim]")
             self.console.print(f"[dim]🔄 Replay-compatible logs for Streamlit[/dim]")
@@ -641,7 +583,7 @@ class DecepticonCLI:
             ))
             
     async def change_model(self):
-        """세션 도중 모델 변경"""
+        """Change model using common executor module"""
         self.console.print(Panel(
             "[bold yellow]🔄 Model Change[/bold yellow]\n\n"
             "[dim]Change your AI model during the session[/dim]",
@@ -650,7 +592,6 @@ class DecepticonCLI:
             title="[bold yellow]🤖 Change LLM Model[/bold yellow]"
         ))
         
-        # 현재 모델 정보 표시
         if self.current_model:
             current_panel = Panel(
                 f"[cyan]Current Model:[/cyan] [bold]{self.current_model['display_name']}[/bold]\n"
@@ -661,13 +602,11 @@ class DecepticonCLI:
             )
             self.console.print(current_panel)
         
-        # 새로운 모델 선택
         new_model_info = self.display_model_selection()
         if not new_model_info:
             self.console.print("[yellow]⚠️ Model change cancelled[/yellow]")
             return False
         
-        # 모델 변경 확인
         if (self.current_model and 
             new_model_info['model_name'] == self.current_model['model_name'] and 
             new_model_info['provider'] == self.current_model['provider']):
@@ -680,31 +619,19 @@ class DecepticonCLI:
             ))
             return False
         
-        # 모델 변경 진행
         old_model_name = self.current_model['display_name'] if self.current_model else "Previous Model"
         
         with Status("[bold green]Changing model and recreating agents...", console=self.console) as status:
             try:
-                # 메모리 설정 업데이트
-                status.update("[bold green]Updating model configuration...")
                 self.current_model = new_model_info
                 
-                update_llm_config(
-                    model_name=new_model_info['model_name'],
-                    provider=new_model_info['provider'],
-                    display_name=new_model_info['display_name'],
-                    temperature=0.0
-                )
+                # 공통 실행 모듈로 모델 변경
+                status.update("[bold green]Changing model with executor...")
+                await self.executor.change_model(new_model_info)
                 
-                # 새로운 LLM 인스턴스 생성
-                status.update("[bold green]Loading new LLM instance...")
-                self.current_llm = get_current_llm()
+                # executor에서 swarm 참조 업데이트
+                self.swarm = self.executor.swarm
                 
-                # 새로운 모델로 에이전트들 재생성
-                status.update("[bold green]Recreating AI agents with new model...")
-                self.swarm = await create_dynamic_swarm()
-                
-                # 모델 변경 후 새로운 로깅 세션 시작
                 if self.logging_session_id:
                     self.logger.end_session()
                 
@@ -726,7 +653,6 @@ class DecepticonCLI:
                 ))
                 return False
         
-        # 성공 메시지
         success_panel = Panel(
             f"[bold green]✅ Model Changed Successfully[/bold green]\n\n"
             f"[cyan]🆕 From:[/cyan] [dim]{old_model_name}[/dim]\n"
@@ -740,14 +666,9 @@ class DecepticonCLI:
         self.console.print(success_panel)
         
         return True
-            
     
     def get_user_input_box(self):
-        """Rich Prompt.ask를 사용한 기본 입력"""
-        
-        
         try:
-            # Rich의 기본 Prompt.ask 사용 - 깔끔한 스타일
             user_input = Prompt.ask(
                 "\n[bold blue]Decepticon > [/bold blue]",  
                 console=self.console,
@@ -761,7 +682,6 @@ class DecepticonCLI:
             return None
     
     def display_help(self):
-        """도움말 표시"""
         help_content = """
     [bold cyan]📖 Decepticon CLI Help Guide[/bold cyan]
 
@@ -797,52 +717,12 @@ class DecepticonCLI:
         )
         
         self.console.print(help_panel)
-    
-    def should_display_message(self, message, agent_name, step_count):
-            """메시지를 표시할지 결정 - 중복 방지"""
-            # processed_message_ids 초기화 (없으면 생성)
-            if not hasattr(self, 'processed_message_ids'):
-                self.processed_message_ids = set()
-                
-            # 메시지 ID 생성
-            message_id = None
-            if hasattr(message, 'id') and message.id:
-                message_id = message.id
-            else:
-                content = extract_message_content(message)
-                message_id = f"{agent_name}_{hash(content)}"
-            
-            # 사용자 메시지는 최초 1회만 표시
-            if message.__class__.__name__ == 'HumanMessage':
-                if message_id not in self.processed_message_ids:
-                    self.processed_message_ids.add(message_id)
-                    return True, "user"
-                return False, None
-            
-            # AI 메시지는 새로운 것만 표시
-            elif message.__class__.__name__ == 'AIMessage':
-                if message_id not in self.processed_message_ids:
-                    self.processed_message_ids.add(message_id)
-                    return True, "ai"
-                return False, None
-            
-            # 도구 메시지는 항상 표시
-            elif message.__class__.__name__ == 'ToolMessage':
-                if message_id not in self.processed_message_ids:
-                    self.processed_message_ids.add(message_id)
-                    return True, "tool" 
-                return False, None
-            
-            return False, None
-
-
 
     async def execute_workflow(self, user_input: str):
-        """워크플로우 실행"""
-        # Swarm이 아직 생성되지 않았는지 확인
-        if not self.swarm:
+        """Execute workflow using common executor module"""
+        if not self.executor.is_ready():
             error_panel = Panel(
-                f"[bold red]❌ Swarm not initialized[/bold red]\n\n",
+                f"[bold red]❌ Executor not ready[/bold red]\n\n",
                 box=box.ROUNDED,
                 border_style="red",
                 title="[bold red]⚠️ Initialization Error[/bold red]"
@@ -852,19 +732,11 @@ class DecepticonCLI:
             
         self.conversation_history.append(("user", user_input))
         
-        # 로깅 - 사용자 입력만 기록
-        # workflow_start_time = time.time()
         self.logger.log_user_input(user_input)
         
-        # 메시지 ID 추적 초기화 (새로운 워크플로우 시작)
-        self.processed_message_ids = set()
-        
-        inputs = {"messages": [HumanMessage(content=user_input)]}
-        
-        # 워크플로우 실행
         agent_responses = {}
         step_count = 0
-        event_count = 0  # ✅ event_count 초기화 추가
+        event_count = 0
 
         with Progress(
             SpinnerColumn(),
@@ -875,149 +747,32 @@ class DecepticonCLI:
             main_task = progress.add_task("[bold green]🤖 Working...", total=None)
 
             try:
-                async for namespace, output in self.swarm.astream(
-                    inputs,
-                    stream_mode="updates",
-                    config=self.config,
-                    subgraphs=True
-                ):
-                    step_count += 1
-                    event_count += 1  # ✅ 이벤트 카운트 증가
+                async for event_data in self.executor.execute_workflow(user_input, self.config):
+                    event_count += 1
+                    
+                    if event_data["type"] == "message":
+                        step_count = event_data["step_count"]
+                        progress.stop()
+                        
+                        # Handle different message types
+                        await self._handle_message_event(event_data, agent_responses)
+                        
+                        progress.start()
+                        progress.update(main_task, description=f"[bold blue]🤖 Working... [/bold blue]")
+                    
+                    elif event_data["type"] == "workflow_complete":
+                        step_count = event_data["step_count"]
+                        break
+                    
+                    elif event_data["type"] == "error":
+                        raise Exception(event_data["error"])
 
-                    for node, value in output.items():
-                        # 에이전트 이름 결정
-                        agent_name = get_agent_name(namespace)
-            
-                        # 메시지 처리
-                        if "messages" in value and value["messages"]:
-                            messages = value["messages"]
-                            if messages:
-                                latest_message = messages[-1]
-                                should_display, message_type = self.should_display_message(
-                                    latest_message, agent_name, step_count
-                                )
-                                
-                                if should_display:
-                                    progress.stop()
-
-                                    if message_type == "ai":
-                                        # AI message content 안전 추출
-                                        original_content = extract_message_content(latest_message, escape_markup=False)
-                                        
-                                        # Tool calls 정보 추출
-                                        tool_calls = extract_tool_calls(latest_message)
-                                        
-                                        # 로깅 - 에이전트 응답 (원본 데이터 사용)
-                                        self.logger.log_agent_response(
-                                            agent_name=agent_name,
-                                            content=original_content,
-                                            tool_calls=tool_calls if tool_calls else None
-                                        )
-
-                                        try:
-                                            # 에이전트별 색상 설정
-                                            agent_color = AgentManager.get_cli_color(agent_name)
-                                            
-                                            # Markdown에서 escape 처리 - 원본 content 사용
-                                            content_markdown = Markdown(original_content)
-                                            
-                                            # Tool calls가 있으면 추가 정보 표시
-                                            if tool_calls:
-                                                # Tool calls 정보를 Rich로 표시
-                                                tool_call_info = []
-                                                for i, tool_call in enumerate(tool_calls, 1):
-                                                    tool_name = tool_call.get('name', 'Unknown Tool')
-                                                    tool_args = tool_call.get('args', {})
-                                                    
-                                                    # parse_tool_call 함수로 깔끔한 메시지 생성
-                                                    
-                                                    tool_call_message = parse_tool_call(tool_call)
-                                                    
-                                                    tool_call_info.append(f"[bold cyan]{tool_call_message}[/bold cyan]")
-                                                    
-                                                    # Arguments가 있으면 세부 정보 추가
-                                                    if tool_args:
-                                                        args_str = ", ".join([f"{k}={v}" for k, v in tool_args.items()])
-                                                        if len(args_str) > 100:  # 너무 길면 자르기
-                                                            args_str = args_str[:100] + "..."
-                                                        tool_call_info.append(f"  [dim]→ {args_str}[/dim]")
-                                                
-                                                # Content와 tool calls를 합쳐서 표시
-                                                if content.strip():  # content가 있는 경우
-                                                    combined_content = Group(
-                                                        content_markdown,
-                                                        "\n".join(tool_call_info)
-                                                    )
-                                                else:  # content가 비어있는 경우
-                                                    combined_content = "\n".join(tool_call_info)
-                                                
-                                                agent_panel = Panel(
-                                                    combined_content,
-                                                    box=box.ROUNDED,
-                                                    border_style=agent_color,
-                                                    title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
-                                                )
-                                            else:
-                                                # Tool calls가 없으면 기존 방식
-                                                agent_panel = Panel(
-                                                    content_markdown,
-                                                    box=box.ROUNDED,
-                                                    border_style=agent_color,
-                                                    title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
-                                                )
-                                            
-                                            self.console.print(agent_panel)
-                                        except Exception as panel_error:
-                                            # Panel 출력 실패 시 기본 출력
-                                            self.console.print(f"[{agent_name}]: {content}")
-
-                                        if agent_name not in agent_responses:
-                                            agent_responses[agent_name] = []
-                                        agent_responses[agent_name].append(content)
-
-                                    elif message_type == "tool":
-                                        # Tool message content 안전 추출 (escape 활성화)
-                                        content = extract_message_content(latest_message, escape_markup=True)
-                                        tool_name = getattr(latest_message, 'name', 'Unknown Tool')
-                                        tool_display_name = parse_tool_name(tool_name)
-                                        
-                                        # 로깅 - 도구 출력 (원본 데이터 사용)
-                                        original_content = extract_message_content(latest_message, escape_markup=False)
-                                        self.logger.log_tool_output(
-                                            tool_name=tool_name,
-                                            output=original_content
-                                        )
-
-                                        # 도구는 녹색으로 고정
-                                        tool_color = "green"
-                                        
-                                        try:
-                                            tool_panel = Panel(
-                                                content,  # 이미 escape된 컨텐트
-                                                box=box.ROUNDED,
-                                                border_style=tool_color,
-                                                title=f"[bold {tool_color}]{tool_display_name}[/bold {tool_color}]"
-                                            )
-                                            self.console.print(tool_panel)
-                                        except Exception as panel_error:
-                                            # Panel 출력 실패 시 기본 출력
-                                            fallback_output = f"[{tool_display_name}]: {content}"
-                                            self.console.print(fallback_output)
-                                        
-
-                                # 진행 상황 재시작
-                                progress.start()
-                                progress.update(main_task, description=f"[bold blue]🤖 Working... [/bold blue]")
-
-                # 워크플로우 완료 후 완료 상태 표시
                 progress.update(main_task, description="[bold green]✅ Workflow completed!")
                 time.sleep(1)
                 progress.stop()
                 
-                # 로깅 - 세션 자동 저장
                 self.logger.save_session()
 
-                # 완료 요약
                 completion_panel = Panel(
                     f"[bold green]✅ Operation Completed[/bold green]\n\n"
                     f"[cyan]📊 Agents:[/cyan] {', '.join(agent_responses.keys())}\n"
@@ -1037,7 +792,6 @@ class DecepticonCLI:
                 time.sleep(2)
                 progress.stop()
                 
-                # 로깅 - 세션 저장 시도
                 try:
                     self.logger.save_session()
                 except Exception as log_error:
@@ -1046,7 +800,7 @@ class DecepticonCLI:
                 error_panel = Panel(
                     f"[bold red]❌ Workflow Error[/bold red]\n\n"
                     f"[yellow]Error:[/yellow] {str(e)}\n"
-                    f"[yellow]Events processed:[/yellow] {event_count if 'event_count' in locals() else 'Unknown'}\n"
+                    f"[yellow]Events processed:[/yellow] {event_count}\n"
                     f"[dim]Please try again[/dim]",
                     box=box.ROUNDED,
                     border_style="red",
@@ -1055,9 +809,101 @@ class DecepticonCLI:
                 self.console.print(error_panel)
                 return False
 
+    async def _handle_message_event(self, event_data: Dict[str, Any], agent_responses: Dict[str, List[str]]):
+        """Handle message events from executor"""
+        message_type = event_data["message_type"]
+        agent_name = event_data["agent_name"]
+        content = event_data["content"]
+        
+        if message_type == "ai":
+            # Extract tool calls from raw message
+            raw_message = event_data["raw_message"]
+            tool_calls = extract_tool_calls(raw_message)
+            
+            self.logger.log_agent_response(
+                agent_name=agent_name,
+                content=content,
+                tool_calls=tool_calls if tool_calls else None
+            )
+
+            try:
+                agent_color = AgentManager.get_cli_color(agent_name)
+                content_markdown = Markdown(content)
+                
+                if tool_calls:
+                    tool_call_info = []
+                    for i, tool_call in enumerate(tool_calls, 1):
+                        tool_call_message = parse_tool_call(tool_call)
+                        # Rich markup 없이 단순 텍스트로 처리
+                        tool_call_info.append(f"[bold cyan]{tool_call_message}[/bold cyan]")
+                        
+                        tool_args = tool_call.get('args', {})
+                        if tool_args:
+                            args_str = ", ".join([f"{k}={v}" for k, v in tool_args.items()])
+                            if len(args_str) > 100:
+                                args_str = args_str[:100] + "..."
+                            # args도 단순하게 처리
+                            tool_call_info.append(f"  [dim]→ {args_str}[/dim]")
+                    
+                    if content.strip():
+                        combined_content = Group(
+                            content_markdown,
+                            "\n".join(tool_call_info)
+                        )
+                    else:
+                        combined_content = "\n".join(tool_call_info)
+                    
+                    agent_panel = Panel(
+                        combined_content,
+                        box=box.ROUNDED,
+                        border_style=agent_color,
+                        title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
+                    )
+                else:
+                    agent_panel = Panel(
+                        content_markdown,
+                        box=box.ROUNDED,
+                        border_style=agent_color,
+                        title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
+                    )
+                
+                self.console.print(agent_panel)
+            except Exception as panel_error:
+                self.console.print(f"[{agent_name}]: {content}")
+
+            if agent_name not in agent_responses:
+                agent_responses[agent_name] = []
+            agent_responses[agent_name].append(content)
+
+        elif message_type == "tool":
+            tool_name = event_data.get("tool_name", "Unknown Tool")
+            tool_display_name = event_data.get("tool_display_name", parse_tool_name(tool_name))
+            
+            self.logger.log_tool_output(
+                tool_name=tool_name,
+                output=content
+            )
+
+            tool_color = "green"
+            
+            tool_output = Syntax(
+                content, 
+                "bash", 
+                theme="monokai", 
+                line_numbers=False,
+                word_wrap=True
+            )
+            
+            tool_panel = Panel(
+                tool_output,
+                box=box.ROUNDED,
+                border_style=tool_color,
+                title=f"[bold {tool_color}]🔧 {tool_display_name}[/bold {tool_color}]"
+            )
+            self.console.print(tool_panel)
+            
     
     async def interactive_session(self):
-        """대화형 세션"""
         start_panel = Panel(
             f"[bold green]🚀 Interactive Session Started[/bold green]\n\n"
             f"[cyan]🎯 Ready for red team operations[/cyan]\n"
@@ -1073,11 +919,9 @@ class DecepticonCLI:
         
         while True:
             try:
-                # 사각형 상자 스타일의 입력 받기
-                self.console.print("\n")  # 공백 추가
+                self.console.print("\n")
                 user_input = self.get_user_input_box()
                 
-                # 입력이 None인 경우 (Ctrl+C 등)
                 if user_input is None:
                     if Confirm.ask("\n[yellow]Exit Decepticon?[/yellow]"):
                         break
@@ -1086,7 +930,6 @@ class DecepticonCLI:
                 if not user_input:
                     continue
                 
-                # 특수 명령어 처리
                 if user_input.lower() in ['quit', 'exit', 'q']:
                     if Confirm.ask("\n[yellow]Exit Decepticon?[/yellow]"):
                         break
@@ -1106,7 +949,6 @@ class DecepticonCLI:
                     self.console.clear()
                     self.display_banner()
                 else:
-                    # 워크플로우 실행
                     await self.execute_workflow(user_input)
                     
             except KeyboardInterrupt:
@@ -1123,7 +965,6 @@ class DecepticonCLI:
                 )
                 self.console.print(error_panel)
         
-        # 종료 메시지
         farewell_panel = Panel(
             "[bold cyan]👋 Thank you for using Decepticon![/bold cyan]\n\n"
             "[green]🛡️ Stay secure and happy hacking![/green]",
@@ -1134,15 +975,10 @@ class DecepticonCLI:
         self.console.print(farewell_panel)
     
     async def run(self):
-        """메인 실행 함수"""
         try:
-            # 1. 배너 표시
             self.display_banner()
-            
-            # 2. MCP 인프라 정보 표시
             await self.display_mcp_infrastructure()
             
-            # 3. LLM 모델 선택
             model_info = self.display_model_selection()
             if not model_info:
                 self.console.print(Panel(
@@ -1154,10 +990,7 @@ class DecepticonCLI:
                 ))
                 return
             
-            # 4. 세션 설정
             await self.setup_session(model_info)
-            
-            # 5. 대화형 세션 시작
             await self.interactive_session()
             
         except KeyboardInterrupt:
@@ -1174,7 +1007,6 @@ class DecepticonCLI:
 
 
 async def main():
-    """메인 엔트리 포인트"""
     try:
         cli = DecepticonCLI()
         await cli.run()
@@ -1206,8 +1038,8 @@ if __name__ == "__main__":
         console.print("\n[bold cyan]👋 Goodbye![/bold cyan]")
     except Exception as e:
         try:
-            # 안전한 에러 출력
-            error_msg = markup.escape(str(e))
+            # Rich markup escape 대신 기본 문자열 처리
+            error_msg = str(e)
             console.print(f"[bold red]❌ Critical Error: {error_msg}[/bold red]")
         except:
             # Rich도 실패하면 기본 print 사용

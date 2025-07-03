@@ -172,34 +172,5 @@ def session_clear(
         raise Exception(f"Failed to clear session: {str(e)}")
 
 
-@mcp.tool(description="Test docker container connection")
-def test_connection() -> Annotated[str, "Connection test result"]:
-    """Docker 컨테이너 연결 테스트"""
-    try:
-        # 컨테이너 연결 테스트
-        result = subprocess.run(
-            ["docker", "exec", CONTAINER_NAME, "whoami"],
-            capture_output=True, text=True, encoding='utf-8', timeout=10
-        )
-        
-        if result.returncode != 0:
-            return f"Connection failed: {result.stderr}"
-        
-        user = result.stdout.strip()
-        
-        # tmux 설치 확인
-        tmux_result = subprocess.run(
-            ["docker", "exec", CONTAINER_NAME, "which", "tmux"],
-            capture_output=True, text=True, encoding='utf-8', timeout=10
-        )
-        
-        tmux_status = "Available" if tmux_result.returncode == 0 else "Not available"
-        
-        return f"Container: {CONTAINER_NAME} | User: {user} | Tmux: {tmux_status}"
-        
-    except Exception as e:
-        return f"Connection test failed: {str(e)}"
-
-
 if __name__ == "__main__":
     mcp.run(transport="streamable-http")

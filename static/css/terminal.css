@@ -1,6 +1,6 @@
-/* 터미널 UI 스타일 - 맥 스타일 (데스크톱 전용) */
+/* 터미널 UI 스타일 - 맥 스타일 (테마 대응) */
 
-/* 터미널 컨테이너 스타일 */
+/* 터미널 컨테이너 스타일 - 기본값 (다크 모드 기준) */
 .terminal-container {
     background-color: #1E1E1E;
     color: #FFFFFF;
@@ -11,19 +11,20 @@
     overflow-y: auto;
     margin-bottom: 10px;
     scroll-behavior: smooth;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    border-left: 1px solid #444;
-    border-right: 1px solid #444;
-    border-bottom: 1px solid #444;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    border-left: 1px solid #333333;
+    border-right: 1px solid #333333;
+    border-bottom: 1px solid #333333;
     /* 상단 그라데이션 추가 */
-    background-image: linear-gradient(to bottom, #2c2c2c 0%, #1E1E1E 20px);
+    background-image: linear-gradient(to bottom, #333333 0%, #1E1E1E 20px);
+    transition: all 0.3s ease;
 }
 
-/* 맥 스타일 헤더 */
+/* 맥 스타일 헤더 - 기본값 (다크 모드 기준) */
 .mac-terminal-header {
     background-color: #333333;
-    background: linear-gradient(to bottom, #515151, #2c2c2c);
-    color: #CCCCCC;
+    background: linear-gradient(to bottom, #515151, #333333);
+    color: #FFFFFF;
     padding: 8px 10px;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
@@ -33,12 +34,13 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    border-left: 1px solid #444;
-    border-right: 1px solid #444;
-    border-top: 1px solid #444;
+    border-left: 1px solid #333333;
+    border-right: 1px solid #333333;
+    border-top: 1px solid #333333;
     border-bottom: none;
     text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
     height: 35px;
+    transition: all 0.3s ease;
 }
 
 /* 맥 스타일 버튼들 */
@@ -72,42 +74,48 @@
     border: 1px solid #178323;
 }
 
-/* 터미널 프롬프트 스타일 */
+/* 터미널 프롬프트 스타일 - 기본값 (다크 모드 기준) */
 .terminal-prompt {
     margin-bottom: 5px;
     font-weight: bold;
+    transition: color 0.3s ease;
 }
 
-/* root@kali 부분을 빨간색으로 표시 */
+/* root@kali 부분 - 기본값 (다크 모드 기준) */
 .terminal-user {
-    color: #FF0000;
+    color: #4EC9B0;
+    transition: color 0.3s ease;
 }
 
-/* 프롬프트 텍스트 부분(:~$) */
+/* 프롬프트 텍스트 부분(:~$) - 기본값 (다크 모드 기준) */
 .terminal-prompt-text {
     color: #FFFFFF;
+    transition: color 0.3s ease;
 }
 
-/* 명령어 텍스트 부분 */
+/* 명령어 텍스트 부분 - 기본값 (다크 모드 기준) */
 .terminal-command-text {
-    color: #FFFFFF;
+    color: #DCDCAA;
     font-weight: normal;
+    transition: color 0.3s ease;
 }
 
-/* 터미널 명령어 스타일 */
+/* 터미널 명령어 스타일 - 기본값 (다크 모드 기준) */
 .terminal-command {
-    color: #FFFFFF;
+    color: #DCDCAA;
     margin-bottom: 5px;
     padding-left: 10px;
+    transition: color 0.3s ease;
 }
 
-/* 터미널 출력 스타일 - 단순화 */
+/* 터미널 출력 스타일 - 기본값 (다크 모드 기준) */
 .terminal-output {
-    color: #FFFFFF;
+    color: #CCCCCC;
     margin-bottom: 10px;
     padding-left: 10px;
     white-space: pre-wrap;
     word-break: break-all;
+    transition: color 0.3s ease;
 }
 
 /* 커서 깜빡임 애니메이션 */
@@ -126,20 +134,23 @@
     animation: blink 1s infinite;
 }
 
-/* 스크롤바 스타일 */
+/* 스크롤바 스타일 - 기본값 (다크 모드 기준) */
 .terminal-container::-webkit-scrollbar {
     width: 8px;
 }
 
 .terminal-container::-webkit-scrollbar-track {
     background: #1E1E1E;
+    transition: background 0.3s ease;
 }
 
 .terminal-container::-webkit-scrollbar-thumb {
-    background-color: #555555;
+    background-color: #333333;
     border-radius: 4px;
+    transition: background-color 0.3s ease;
 }
 
 .terminal-container::-webkit-scrollbar-thumb:hover {
-    background: #777777;
+    background: #4EC9B0;
+    transition: background 0.2s ease;
 }

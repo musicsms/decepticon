@@ -17,7 +17,35 @@ class LogManagerUI:
         self.logger = get_logger()
         
     def display_log_page(self):
-        """로그 페이지 표시"""
+        """로그 페이지 표시 - 사이드바 숨김"""
+        # 사이드바 완전히 숨김
+        st.markdown("""
+        <style>
+            [data-testid="stSidebarNav"] {
+                display: none;
+            }
+            
+            section[data-testid="stSidebar"] {
+                display: none !important;
+            }
+            
+            /* 메인 컨텐트를 전체 화면에 확장 */
+            .main .block-container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+                max-width: none;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # 로고 표시
+        st.logo(
+            "assets/logo_text1.png",
+            icon_image="assets/logo.png",
+            size="large",
+            link="https://purplelab.framer.ai"
+        )
+        
         st.title("📊 :red[Session Logs]")
         
         # 뒤로가기 버튼
