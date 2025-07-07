@@ -6,6 +6,7 @@ load_env.bat
 logs/
 data/
 tests/
+backup/
 
 # Python byte-compiled files
 __pycache__/
