@@ -1,7 +1,7 @@
 from langgraph.prebuilt import create_react_agent
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langmem import create_manage_memory_tool, create_search_memory_tool
-from src.prompts.prompt_loader import load_initaccess_prompt
+from src.prompts.prompt_loader import load_prompt
 from src.tools.handoff import handoff_to_planner, handoff_to_reconnaissance, handoff_to_summary
 from src.utils.llm.config_manager import get_current_llm
 from src.utils.memory import get_store 
@@ -20,21 +20,25 @@ async def make_initaccess_agent():
     
     mcp_tools = await load_mcp_tools(agent_name=["initial_access"])
 
-        
-    swarm_tools = mcp_tools + [
+    swarm_tools = [
         handoff_to_reconnaissance,
         handoff_to_planner,
         handoff_to_summary,
+    ]
+
+    mem_tools = [
         create_manage_memory_tool(namespace=("memories",)),
         create_search_memory_tool(namespace=("memories",))
     ]
 
+    tools = mcp_tools + swarm_tools + mem_tools
+
     agent = create_react_agent(
         llm,
-        tools=swarm_tools,
+        tools=tools,
         store=store,
         name="Initial_Access",
-        prompt=load_initaccess_prompt("swarm"),
+        prompt=load_prompt("initial_access", "swarm"),
     )
     return agent
 
