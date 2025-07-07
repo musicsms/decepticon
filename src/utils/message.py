@@ -110,7 +110,7 @@ def get_message_type(message):
         return None
 
 # 메시지 content 
-def extract_message_content(message):
+def extract_message_content(message, escape_markup=True):
     """메시지에서 내용 추출 - 안전한 처리"""
     try:
         if hasattr(message, 'content'):
@@ -120,7 +120,6 @@ def extract_message_content(message):
         
         if isinstance(content, str):
             result = content.strip() if content else ""
-            return result
         elif isinstance(content, list):
             text_parts = []
             for item in content:
@@ -132,12 +131,19 @@ def extract_message_content(message):
                 elif isinstance(item, str):
                     text_parts.append(item)
             result = "\n".join(text_parts) if text_parts else str(content)
-            return result
         else:
             result = str(content)
-            return result
+        
+        # Rich 마크업 이스케이프 (기본적으로 활성화)
+        if escape_markup:
+            result = markup.escape(result)
+            
+        return result
     except Exception as e:
         error_msg = f"Content extraction error: {str(e)}\n{str(message)}"
+        # 에러 메시지도 이스케이프
+        if escape_markup:
+            error_msg = markup.escape(error_msg)
         return error_msg
 
 # Tool calls 추출 함수

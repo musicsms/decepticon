@@ -902,7 +902,10 @@ class DecepticonCLI:
 
                                     if message_type == "ai":
                                         # AI message content 안전 추출
+                                        # 로깅용: 원본 텍스트 (이스케이프 안함)
                                         original_content = extract_message_content(latest_message, escape_markup=False)
+                                        # Rich 출력용: 이스케이프된 텍스트
+                                        safe_content = extract_message_content(latest_message, escape_markup=True)
                                         
                                         # Tool calls 정보 추출
                                         tool_calls = extract_tool_calls(latest_message)
@@ -918,8 +921,8 @@ class DecepticonCLI:
                                             # 에이전트별 색상 설정
                                             agent_color = AgentManager.get_cli_color(agent_name)
                                             
-                                            # Markdown에서 escape 처리 - 원본 content 사용
-                                            content_markdown = Markdown(original_content)
+                                            # Markdown에서 escape 처리 - 안전한 content 사용
+                                            content_markdown = Markdown(safe_content)
                                             
                                             # Tool calls가 있으면 추가 정보 표시
                                             if tool_calls:
@@ -943,7 +946,7 @@ class DecepticonCLI:
                                                         tool_call_info.append(f"  [dim]→ {args_str}[/dim]")
                                                 
                                                 # Content와 tool calls를 합쳐서 표시
-                                                if content.strip():  # content가 있는 경우
+                                                if original_content.strip():  # content가 있는 경우
                                                     combined_content = Group(
                                                         content_markdown,
                                                         "\n".join(tool_call_info)
@@ -968,21 +971,24 @@ class DecepticonCLI:
                                             
                                             self.console.print(agent_panel)
                                         except Exception as panel_error:
-                                            # Panel 출력 실패 시 기본 출력
-                                            self.console.print(f"[{agent_name}]: {content}")
+                                            # Panel 출력 실패 시 기본 출력 (안전한 텍스트 사용)
+                                            self.console.print(f"[{agent_name}]: {safe_content}")
 
                                         if agent_name not in agent_responses:
                                             agent_responses[agent_name] = []
-                                        agent_responses[agent_name].append(content)
+                                        agent_responses[agent_name].append(safe_content)
 
                                     elif message_type == "tool":
-                                        # Tool message content 안전 추출 (escape 활성화)
-                                        content = extract_message_content(latest_message, escape_markup=True)
+                                        # Tool message content 안전 추출 
+                                        # 로깅용: 원본 텍스트 (이스케이프 안함)
+                                        original_content = extract_message_content(latest_message, escape_markup=False)
+                                        # Rich 출력용: 이스케이프된 텍스트
+                                        safe_content = extract_message_content(latest_message, escape_markup=True)
+                                        
                                         tool_name = getattr(latest_message, 'name', 'Unknown Tool')
                                         tool_display_name = parse_tool_name(tool_name)
                                         
                                         # 로깅 - 도구 출력 (원본 데이터 사용)
-                                        original_content = extract_message_content(latest_message, escape_markup=False)
                                         self.logger.log_tool_output(
                                             tool_name=tool_name,
                                             output=original_content
@@ -993,15 +999,15 @@ class DecepticonCLI:
                                         
                                         try:
                                             tool_panel = Panel(
-                                                content,  # 이미 escape된 컨텐트
+                                                safe_content,  # 이스케이프된 컨텐트
                                                 box=box.ROUNDED,
                                                 border_style=tool_color,
                                                 title=f"[bold {tool_color}]{tool_display_name}[/bold {tool_color}]"
                                             )
                                             self.console.print(tool_panel)
                                         except Exception as panel_error:
-                                            # Panel 출력 실패 시 기본 출력
-                                            fallback_output = f"[{tool_display_name}]: {content}"
+                                            # Panel 출력 실패 시 기본 출력 (안전한 텍스트 사용)
+                                            fallback_output = f"[{tool_display_name}]: {safe_content}"
                                             self.console.print(fallback_output)
                                         
 

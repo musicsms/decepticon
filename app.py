@@ -709,7 +709,7 @@ class DecepticonApp:
 
         st.title(":red[Decepticon]")
 
-        # 사이드바 설정 - 현대적인 AI UI/UX 스타일
+        # 사이드바 설정 
         sidebar = st.sidebar
 
         with sidebar.container():
