@@ -1,14 +1,14 @@
+# .env 파일 로드
+from dotenv import load_dotenv
+load_dotenv()
 import streamlit as st
 import time
 import os
 import asyncio
 import uuid
 from datetime import datetime
-from dotenv import load_dotenv
 import hashlib
 
-# .env 파일 로드
-load_dotenv()
 
 # persistence 설정 추가
 from src.utils.memory import (
@@ -22,8 +22,8 @@ from src.utils.memory import (
 from src.utils.logging.logger import get_logger
 from src.utils.logging.replay import get_replay_system
 
-ICON = "assets\logo.png"
-ICON_TEXT = "assets\logo_text1.png"
+ICON = "assets/logo.png"
+ICON_TEXT = "assets/logo_text1.png"
 
 # Streamlit 페이지 설정 
 st.set_page_config(
@@ -58,6 +58,7 @@ from frontend.components.chat_replay import ReplayManager
 terminal_ui = TerminalUI()
 terminal_ui.apply_terminal_css()
 
+os.environ.get("LANGSMITH_API_KEY")
 
 def get_env_config() -> dict:
     """환경 설정 로드"""
@@ -65,7 +66,7 @@ def get_env_config() -> dict:
         "debug_mode": os.getenv("DEBUG_MODE", "false").lower() == "true",
         "theme": os.getenv("THEME", "dark"),
         "docker_container": os.getenv("DOCKER_CONTAINER", "decepticon-kali"),
-        "chat_height": int(os.getenv("CHAT_HEIGHT", "700"))
+        "chat_height": int(os.getenv("CHAT_HEIGHT", "700")),
     }
 
 

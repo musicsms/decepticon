@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Decepticon CLI - Dynamic Configuration Only
-A command-line interface for penetration testing workflows with NO hardcoded values
-"""
-
 import asyncio
 import uuid
 import sys
@@ -13,7 +8,8 @@ import json
 import hashlib
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Set
-
+from dotenv import load_dotenv
+load_dotenv()
 # Rich imports for beautiful CLI
 from rich.console import Console
 from rich.panel import Panel
@@ -67,8 +63,7 @@ from src.utils.logging.logger import get_logger
 from src.utils.agents import AgentManager
 
 
-from dotenv import load_dotenv
-load_dotenv()
+
 
 console = Console()
 
