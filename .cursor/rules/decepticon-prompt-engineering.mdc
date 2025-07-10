@@ -1,0 +1,74 @@
+---
+alwaysApply: true
+---
+
+<rule>
+<meta>
+<title>Prompt & Persona Rules</title>
+<description>Rules for multilingual, structured, and professional persona prompts</description>
+<applies-to>
+<file-matcher glob="src/prompts/**/*.py"/>
+<file-matcher glob="src/agents/**/*.py"/>
+</applies-to>
+</meta>
+
+<requirements>
+<requirement priority="critical">
+<description>All persona prompts must support both Korean and English, and provide structured output.</description>
+<examples>
+<correct-example><![CDATA[
+<language_instructions>
+Detect and respond in the user's language (Korean/English).
+</language_instructions>
+<output_format>
+## EXECUTIVE INTELLIGENCE
+...
+</output_format>
+]]></correct-example>
+<incorrect-example><![CDATA[
+<role>
+You are an intelligence analyst.
+</role>
+]]></incorrect-example>
+</examples>
+</requirement>
+<requirement priority="high">
+<description>Document available tools and commands with concrete use cases.</description>
+</requirement>
+</requirements>
+</rule>
+<rule>
+<meta>
+<title>Prompt & Persona Rules</title>
+<description>Rules for multilingual, structured, and professional persona prompts</description>
+<applies-to>
+<file-matcher glob="src/prompts/**/*.py"/>
+<file-matcher glob="src/agents/**/*.py"/>
+</applies-to>
+</meta>
+
+<requirements>
+<requirement priority="critical">
+<description>All persona prompts must support both Korean and English, and provide structured output.</description>
+<examples>
+<correct-example><![CDATA[
+<language_instructions>
+Detect and respond in the user's language (Korean/English).
+</language_instructions>
+<output_format>
+## EXECUTIVE INTELLIGENCE
+...
+</output_format>
+]]></correct-example>
+<incorrect-example><![CDATA[
+<role>
+You are an intelligence analyst.
+</role>
+]]></incorrect-example>
+</examples>
+</requirement>
+<requirement priority="high">
+<description>Document available tools and commands with concrete use cases.</description>
+</requirement>
+</requirements>
+</rule>

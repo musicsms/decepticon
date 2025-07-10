@@ -1,0 +1,62 @@
+---
+alwaysApply: true
+---
+
+<rule>
+<meta>
+<title>Frontend & UI Rules</title>
+<description>Rules for theme, session state, and safe UI in Decepticon</description>
+<applies-to>
+<file-matcher glob="frontend/**/*.py"/>
+<file-matcher glob="static/**/*.css"/>
+<file-matcher glob="static/**/*.toml"/>
+</applies-to>
+</meta>
+
+<requirements>
+<requirement priority="critical">
+<description>All UI must use ThemeManager and Streamlit session state (never global variables).</description>
+<examples>
+<correct-example><![CDATA[
+if "app_stage" not in st.session_state:
+    st.session_state.app_stage = "main"
+]]></correct-example>
+<incorrect-example><![CDATA[
+app_stage = "main"
+]]></incorrect-example>
+</examples>
+</requirement>
+<requirement priority="high">
+<description>All user-facing output must be safely escaped and error-handled.</description>
+</requirement>
+</requirements>
+</rule>
+<rule>
+<meta>
+<title>Frontend & UI Rules</title>
+<description>Rules for theme, session state, and safe UI in Decepticon</description>
+<applies-to>
+<file-matcher glob="frontend/**/*.py"/>
+<file-matcher glob="static/**/*.css"/>
+<file-matcher glob="static/**/*.toml"/>
+</applies-to>
+</meta>
+
+<requirements>
+<requirement priority="critical">
+<description>All UI must use ThemeManager and Streamlit session state (never global variables).</description>
+<examples>
+<correct-example><![CDATA[
+if "app_stage" not in st.session_state:
+    st.session_state.app_stage = "main"
+]]></correct-example>
+<incorrect-example><![CDATA[
+app_stage = "main"
+]]></incorrect-example>
+</examples>
+</requirement>
+<requirement priority="high">
+<description>All user-facing output must be safely escaped and error-handled.</description>
+</requirement>
+</requirements>
+</rule>
