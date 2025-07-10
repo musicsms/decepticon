@@ -31,6 +31,7 @@ from rich import markup
 
 # Decepticon imports
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from src.utils.llm.models import (
     list_available_models, 
@@ -873,142 +874,144 @@ class DecepticonCLI:
                 async for namespace, output in self.swarm.astream(
                     inputs,
                     stream_mode="updates",
-                    config=self.config,
+                    config=self.config if self.config else None,  # type: ignore
                     subgraphs=True
                 ):
                     step_count += 1
                     event_count += 1  # ✅ 이벤트 카운트 증가
 
-                    for node, value in output.items():
-                        # 에이전트 이름 결정
-                        agent_name = get_agent_name(namespace)
+                    # output이 딕셔너리인지 확인
+                    if isinstance(output, dict):
+                        for node, value in output.items():
+                            # 에이전트 이름 결정
+                            agent_name = get_agent_name(namespace)
             
-                        # 메시지 처리
-                        if "messages" in value and value["messages"]:
-                            messages = value["messages"]
-                            if messages:
-                                latest_message = messages[-1]
-                                should_display, message_type = self.should_display_message(
-                                    latest_message, agent_name, step_count
-                                )
-                                
-                                if should_display:
-                                    progress.stop()
+                            # 메시지 처리
+                            if "messages" in value and value["messages"]:
+                                messages = value["messages"]
+                                if messages:
+                                    latest_message = messages[-1]
+                                    should_display, message_type = self.should_display_message(
+                                        latest_message, agent_name, step_count
+                                    )
+                                    
+                                    if should_display:
+                                        progress.stop()
 
-                                    if message_type == "ai":
-                                        # AI message content 안전 추출
-                                        # 로깅용: 원본 텍스트 (이스케이프 안함)
-                                        original_content = extract_message_content(latest_message, escape_markup=False)
-                                        # Rich 출력용: 이스케이프된 텍스트
-                                        safe_content = extract_message_content(latest_message, escape_markup=True)
-                                        
-                                        # Tool calls 정보 추출
-                                        tool_calls = extract_tool_calls(latest_message)
-                                        
-                                        # 로깅 - 에이전트 응답 (원본 데이터 사용)
-                                        self.logger.log_agent_response(
-                                            agent_name=agent_name,
-                                            content=original_content,
-                                            tool_calls=tool_calls if tool_calls else None
-                                        )
-
-                                        try:
-                                            # 에이전트별 색상 설정
-                                            agent_color = AgentManager.get_cli_color(agent_name)
+                                        if message_type == "ai":
+                                            # AI message content 안전 추출
+                                            # 로깅용: 원본 텍스트 (이스케이프 안함)
+                                            original_content = extract_message_content(latest_message, escape_markup=False)
+                                            # Rich 출력용: 이스케이프된 텍스트
+                                            safe_content = extract_message_content(latest_message, escape_markup=True)
                                             
-                                            # Markdown에서 escape 처리 - 안전한 content 사용
-                                            content_markdown = Markdown(safe_content)
+                                            # Tool calls 정보 추출
+                                            tool_calls = extract_tool_calls(latest_message)
                                             
-                                            # Tool calls가 있으면 추가 정보 표시
-                                            if tool_calls:
-                                                # Tool calls 정보를 Rich로 표시
-                                                tool_call_info = []
-                                                for i, tool_call in enumerate(tool_calls, 1):
-                                                    tool_name = tool_call.get('name', 'Unknown Tool')
-                                                    tool_args = tool_call.get('args', {})
-                                                    
-                                                    # parse_tool_call 함수로 깔끔한 메시지 생성
-                                                    
-                                                    tool_call_message = parse_tool_call(tool_call)
-                                                    
-                                                    tool_call_info.append(f"[bold cyan]{tool_call_message}[/bold cyan]")
-                                                    
-                                                    # Arguments가 있으면 세부 정보 추가
-                                                    if tool_args:
-                                                        args_str = ", ".join([f"{k}={v}" for k, v in tool_args.items()])
-                                                        if len(args_str) > 100:  # 너무 길면 자르기
-                                                            args_str = args_str[:100] + "..."
-                                                        tool_call_info.append(f"  [dim]→ {args_str}[/dim]")
-                                                
-                                                # Content와 tool calls를 합쳐서 표시
-                                                if original_content.strip():  # content가 있는 경우
-                                                    combined_content = Group(
-                                                        content_markdown,
-                                                        "\n".join(tool_call_info)
-                                                    )
-                                                else:  # content가 비어있는 경우
-                                                    combined_content = "\n".join(tool_call_info)
-                                                
-                                                agent_panel = Panel(
-                                                    combined_content,
-                                                    box=box.ROUNDED,
-                                                    border_style=agent_color,
-                                                    title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
-                                                )
-                                            else:
-                                                # Tool calls가 없으면 기존 방식
-                                                agent_panel = Panel(
-                                                    content_markdown,
-                                                    box=box.ROUNDED,
-                                                    border_style=agent_color,
-                                                    title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
-                                                )
-                                            
-                                            self.console.print(agent_panel)
-                                        except Exception as panel_error:
-                                            # Panel 출력 실패 시 기본 출력 (안전한 텍스트 사용)
-                                            self.console.print(f"[{agent_name}]: {safe_content}")
-
-                                        if agent_name not in agent_responses:
-                                            agent_responses[agent_name] = []
-                                        agent_responses[agent_name].append(safe_content)
-
-                                    elif message_type == "tool":
-                                        # Tool message content 안전 추출 
-                                        # 로깅용: 원본 텍스트 (이스케이프 안함)
-                                        original_content = extract_message_content(latest_message, escape_markup=False)
-                                        # Rich 출력용: 이스케이프된 텍스트
-                                        safe_content = extract_message_content(latest_message, escape_markup=True)
-                                        
-                                        tool_name = getattr(latest_message, 'name', 'Unknown Tool')
-                                        tool_display_name = parse_tool_name(tool_name)
-                                        
-                                        # 로깅 - 도구 출력 (원본 데이터 사용)
-                                        self.logger.log_tool_output(
-                                            tool_name=tool_name,
-                                            output=original_content
-                                        )
-
-                                        # 도구는 녹색으로 고정
-                                        tool_color = "green"
-                                        
-                                        try:
-                                            tool_panel = Panel(
-                                                safe_content,  # 이스케이프된 컨텐트
-                                                box=box.ROUNDED,
-                                                border_style=tool_color,
-                                                title=f"[bold {tool_color}]{tool_display_name}[/bold {tool_color}]"
+                                            # 로깅 - 에이전트 응답 (원본 데이터 사용)
+                                            self.logger.log_agent_response(
+                                                agent_name=agent_name,
+                                                content=original_content,
+                                                tool_calls=tool_calls if tool_calls else None
                                             )
-                                            self.console.print(tool_panel)
-                                        except Exception as panel_error:
-                                            # Panel 출력 실패 시 기본 출력 (안전한 텍스트 사용)
-                                            fallback_output = f"[{tool_display_name}]: {safe_content}"
-                                            self.console.print(fallback_output)
-                                        
 
-                                # 진행 상황 재시작
-                                progress.start()
-                                progress.update(main_task, description=f"[bold blue]🤖 Working... [/bold blue]")
+                                            try:
+                                                # 에이전트별 색상 설정
+                                                agent_color = AgentManager.get_cli_color(agent_name)
+                                                
+                                                # Markdown에서 escape 처리 - 안전한 content 사용
+                                                content_markdown = Markdown(safe_content)
+                                                
+                                                # Tool calls가 있으면 추가 정보 표시
+                                                if tool_calls:
+                                                    # Tool calls 정보를 Rich로 표시
+                                                    tool_call_info = []
+                                                    for i, tool_call in enumerate(tool_calls, 1):
+                                                        tool_name = tool_call.get('name', 'Unknown Tool')
+                                                        tool_args = tool_call.get('args', {})
+                                                        
+                                                        # parse_tool_call 함수로 깔끔한 메시지 생성
+                                                        
+                                                        tool_call_message = parse_tool_call(tool_call)
+                                                        
+                                                        tool_call_info.append(f"[bold cyan]{tool_call_message}[/bold cyan]")
+                                                        
+                                                        # Arguments가 있으면 세부 정보 추가
+                                                        if tool_args:
+                                                            args_str = ", ".join([f"{k}={v}" for k, v in tool_args.items()])
+                                                            if len(args_str) > 100:  # 너무 길면 자르기
+                                                                args_str = args_str[:100] + "..."
+                                                            tool_call_info.append(f"  [dim]→ {args_str}[/dim]")
+                                                    
+                                                    # Content와 tool calls를 합쳐서 표시
+                                                    if original_content.strip():  # content가 있는 경우
+                                                        combined_content = Group(
+                                                            content_markdown,
+                                                            "\n".join(tool_call_info)
+                                                        )
+                                                    else:  # content가 비어있는 경우
+                                                        combined_content = "\n".join(tool_call_info)
+                                                    
+                                                    agent_panel = Panel(
+                                                        combined_content,
+                                                        box=box.ROUNDED,
+                                                        border_style=agent_color,
+                                                        title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
+                                                    )
+                                                else:
+                                                    # Tool calls가 없으면 기존 방식
+                                                    agent_panel = Panel(
+                                                        content_markdown,
+                                                        box=box.ROUNDED,
+                                                        border_style=agent_color,
+                                                        title=f"[{agent_color} bold]{agent_name}[/{agent_color} bold]"
+                                                    )
+                                                
+                                                self.console.print(agent_panel)
+                                            except Exception as panel_error:
+                                                # Panel 출력 실패 시 기본 출력 (안전한 텍스트 사용)
+                                                self.console.print(f"[{agent_name}]: {safe_content}")
+
+                                            if agent_name not in agent_responses:
+                                                agent_responses[agent_name] = []
+                                            agent_responses[agent_name].append(safe_content)
+
+                                        elif message_type == "tool":
+                                            # Tool message content 안전 추출 
+                                            # 로깅용: 원본 텍스트 (이스케이프 안함)
+                                            original_content = extract_message_content(latest_message, escape_markup=False)
+                                            # Rich 출력용: 이스케이프된 텍스트
+                                            safe_content = extract_message_content(latest_message, escape_markup=True)
+                                            
+                                            tool_name = getattr(latest_message, 'name', 'Unknown Tool')
+                                            tool_display_name = parse_tool_name(tool_name)
+                                            
+                                            # 로깅 - 도구 출력 (원본 데이터 사용)
+                                            self.logger.log_tool_output(
+                                                tool_name=tool_name,
+                                                output=original_content
+                                            )
+
+                                            # 도구는 녹색으로 고정
+                                            tool_color = "green"
+                                            
+                                            try:
+                                                tool_panel = Panel(
+                                                    safe_content,  # 이스케이프된 컨텐트
+                                                    box=box.ROUNDED,
+                                                    border_style=tool_color,
+                                                    title=f"[bold {tool_color}]{tool_display_name}[/bold {tool_color}]"
+                                                )
+                                                self.console.print(tool_panel)
+                                            except Exception as panel_error:
+                                                # Panel 출력 실패 시 기본 출력 (안전한 텍스트 사용)
+                                                fallback_output = f"[{tool_display_name}]: {safe_content}"
+                                                self.console.print(fallback_output)
+                                            
+
+                                    # 진행 상황 재시작
+                                    progress.start()
+                                    progress.update(main_task, description=f"[bold blue]🤖 Working... [/bold blue]")
 
                 # 워크플로우 완료 후 완료 상태 표시
                 progress.update(main_task, description="[bold green]✅ Workflow completed!")
@@ -1064,7 +1067,7 @@ class DecepticonCLI:
             f"[cyan]🎯 Ready for red team operations[/cyan]\n"
             f"[cyan]💡 Type your requests in natural language[/cyan]\n"
             f"[cyan]❓ Use 'help' for guidance[/cyan]\n\n"
-            f"[yellow]Model:[/yellow] [bold]{self.current_model['display_name']}[/bold]",
+            f"[yellow]Model:[/yellow] [bold]{self.current_model['display_name'] if self.current_model else 'Not set'}[/bold]",
             box=box.ROUNDED,
             border_style="green",
             title="[bold green]🎮 Interactive Mode[/bold green]"
