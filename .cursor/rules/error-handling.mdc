@@ -1,0 +1,1127 @@
+---
+description: 강건한 에러 처리와 예외 관리를 위한 포괄적 가이드라인
+globs: "**/*.py"
+alwaysApply: false
+---
+
+<rule>
+<meta>
+<title>Error Handling and Exception Management</title>
+<description>안정적인 시스템을 위한 에러 처리, 예외 관리, 복구 전략의 모범 사례</description>
+<created-at utc-timestamp="1720684800">2025-07-08, 11:35 AM KST</created-at>
+<last-updated-at utc-timestamp="1720684800">2025-07-08, 11:35 AM KST</last-updated-at>
+<applies-to>
+<file-matcher glob="**/*.py">모든 Python 파일</file-matcher>
+<action-matcher action="error-handling">에러 처리 구현 시</action-matcher>
+</applies-to>
+</meta>
+
+<requirements>
+<requirement priority="critical">
+<description>모든 외부 의존성 호출은 적절한 예외 처리와 fallback 메커니즘을 포함한다.</description>
+<examples>
+<example title="외부 API 호출 에러 처리">
+<correct-example title="복원력 있는 API 호출" conditions="외부 API 호출" expected-result="안정적인 시스템 동작" correctness-criteria="예외 처리와 fallback 포함"><![CDATA[
+import aiohttp
+import asyncio
+from typing import Optional, Dict, Any, Union
+from dataclasses import dataclass
+from enum import Enum
+import logging
+
+class ErrorSeverity(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+@dataclass
+class ErrorContext:
+    """에러 컨텍스트 정보"""
+    operation: str
+    component: str
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    request_id: Optional[str] = None
+
+class ResilientAPIClient:
+    """복원력 있는 API 클라이언트"""
+    
+    def __init__(self, base_url: str, max_retries: int = 3, timeout: float = 30.0):
+        self.base_url = base_url
+        self.max_retries = max_retries
+        self.timeout = timeout
+        self.logger = logging.getLogger(__name__)
+    
+    async def make_request(
+        self,
+        endpoint: str,
+        method: str = "GET",
+        data: Optional[Dict[str, Any]] = None,
+        context: Optional[ErrorContext] = None
+    ) -> Dict[str, Any]:
+        """복원력 있는 API 요청"""
+        
+        last_exception = None
+        
+        for attempt in range(self.max_retries + 1):
+            try:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
+                    url = f"{self.base_url}/{endpoint.lstrip('/')}"
+                    
+                    async with session.request(method, url, json=data) as response:
+                        if response.status == 200:
+                            result = await response.json()
+                            
+                            # 성공 시 이전 실패 기록 정리
+                            if attempt > 0:
+                                self.logger.info(f"Request succeeded on attempt {attempt + 1}")
+                            
+                            return {
+                                "status": "success",
+                                "data": result,
+                                "attempts": attempt + 1
+                            }
+                        
+                        elif response.status in [429, 503]:  # Rate limit, Service unavailable
+                            # 재시도 가능한 에러
+                            wait_time = min(2 ** attempt, 60)  # Exponential backoff with cap
+                            self.logger.warning(f"Retryable error {response.status}, waiting {wait_time}s")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        
+                        elif response.status in [401, 403]:  # Authentication errors
+                            # 재시도 불가능한 에러
+                            error_data = await response.text()
+                            return await self._handle_auth_error(response.status, error_data, context)
+                        
+                        else:
+                            # 기타 HTTP 에러
+                            error_data = await response.text()
+                            raise aiohttp.ClientResponseError(
+                                request_info=response.request_info,
+                                history=response.history,
+                                status=response.status,
+                                message=error_data
+                            )
+            
+            except asyncio.TimeoutError as e:
+                last_exception = e
+                self.logger.warning(f"Request timeout on attempt {attempt + 1}")
+                if attempt < self.max_retries:
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                
+            except aiohttp.ClientError as e:
+                last_exception = e
+                self.logger.warning(f"Client error on attempt {attempt + 1}: {e}")
+                if attempt < self.max_retries:
+                    await asyncio.sleep(2 ** attempt)
+            
+            except Exception as e:
+                last_exception = e
+                self.logger.error(f"Unexpected error on attempt {attempt + 1}: {e}")
+                break  # 예상치 못한 에러는 재시도하지 않음
+        
+        # 모든 재시도 실패
+        return await self._handle_final_failure(last_exception, endpoint, context)
+    
+    async def _handle_auth_error(
+        self, 
+        status_code: int, 
+        error_data: str, 
+        context: Optional[ErrorContext]
+    ) -> Dict[str, Any]:
+        """인증 에러 처리"""
+        self.logger.error(f"Authentication error {status_code}: {error_data}")
+        
+        # 컨텍스트 기반 에러 보고
+        if context:
+            await self._report_error(
+                ErrorSeverity.HIGH,
+                f"Authentication failed for {context.operation}",
+                context
+            )
+        
+        return {
+            "status": "auth_error",
+            "error_code": status_code,
+            "message": "Authentication or authorization failed",
+            "recoverable": False,
+            "action_required": "Check API credentials"
+        }
+    
+    async def _handle_final_failure(
+        self,
+        exception: Exception,
+        endpoint: str,
+        context: Optional[ErrorContext]
+    ) -> Dict[str, Any]:
+        """최종 실패 처리"""
+        error_message = f"API call to {endpoint} failed after {self.max_retries + 1} attempts: {exception}"
+        self.logger.error(error_message)
+        
+        # 심각한 에러 보고
+        if context:
+            await self._report_error(
+                ErrorSeverity.CRITICAL,
+                error_message,
+                context
+            )
+        
+        # Fallback 데이터 제공 시도
+        fallback_data = await self._get_fallback_data(endpoint)
+        
+        return {
+            "status": "failed",
+            "error": str(exception),
+            "endpoint": endpoint,
+            "attempts": self.max_retries + 1,
+            "fallback_data": fallback_data,
+            "recovery_suggestions": [
+                "Check network connectivity",
+                "Verify API endpoint availability", 
+                "Review API rate limits",
+                "Check authentication credentials"
+            ]
+        }
+    
+    async def _get_fallback_data(self, endpoint: str) -> Optional[Dict[str, Any]]:
+        """Fallback 데이터 제공"""
+        # 캐시된 데이터나 기본값 반환
+        fallback_map = {
+            "status": {"service": "degraded", "timestamp": "unknown"},
+            "config": {"default": True, "version": "fallback"},
+            "data": {"cached": True, "stale": True}
+        }
+        
+        for key in fallback_map:
+            if key in endpoint:
+                return fallback_map[key]
+        
+        return None
+    
+    async def _report_error(
+        self,
+        severity: ErrorSeverity,
+        message: str,
+        context: ErrorContext
+    ) -> None:
+        """에러 보고 및 알림"""
+        error_report = {
+            "severity": severity.value,
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+            "context": {
+                "operation": context.operation,
+                "component": context.component,
+                "user_id": context.user_id,
+                "session_id": context.session_id,
+                "request_id": context.request_id
+            }
+        }
+        
+        # 심각도에 따른 알림 처리
+        if severity == ErrorSeverity.CRITICAL:
+            # 즉시 알림 발송
+            await self._send_critical_alert(error_report)
+        
+        # 에러 로그 저장
+        await self._save_error_log(error_report)
+
+# 사용 예시
+async def fetch_vulnerability_data_safely(cve_id: str, user_id: str) -> Dict[str, Any]:
+    """안전한 취약점 데이터 조회"""
+    client = ResilientAPIClient("https://services.nvd.nist.gov/rest/json/cves/2.0")
+    
+    context = ErrorContext(
+        operation="fetch_vulnerability_data",
+        component="cve_api_client",
+        user_id=user_id,
+        request_id=str(uuid.uuid4())
+    )
+    
+    result = await client.make_request(
+        endpoint=f"?cveId={cve_id}",
+        context=context
+    )
+    
+    if result["status"] == "success":
+        return result["data"]
+    elif result.get("fallback_data"):
+        return {
+            "cve_id": cve_id,
+            "status": "fallback",
+            "data": result["fallback_data"],
+            "warning": "Using fallback data due to API unavailability"
+        }
+    else:
+        return {
+            "cve_id": cve_id,
+            "status": "unavailable",
+            "error": result["error"],
+            "suggestions": result["recovery_suggestions"]
+        }
+]]></correct-example>
+<incorrect-example title="기본적인 try-catch" conditions="외부 API 호출" expected-result="안정적인 시스템 동작" incorrectness-criteria="재시도 로직과 fallback 누락"><![CDATA[
+async def fetch_vulnerability_data_basic(cve_id: str) -> Dict[str, Any]:
+    """기본적인 에러 처리 (불완전)"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.example.com/cve/{cve_id}") as response:
+                data = await response.json()
+                return data
+    except Exception as e:
+        # 단순한 에러 처리 - 재시도, fallback, 상세 컨텍스트 없음
+        return {"error": str(e)}
+]]></incorrect-example>
+</example>
+</examples>
+</requirement>
+
+<requirement priority="high">
+<description>에이전트 실행 중 발생하는 에러는 적절히 로깅하고 사용자에게 유용한 피드백을 제공한다.</description>
+<examples>
+<example title="에이전트 에러 처리">
+<correct-example title="포괄적인 에이전트 에러 관리" conditions="에이전트 실행 에러" expected-result="유용한 사용자 피드백" correctness-criteria="구조화된 에러 정보와 복구 제안"><![CDATA[
+from typing import Dict, Any, Optional, List
+from dataclasses import dataclass, field
+from datetime import datetime
+import traceback
+import sys
+
+@dataclass
+class AgentError:
+    """에이전트 에러 정보"""
+    agent_name: str
+    operation: str
+    error_type: str
+    error_message: str
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    stack_trace: Optional[str] = None
+    user_message: str = ""
+    recovery_suggestions: List[str] = field(default_factory=list)
+    context: Dict[str, Any] = field(default_factory=dict)
+
+class AgentErrorHandler:
+    """에이전트 에러 핸들러"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger("agent_errors")
+        self.error_patterns = {
+            "llm_api_error": {
+                "user_message": "AI 모델 서비스에 일시적인 문제가 발생했습니다.",
+                "suggestions": [
+                    "잠시 후 다시 시도해주세요",
+                    "다른 AI 모델로 변경해보세요",
+                    "네트워크 연결을 확인해주세요"
+                ]
+            },
+            "mcp_tool_error": {
+                "user_message": "보안 도구 실행 중 오류가 발생했습니다.",
+                "suggestions": [
+                    "타겟 주소가 올바른지 확인해주세요",
+                    "도구 설정을 점검해주세요",
+                    "네트워크 접근 권한을 확인해주세요"
+                ]
+            },
+            "memory_error": {
+                "user_message": "메모리 시스템에 문제가 발생했습니다.",
+                "suggestions": [
+                    "이전 대화 내용을 다시 요약해주세요",
+                    "새 세션을 시작해주세요",
+                    "메모리 저장소 상태를 확인해주세요"
+                ]
+            },
+            "handoff_error": {
+                "user_message": "에이전트 간 작업 전달에 실패했습니다.",
+                "suggestions": [
+                    "다른 에이전트로 직접 요청해주세요",
+                    "작업을 더 작은 단위로 나누어주세요",
+                    "시스템 상태를 확인해주세요"
+                ]
+            }
+        }
+    
+    async def handle_agent_error(
+        self,
+        agent_name: str,
+        operation: str,
+        exception: Exception,
+        context: Dict[str, Any] = None
+    ) -> AgentError:
+        """에이전트 에러 처리 및 분석"""
+        
+        # 에러 타입 분류
+        error_type = self._classify_error(exception)
+        
+        # 스택 트레이스 캡처
+        stack_trace = traceback.format_exc()
+        
+        # 에러 패턴 매칭하여 사용자 메시지 생성
+        pattern_info = self.error_patterns.get(error_type, {})
+        user_message = pattern_info.get("user_message", "알 수 없는 오류가 발생했습니다.")
+        suggestions = pattern_info.get("suggestions", ["시스템 관리자에게 문의해주세요"])
+        
+        # 컨텍스트 기반 추가 정보
+        if context:
+            user_message = self._enhance_user_message(user_message, context)
+            suggestions = self._enhance_suggestions(suggestions, context, error_type)
+        
+        # 에이전트 에러 객체 생성
+        agent_error = AgentError(
+            agent_name=agent_name,
+            operation=operation,
+            error_type=error_type,
+            error_message=str(exception),
+            stack_trace=stack_trace,
+            user_message=user_message,
+            recovery_suggestions=suggestions,
+            context=context or {}
+        )
+        
+        # 에러 로깅
+        await self._log_agent_error(agent_error)
+        
+        # 심각한 에러인 경우 알림
+        if self._is_critical_error(error_type, exception):
+            await self._send_error_notification(agent_error)
+        
+        return agent_error
+    
+    def _classify_error(self, exception: Exception) -> str:
+        """에러 타입 분류"""
+        error_class = type(exception).__name__
+        error_message = str(exception).lower()
+        
+        # API 관련 에러
+        if any(keyword in error_message for keyword in ["api", "openai", "anthropic", "rate limit"]):
+            return "llm_api_error"
+        
+        # MCP 도구 에러
+        if any(keyword in error_message for keyword in ["mcp", "tool", "nmap", "scan"]):
+            return "mcp_tool_error"
+        
+        # 메모리 관련 에러
+        if any(keyword in error_message for keyword in ["memory", "store", "namespace"]):
+            return "memory_error"
+        
+        # 핸드오프 에러
+        if any(keyword in error_message for keyword in ["handoff", "agent", "transfer"]):
+            return "handoff_error"
+        
+        # 기본 분류
+        return error_class.lower()
+    
+    def _enhance_user_message(self, base_message: str, context: Dict[str, Any]) -> str:
+        """컨텍스트 기반 사용자 메시지 향상"""
+        if "target" in context:
+            return f"{base_message} (대상: {context['target']})"
+        elif "tool_name" in context:
+            return f"{base_message} (도구: {context['tool_name']})"
+        else:
+            return base_message
+    
+    def _enhance_suggestions(
+        self, 
+        base_suggestions: List[str], 
+        context: Dict[str, Any], 
+        error_type: str
+    ) -> List[str]:
+        """컨텍스트 기반 복구 제안 향상"""
+        enhanced = base_suggestions.copy()
+        
+        # 타겟 관련 제안
+        if "target" in context and error_type == "mcp_tool_error":
+            target = context["target"]
+            enhanced.append(f"타겟 {target}이 접근 가능한지 확인해주세요")
+            enhanced.append(f"타겟 {target}에 대한 권한이 있는지 확인해주세요")
+        
+        # LLM 관련 제안
+        if error_type == "llm_api_error":
+            enhanced.append("AI 모델 설정에서 다른 공급자를 선택해주세요")
+            enhanced.append("API 키가 올바르게 설정되었는지 확인해주세요")
+        
+        return enhanced
+    
+    def _is_critical_error(self, error_type: str, exception: Exception) -> bool:
+        """심각한 에러 여부 판단"""
+        critical_patterns = [
+            "system", "critical", "fatal", "corruption",
+            "security", "authentication", "authorization"
+        ]
+        
+        error_message = str(exception).lower()
+        return any(pattern in error_message for pattern in critical_patterns)
+    
+    async def _log_agent_error(self, agent_error: AgentError) -> None:
+        """에이전트 에러 로깅"""
+        log_data = {
+            "timestamp": agent_error.timestamp,
+            "agent": agent_error.agent_name,
+            "operation": agent_error.operation,
+            "error_type": agent_error.error_type,
+            "error_message": agent_error.error_message,
+            "context": agent_error.context
+        }
+        
+        self.logger.error(f"Agent Error: {log_data}")
+        
+        # 디버그 레벨에서 스택 트레이스 로깅
+        if agent_error.stack_trace:
+            self.logger.debug(f"Stack Trace: {agent_error.stack_trace}")
+    
+    async def _send_error_notification(self, agent_error: AgentError) -> None:
+        """심각한 에러 알림 발송"""
+        # 실제 구현에서는 이메일, Slack, 웹훅 등으로 알림
+        print(f"🚨 CRITICAL ERROR ALERT 🚨")
+        print(f"Agent: {agent_error.agent_name}")
+        print(f"Error: {agent_error.error_message}")
+        print(f"Time: {agent_error.timestamp}")
+
+# 에이전트 래퍼 함수
+async def execute_agent_with_error_handling(
+    agent_func: callable,
+    agent_name: str,
+    operation: str,
+    *args,
+    **kwargs
+) -> Dict[str, Any]:
+    """에러 처리가 포함된 에이전트 실행"""
+    error_handler = AgentErrorHandler()
+    
+    try:
+        result = await agent_func(*args, **kwargs)
+        return {
+            "status": "success",
+            "result": result,
+            "agent": agent_name
+        }
+    
+    except Exception as e:
+        agent_error = await error_handler.handle_agent_error(
+            agent_name=agent_name,
+            operation=operation,
+            exception=e,
+            context=kwargs
+        )
+        
+        return {
+            "status": "error",
+            "agent": agent_name,
+            "error_info": {
+                "type": agent_error.error_type,
+                "message": agent_error.user_message,
+                "suggestions": agent_error.recovery_suggestions,
+                "technical_details": agent_error.error_message
+            }
+        }
+]]></correct-example>
+<incorrect-example title="기본 에러 처리" conditions="에이전트 실행 에러" expected-result="유용한 사용자 피드백" incorrectness-criteria="사용자 친화적 메시지와 복구 제안 누락"><![CDATA[
+async def execute_agent_basic(agent_func: callable) -> Any:
+    """기본적인 에러 처리"""
+    try:
+        result = await agent_func()
+        return result
+    except Exception as e:
+        # 단순한 에러 반환 - 사용자 친화적 메시지나 복구 제안 없음
+        return {"error": str(e)}
+]]></incorrect-example>
+</example>
+</examples>
+</requirement>
+
+<requirement priority="high">
+<description>파일 I/O와 설정 로딩에서 발생할 수 있는 에러를 예측하고 대응한다.</description>
+<examples>
+<example title="안전한 파일 및 설정 처리">
+<correct-example title="강건한 파일 I/O" conditions="파일 읽기/쓰기 작업" expected-result="안정적인 파일 처리" correctness-criteria="파일 존재, 권한, 형식 검증"><![CDATA[
+import json
+import yaml
+import aiofiles
+from pathlib import Path
+from typing import Dict, Any, Optional, Union
+import asyncio
+import logging
+
+class ConfigurationManager:
+    """설정 파일 관리자"""
+    
+    def __init__(self, base_path: Union[str, Path] = "."):
+        self.base_path = Path(base_path)
+        self.logger = logging.getLogger(__name__)
+        self.default_configs = {
+            "mcp_config.json": {
+                "reconnaissance": {},
+                "initial_access": {},
+                "planner": {}
+            },
+            ".env": {
+                "OPENAI_API_KEY": "",
+                "ANTHROPIC_API_KEY": "",
+                "LANGSMITH_API_KEY": ""
+            }
+        }
+    
+    async def load_config_safely(
+        self, 
+        config_file: str,
+        required_fields: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """안전한 설정 파일 로딩"""
+        config_path = self.base_path / config_file
+        
+        try:
+            # 1. 파일 존재 확인
+            if not config_path.exists():
+                self.logger.warning(f"Config file {config_file} not found, creating default")
+                return await self._create_default_config(config_file)
+            
+            # 2. 파일 읽기 권한 확인
+            if not config_path.is_file() or not os.access(config_path, os.R_OK):
+                raise PermissionError(f"Cannot read config file {config_file}")
+            
+            # 3. 파일 크기 검증 (비정상적으로 큰 파일 방지)
+            file_size = config_path.stat().st_size
+            if file_size > 10 * 1024 * 1024:  # 10MB 제한
+                raise ValueError(f"Config file {config_file} is too large ({file_size} bytes)")
+            
+            # 4. 파일 형식에 따른 파싱
+            config_data = await self._parse_config_file(config_path)
+            
+            # 5. 필수 필드 검증
+            if required_fields:
+                missing_fields = self._validate_required_fields(config_data, required_fields)
+                if missing_fields:
+                    # 누락된 필드에 기본값 추가
+                    config_data = await self._add_missing_fields(config_data, missing_fields, config_file)
+            
+            # 6. 설정 검증
+            validated_config = self._validate_config_values(config_data, config_file)
+            
+            self.logger.info(f"Successfully loaded config from {config_file}")
+            return validated_config
+        
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON in {config_file}: {e}")
+            return await self._handle_corrupted_config(config_file, "json_error")
+        
+        except yaml.YAMLError as e:
+            self.logger.error(f"Invalid YAML in {config_file}: {e}")
+            return await self._handle_corrupted_config(config_file, "yaml_error")
+        
+        except PermissionError as e:
+            self.logger.error(f"Permission denied for {config_file}: {e}")
+            return await self._handle_permission_error(config_file)
+        
+        except Exception as e:
+            self.logger.error(f"Unexpected error loading {config_file}: {e}")
+            return await self._handle_general_error(config_file, e)
+    
+    async def _parse_config_file(self, config_path: Path) -> Dict[str, Any]:
+        """파일 형식에 따른 파싱"""
+        file_extension = config_path.suffix.lower()
+        
+        try:
+            async with aiofiles.open(config_path, 'r', encoding='utf-8') as file:
+                content = await file.read()
+                
+                # 빈 파일 체크
+                if not content.strip():
+                    self.logger.warning(f"Config file {config_path.name} is empty")
+                    return {}
+                
+                if file_extension == '.json':
+                    return json.loads(content)
+                elif file_extension in ['.yml', '.yaml']:
+                    return yaml.safe_load(content) or {}
+                elif file_extension == '.env':
+                    return self._parse_env_file(content)
+                else:
+                    # 기본적으로 JSON으로 시도
+                    try:
+                        return json.loads(content)
+                    except json.JSONDecodeError:
+                        # JSON이 아니면 YAML로 시도
+                        return yaml.safe_load(content) or {}
+        
+        except UnicodeDecodeError as e:
+            raise ValueError(f"File encoding error in {config_path.name}: {e}")
+    
+    def _parse_env_file(self, content: str) -> Dict[str, str]:
+        """환경 변수 파일 파싱"""
+        env_vars = {}
+        for line in content.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                # 따옴표 제거
+                value = value.strip().strip('"').strip("'")
+                env_vars[key.strip()] = value
+        return env_vars
+    
+    def _validate_required_fields(
+        self, 
+        config: Dict[str, Any], 
+        required_fields: List[str]
+    ) -> List[str]:
+        """필수 필드 검증"""
+        missing_fields = []
+        for field in required_fields:
+            if '.' in field:
+                # 중첩된 필드 검증 (예: "database.host")
+                parts = field.split('.')
+                current = config
+                for part in parts:
+                    if not isinstance(current, dict) or part not in current:
+                        missing_fields.append(field)
+                        break
+                    current = current[part]
+            else:
+                if field not in config:
+                    missing_fields.append(field)
+        
+        return missing_fields
+    
+    async def _add_missing_fields(
+        self, 
+        config: Dict[str, Any], 
+        missing_fields: List[str],
+        config_file: str
+    ) -> Dict[str, Any]:
+        """누락된 필드에 기본값 추가"""
+        updated_config = config.copy()
+        default_config = self.default_configs.get(config_file, {})
+        
+        for field in missing_fields:
+            if field in default_config:
+                updated_config[field] = default_config[field]
+                self.logger.info(f"Added default value for missing field '{field}' in {config_file}")
+        
+        # 업데이트된 설정을 파일에 저장
+        try:
+            await self.save_config_safely(config_file, updated_config)
+        except Exception as e:
+            self.logger.warning(f"Could not save updated config: {e}")
+        
+        return updated_config
+    
+    def _validate_config_values(self, config: Dict[str, Any], config_file: str) -> Dict[str, Any]:
+        """설정 값 검증"""
+        if config_file == "mcp_config.json":
+            return self._validate_mcp_config(config)
+        elif config_file == ".env":
+            return self._validate_env_config(config)
+        else:
+            return config
+    
+    def _validate_mcp_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """MCP 설정 검증"""
+        validated = {}
+        
+        for agent_name, servers in config.items():
+            if not isinstance(servers, dict):
+                self.logger.warning(f"Invalid server config for agent {agent_name}")
+                continue
+            
+            validated_servers = {}
+            for server_name, server_config in servers.items():
+                if self._is_valid_mcp_server_config(server_config):
+                    validated_servers[server_name] = server_config
+                else:
+                    self.logger.warning(f"Invalid MCP server config: {server_name}")
+            
+            if validated_servers:
+                validated[agent_name] = validated_servers
+        
+        return validated
+    
+    def _is_valid_mcp_server_config(self, server_config: Dict[str, Any]) -> bool:
+        """MCP 서버 설정 유효성 검증"""
+        if "command" in server_config and "args" in server_config:
+            return isinstance(server_config["args"], list)
+        elif "url" in server_config:
+            return server_config["url"].startswith(("http://", "https://"))
+        else:
+            return False
+    
+    async def _create_default_config(self, config_file: str) -> Dict[str, Any]:
+        """기본 설정 파일 생성"""
+        default_config = self.default_configs.get(config_file, {})
+        
+        try:
+            await self.save_config_safely(config_file, default_config)
+            self.logger.info(f"Created default config file: {config_file}")
+        except Exception as e:
+            self.logger.error(f"Failed to create default config {config_file}: {e}")
+        
+        return default_config
+    
+    async def save_config_safely(
+        self, 
+        config_file: str, 
+        config_data: Dict[str, Any]
+    ) -> bool:
+        """안전한 설정 파일 저장"""
+        config_path = self.base_path / config_file
+        backup_path = self.base_path / f"{config_file}.backup"
+        
+        try:
+            # 기존 파일이 있으면 백업 생성
+            if config_path.exists():
+                async with aiofiles.open(config_path, 'rb') as src:
+                    async with aiofiles.open(backup_path, 'wb') as dst:
+                        content = await src.read()
+                        await dst.write(content)
+            
+            # 새 설정 파일 작성
+            if config_file.endswith('.json'):
+                content = json.dumps(config_data, indent=2, ensure_ascii=False)
+            elif config_file.endswith(('.yml', '.yaml')):
+                content = yaml.dump(config_data, default_flow_style=False, allow_unicode=True)
+            else:
+                content = json.dumps(config_data, indent=2, ensure_ascii=False)
+            
+            async with aiofiles.open(config_path, 'w', encoding='utf-8') as file:
+                await file.write(content)
+            
+            # 백업 파일 정리 (성공시)
+            if backup_path.exists():
+                backup_path.unlink()
+            
+            return True
+        
+        except Exception as e:
+            self.logger.error(f"Failed to save config {config_file}: {e}")
+            
+            # 백업에서 복원 시도
+            if backup_path.exists():
+                try:
+                    async with aiofiles.open(backup_path, 'rb') as src:
+                        async with aiofiles.open(config_path, 'wb') as dst:
+                            content = await src.read()
+                            await dst.write(content)
+                    self.logger.info(f"Restored {config_file} from backup")
+                except Exception as restore_error:
+                    self.logger.error(f"Failed to restore from backup: {restore_error}")
+            
+            return False
+
+# 사용 예시
+async def load_mcp_config_safely() -> Dict[str, Any]:
+    """안전한 MCP 설정 로딩"""
+    config_manager = ConfigurationManager()
+    
+    required_fields = ["reconnaissance", "initial_access", "planner"]
+    
+    config = await config_manager.load_config_safely(
+        "mcp_config.json",
+        required_fields=required_fields
+    )
+    
+    return config
+]]></correct-example>
+<incorrect-example title="기본 파일 읽기" conditions="파일 읽기/쓰기 작업" expected-result="안정적인 파일 처리" incorrectness-criteria="에러 처리와 검증 로직 누락"><![CDATA[
+def load_config_basic(config_file: str) -> Dict[str, Any]:
+    """기본적인 설정 로딩 (위험)"""
+    # 파일 존재, 권한, 형식 검증 없이 바로 로드
+    with open(config_file, 'r') as file:
+        return json.load(file)
+]]></incorrect-example>
+</example>
+</examples>
+</requirement>
+
+<non-negotiable priority="critical">
+<description>시스템 복구가 불가능한 치명적 에러는 안전한 종료 절차를 따른다.</description>
+<examples>
+<example title="치명적 에러 처리">
+<correct-example title="안전한 시스템 종료" conditions="복구 불가능한 에러 발생" expected-result="데이터 손실 방지" correctness-criteria="안전한 종료와 상태 저장"><![CDATA[
+import signal
+import sys
+import asyncio
+from typing import Dict, Any, List, Callable
+import atexit
+import logging
+
+class CriticalErrorHandler:
+    """치명적 에러 핸들러"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger("critical_errors")
+        self.shutdown_hooks: List[Callable] = []
+        self.is_shutting_down = False
+        self.setup_signal_handlers()
+    
+    def setup_signal_handlers(self):
+        """시그널 핸들러 설정"""
+        signal.signal(signal.SIGINT, self.handle_shutdown_signal)
+        signal.signal(signal.SIGTERM, self.handle_shutdown_signal)
+        
+        # 정상 종료 시 cleanup 실행
+        atexit.register(self.cleanup_on_exit)
+    
+    def register_shutdown_hook(self, hook: Callable):
+        """종료 시 실행할 훅 등록"""
+        self.shutdown_hooks.append(hook)
+    
+    async def handle_critical_error(
+        self, 
+        error: Exception,
+        component: str,
+        context: Dict[str, Any] = None
+    ) -> None:
+        """치명적 에러 처리"""
+        if self.is_shutting_down:
+            return
+        
+        self.is_shutting_down = True
+        
+        try:
+            # 1. 치명적 에러 로깅
+            await self._log_critical_error(error, component, context)
+            
+            # 2. 현재 상태 저장
+            await self._save_system_state(context)
+            
+            # 3. 진행 중인 작업 안전하게 중단
+            await self._abort_running_operations()
+            
+            # 4. 리소스 정리
+            await self._cleanup_resources()
+            
+            # 5. 에러 보고
+            await self._send_critical_error_report(error, component, context)
+            
+            # 6. 안전한 종료
+            await self._safe_shutdown()
+        
+        except Exception as shutdown_error:
+            # 종료 과정에서도 에러가 발생한 경우 강제 종료
+            self.logger.critical(f"Error during shutdown: {shutdown_error}")
+            sys.exit(1)
+    
+    async def _log_critical_error(
+        self, 
+        error: Exception, 
+        component: str, 
+        context: Dict[str, Any]
+    ) -> None:
+        """치명적 에러 로깅"""
+        error_info = {
+            "timestamp": datetime.now().isoformat(),
+            "component": component,
+            "error_type": type(error).__name__,
+            "error_message": str(error),
+            "stack_trace": traceback.format_exc(),
+            "context": context or {},
+            "system_info": {
+                "python_version": sys.version,
+                "platform": sys.platform
+            }
+        }
+        
+        # 파일과 콘솔에 모두 로깅
+        self.logger.critical(f"CRITICAL ERROR: {json.dumps(error_info, indent=2)}")
+        
+        # 에러 정보를 별도 파일에 저장
+        try:
+            error_file = f"critical_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            async with aiofiles.open(error_file, 'w') as f:
+                await f.write(json.dumps(error_info, indent=2))
+        except Exception as e:
+            print(f"Failed to save error details: {e}")
+    
+    async def _save_system_state(self, context: Dict[str, Any]) -> None:
+        """현재 시스템 상태 저장"""
+        try:
+            state_info = {
+                "timestamp": datetime.now().isoformat(),
+                "active_agents": self._get_active_agents(),
+                "running_operations": self._get_running_operations(),
+                "memory_state": await self._get_memory_state(),
+                "configuration": self._get_current_config(),
+                "context": context or {}
+            }
+            
+            state_file = f"system_state_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            async with aiofiles.open(state_file, 'w') as f:
+                await f.write(json.dumps(state_info, indent=2))
+            
+            self.logger.info(f"System state saved to {state_file}")
+        
+        except Exception as e:
+            self.logger.error(f"Failed to save system state: {e}")
+    
+    async def _abort_running_operations(self) -> None:
+        """진행 중인 작업 안전하게 중단"""
+        try:
+            # 실행 중인 에이전트 작업 중단
+            active_tasks = [task for task in asyncio.all_tasks() if not task.done()]
+            
+            if active_tasks:
+                self.logger.info(f"Cancelling {len(active_tasks)} running tasks")
+                
+                for task in active_tasks:
+                    task.cancel()
+                
+                # 작업 중단 완료 대기 (타임아웃 설정)
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*active_tasks, return_exceptions=True),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.warning("Some tasks did not cancel within timeout")
+        
+        except Exception as e:
+            self.logger.error(f"Error aborting operations: {e}")
+    
+    async def _cleanup_resources(self) -> None:
+        """리소스 정리"""
+        try:
+            # 등록된 종료 훅 실행
+            for hook in self.shutdown_hooks:
+                try:
+                    if asyncio.iscoroutinefunction(hook):
+                        await hook()
+                    else:
+                        hook()
+                except Exception as e:
+                    self.logger.error(f"Error in shutdown hook: {e}")
+            
+            # 파일 핸들 정리
+            await self._close_file_handles()
+            
+            # 네트워크 연결 정리
+            await self._close_network_connections()
+            
+        except Exception as e:
+            self.logger.error(f"Error during resource cleanup: {e}")
+    
+    async def _send_critical_error_report(
+        self, 
+        error: Exception, 
+        component: str, 
+        context: Dict[str, Any]
+    ) -> None:
+        """치명적 에러 보고"""
+        try:
+            report = {
+                "severity": "CRITICAL",
+                "service": "Decepticon",
+                "component": component,
+                "error": str(error),
+                "timestamp": datetime.now().isoformat(),
+                "context": context
+            }
+            
+            # 실제 구현에서는 이메일, Slack, 웹훅 등으로 알림
+            print(f"🚨 CRITICAL SYSTEM ERROR 🚨")
+            print(f"Component: {component}")
+            print(f"Error: {str(error)}")
+            print(f"Time: {datetime.now()}")
+            print("System is shutting down safely...")
+        
+        except Exception as e:
+            self.logger.error(f"Failed to send error report: {e}")
+    
+    async def _safe_shutdown(self) -> None:
+        """안전한 시스템 종료"""
+        try:
+            # 로그 플러시
+            logging.shutdown()
+            
+            # 정상 종료 코드로 종료
+            sys.exit(0)
+        
+        except Exception as e:
+            # 강제 종료
+            print(f"Forced shutdown due to: {e}")
+            sys.exit(1)
+    
+    def handle_shutdown_signal(self, signum, frame):
+        """시그널 핸들러"""
+        print(f"\nReceived signal {signum}, initiating safe shutdown...")
+        
+        # 비동기 컨텍스트에서 종료 처리
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.handle_critical_error(
+            Exception(f"Shutdown signal {signum}"),
+            "signal_handler"
+        ))
+    
+    def cleanup_on_exit(self):
+        """프로그램 종료 시 cleanup"""
+        if not self.is_shutting_down:
+            print("Performing final cleanup...")
+
+# 전역 에러 핸들러
+_critical_handler = CriticalErrorHandler()
+
+def register_shutdown_hook(hook: Callable):
+    """종료 훅 등록"""
+    _critical_handler.register_shutdown_hook(hook)
+
+async def handle_critical_system_error(error: Exception, component: str, context: Dict[str, Any] = None):
+    """치명적 시스템 에러 처리"""
+    await _critical_handler.handle_critical_error(error, component, context)
+
+# 사용 예시
+async def protected_main_operation():
+    """보호된 메인 작업"""
+    try:
+        # 메인 애플리케이션 로직
+        await run_application()
+    
+    except MemoryError as e:
+        await handle_critical_system_error(e, "memory_manager", {"available_memory": get_available_memory()})
+    
+    except SystemExit as e:
+        await handle_critical_system_error(e, "system", {"exit_code": e.code})
+    
+    except Exception as e:
+        # 예상치 못한 치명적 에러
+        if is_critical_error(e):
+            await handle_critical_system_error(e, "application", {"operation": "main"})
+        else:
+            # 일반 에러는 로깅만
+            logger.error(f"Non-critical error: {e}")
+
+def is_critical_error(error: Exception) -> bool:
+    """치명적 에러 여부 판단"""
+    critical_types = [MemoryError, SystemError, OSError]
+    critical_keywords = ["corruption", "fatal", "disk full", "permission denied"]
+    
+    if any(isinstance(error, error_type) for error_type in critical_types):
+        return True
+    
+    error_message = str(error).lower()
+    return any(keyword in error_message for keyword in critical_keywords)
+]]></correct-example>
+<incorrect-example title="기본 예외 처리" conditions="복구 불가능한 에러 발생" expected-result="데이터 손실 방지" incorrectness-criteria="안전한 종료 절차 누락"><![CDATA[
+def main_application():
+    """기본적인 예외 처리 (위험)"""
+    try:
+        run_application()
+    except Exception as e:
+        # 상태 저장, 리소스 정리, 안전한 종료 없이 바로 종료
+        print(f"Error: {e}")
+        sys.exit(1)
+]]></incorrect-example>
+</example>
+</examples>
+</non-negotiable>
+</requirements>
+
+<context description="에러 처리 컨텍스트">
+Decepticon은 복잡한 멀티 에이전트 시스템으로, 다양한 외부 의존성과 상호작용합니다.
+안정적인 동작을 위해서는 예측 가능한 에러와 예상치 못한 에러 모두에 대한 강건한 처리가 필요합니다.
+사용자 경험을 위해 기술적인 에러를 이해하기 쉬운 메시지로 변환하고, 가능한 복구 방법을 제시해야 합니다.
+</context>
+
+<references>
+<reference as="dependency" href=".cursor/rules/main-project-rules.mdc" reason="기본 프로젝트 규칙">메인 프로젝트 규칙</reference>
+<reference as="context" href=".cursor/rules/async-patterns.mdc" reason="비동기 에러 처리">비동기 프로그래밍 패턴</reference>
+<reference as="context" href=".cursor/rules/ai-agents.mdc" reason="에이전트 에러 처리">AI 에이전트 개발 규칙</reference>
+</references>
+</rule>

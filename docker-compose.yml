@@ -11,9 +11,7 @@ services:
     volumes:
       - ./data:/root/data  # 원하는 디렉토리 마운트
     network_mode: host
-    ports:
-      - "8080:8080"       # 외부에서 Gotty 터미널에 접근하기 위한 포트 매핑
-
+        
   metasploitable2:
     image: tleemcjr/metasploitable2
     container_name: victim

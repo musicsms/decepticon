@@ -48,7 +48,6 @@
 
 <details>
 <summary><strong>📚 Table of Contents</strong></summary>
-
 - [💡 Community Contribution ](#-community-contribution)
 - [💡 What is Vibe Hacking ?](#-what-is-vibe-hacking-)
 - [💡 Why Decepticon?](#-why-decepticon)
@@ -135,7 +134,7 @@ uv pip install -e .
 cp .env.example .env
 ```
 
-### 3. Docker
+### 3. Docker (10m ~ 20m)
 ```bash
 docker-compose up -d --build
 ```

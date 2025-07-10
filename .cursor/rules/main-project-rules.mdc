@@ -1,0 +1,185 @@
+---
+description: Decepticon 프로젝트 메인 개발 규칙 및 코딩 스탠다드
+globs: "**/*.py"
+alwaysApply: true
+---
+
+<rule>
+<meta>
+<title>Decepticon Project Main Development Rules</title>
+<description>Decepticon AI 기반 레드팀 테스팅 프레임워크의 핵심 개발 규칙</description>
+<created-at utc-timestamp="1720684800">2025-07-08, 11:00 AM KST</created-at>
+<last-updated-at utc-timestamp="1720684800">2025-07-08, 11:00 AM KST</last-updated-at>
+<applies-to>
+<file-matcher glob="**/*.py">모든 Python 파일</file-matcher>
+<file-matcher glob="*.py">루트 레벨 Python 파일</file-matcher>
+</applies-to>
+</meta>
+
+<requirements>
+<requirement priority="critical">
+<description>Python 3.11+ 호환성을 유지하고 타입 힌트를 필수로 사용한다.</description>
+<examples>
+<example title="타입 힌트 사용">
+<correct-example title="완전한 타입 힌트" conditions="함수 정의" expected-result="타입 안전성 확보" correctness-criteria="모든 매개변수와 반환값에 타입 지정"><![CDATA[
+from typing import Dict, List, Optional, Any
+from datetime import datetime
+
+async def execute_workflow(
+    user_input: str, 
+    config: Dict[str, Any], 
+    timeout: Optional[float] = None
+) -> Dict[str, Any]:
+    """워크플로우 실행"""
+    result = await process_input(user_input)
+    return {"status": "success", "data": result}
+]]></correct-example>
+<incorrect-example title="타입 힌트 누락" conditions="함수 정의" expected-result="타입 안전성 확보" incorrectness-criteria="타입 힌트 누락"><![CDATA[
+def execute_workflow(user_input, config, timeout=None):
+    """워크플로우 실행"""
+    result = process_input(user_input)
+    return {"status": "success", "data": result}
+]]></incorrect-example>
+</example>
+</examples>
+</requirement>
+
+<requirement priority="high">
+<description>모든 비동기 함수는 async/await 패턴을 올바르게 사용한다.</description>
+<examples>
+<example title="비동기 함수 패턴">
+<correct-example title="올바른 async/await 사용" conditions="비동기 함수 작성" expected-result="비동기 패턴 준수" correctness-criteria="async 함수에서 await 사용"><![CDATA[
+async def process_mcp_tools(agent_name: str) -> List[Any]:
+    """MCP 도구 비동기 로드"""
+    tools = []
+    async for tool in client.get_tools():
+        result = await tool.execute()
+        tools.append(result)
+    return tools
+]]></correct-example>
+<incorrect-example title="동기 호출 사용" conditions="비동기 함수 작성" expected-result="비동기 패턴 준수" incorrectness-criteria="async 함수에서 동기 호출"><![CDATA[
+async def process_mcp_tools(agent_name: str) -> List[Any]:
+    """MCP 도구 동기 로드"""
+    tools = []
+    for tool in client.get_tools():  # await 누락
+        result = tool.execute()  # await 누락
+        tools.append(result)
+    return tools
+]]></incorrect-example>
+</example>
+</examples>
+</requirement>
+
+<requirement priority="high">
+<description>환경 변수와 설정은 .env 파일과 설정 관리자를 통해 관리한다.</description>
+<examples>
+<example title="설정 관리">
+<correct-example title="올바른 설정 로드" conditions="환경 설정 접근" expected-result="안전한 설정 관리" correctness-criteria="설정 관리자 사용"><![CDATA[
+from dotenv import load_dotenv
+from src.utils.llm.config_manager import get_current_llm_config
+
+load_dotenv()
+
+def get_api_configuration() -> Dict[str, str]:
+    """API 설정 안전하게 로드"""
+    config = get_current_llm_config()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("API key not found in environment")
+    return {"api_key": api_key, "model": config.model_name}
+]]></correct-example>
+<incorrect-example title="하드코딩된 설정" conditions="환경 설정 접근" expected-result="안전한 설정 관리" incorrectness-criteria="하드코딩된 값 사용"><![CDATA[
+def get_api_configuration() -> Dict[str, str]:
+    """하드코딩된 설정"""
+    api_key = "sk-abc123..."  # 하드코딩된 API 키
+    model = "gpt-4"  # 하드코딩된 모델명
+    return {"api_key": api_key, "model": model}
+]]></incorrect-example>
+</example>
+</examples>
+</requirement>
+
+<non-negotiable priority="critical">
+<description>보안에 민감한 정보는 절대로 하드코딩하지 않는다.</description>
+<examples>
+<example title="보안 정보 관리">
+<correct-example title="환경 변수 사용" conditions="API 키 관리" expected-result="보안 준수" correctness-criteria="환경 변수 사용"><![CDATA[
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class SecurityConfig:
+    def __init__(self):
+        self.api_keys = {
+            "openai": os.getenv("OPENAI_API_KEY"),
+            "anthropic": os.getenv("ANTHROPIC_API_KEY")
+        }
+        self._validate_keys()
+    
+    def _validate_keys(self):
+        for provider, key in self.api_keys.items():
+            if not key:
+                raise ValueError(f"{provider} API key not found")
+]]></correct-example>
+<incorrect-example title="하드코딩된 키" conditions="API 키 관리" expected-result="보안 준수" incorrectness-criteria="하드코딩된 보안 정보"><![CDATA[
+class SecurityConfig:
+    def __init__(self):
+        self.api_keys = {
+            "openai": "sk-abc123...",  # 하드코딩된 API 키
+            "anthropic": "sk-ant-..."  # 하드코딩된 API 키
+        }
+]]></incorrect-example>
+</example>
+</examples>
+</non-negotiable>
+
+<requirement priority="medium">
+<description>Rich Console을 사용하여 CLI 출력을 아름답게 표시한다.</description>
+<examples>
+<example title="Rich Console 사용">
+<correct-example title="Rich를 사용한 출력" conditions="CLI 메시지 출력" expected-result="아름다운 콘솔 출력" correctness-criteria="Rich Panel과 색상 사용"><![CDATA[
+from rich.console import Console
+from rich.panel import Panel
+from rich import box
+
+console = Console()
+
+def display_success_message(message: str, details: Optional[str] = None):
+    """성공 메시지 표시"""
+    content = f"[bold green]✅ {message}[/bold green]"
+    if details:
+        content += f"\n\n[dim]{details}[/dim]"
+    
+    panel = Panel(
+        content,
+        box=box.ROUNDED,
+        border_style="green",
+        title="[bold green]Success[/bold green]"
+    )
+    console.print(panel)
+]]></correct-example>
+<incorrect-example title="기본 print 사용" conditions="CLI 메시지 출력" expected-result="아름다운 콘솔 출력" incorrectness-criteria="Rich 미사용"><![CDATA[
+def display_success_message(message: str, details: Optional[str] = None):
+    """기본 출력"""
+    print(f"Success: {message}")
+    if details:
+        print(f"Details: {details}")
+]]></incorrect-example>
+</example>
+</examples>
+</requirement>
+</requirements>
+
+<context description="Decepticon 프로젝트 컨텍스트">
+Decepticon은 AI 기반 레드팀 테스팅 프레임워크로, LangChain/LangGraph를 활용한 멀티 에이전트 시스템입니다. 
+프로젝트는 보안 테스팅 자동화에 초점을 맞추고 있으며, MCP(Modular Command Protocol)를 통해 다양한 보안 도구들을 통합합니다.
+코드는 타입 안전성, 비동기 처리, 보안, 그리고 사용자 경험을 중시합니다.
+</context>
+
+<references>
+<reference as="dependency" href=".cursor/rules/langchain-langgraph.mdc" reason="LangChain/LangGraph 특화 규칙">LangChain/LangGraph 개발 규칙</reference>
+<reference as="dependency" href=".cursor/rules/async-patterns.mdc" reason="비동기 프로그래밍 패턴">비동기 코딩 패턴</reference>
+<reference as="dependency" href=".cursor/rules/security-pentesting.mdc" reason="보안 및 펜테스팅 규칙">보안 개발 규칙</reference>
+</references>
+</rule>
