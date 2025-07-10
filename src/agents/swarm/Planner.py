@@ -13,7 +13,7 @@ async def make_planner_agent():
     # 메모리에서 LLM 로드 (없으면 기본값 사용)
     llm = get_current_llm()
     if llm is None:
-        llm = ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=0)
+        llm = ChatAnthropic(model_name="claude-3-5-sonnet-latest", temperature=0, timeout=60, stop=None)
         print("Warning: Using default LLM model (Claude 3.5 Sonnet)")
     
     # 중앙 집중식 store 사용

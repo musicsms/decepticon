@@ -5,14 +5,15 @@ from src.prompts.prompt_loader import load_prompt
 from src.tools.handoff import handoff_to_planner, handoff_to_reconnaissance, handoff_to_summary
 from src.utils.llm.config_manager import get_current_llm
 from src.utils.memory import get_store 
-
+from langchain_anthropic import ChatAnthropic
 from src.utils.mcp.mcp_loader import load_mcp_tools
 
 async def make_initaccess_agent():
     llm = get_current_llm()
+    
+    # None 체크 추가 (주석 해제 권장)
     if llm is None:
-        from langchain_anthropic import ChatAnthropic
-        llm = ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=0)
+        llm = ChatAnthropic(model_name="claude-3-5-sonnet-latest", temperature=0, timeout=60, stop=None)
         print("Warning: Using default LLM model (Claude 3.5 Sonnet)")
     
     # 중앙 집중식 store 사용
@@ -34,13 +35,10 @@ async def make_initaccess_agent():
     tools = mcp_tools + swarm_tools + mem_tools
 
     agent = create_react_agent(
-        llm,
+        model=llm,  # 🔥 매개변수 이름 명시
         tools=tools,
         store=store,
         name="Initial_Access",
         prompt=load_prompt("initial_access", "swarm"),
     )
     return agent
-
-
-

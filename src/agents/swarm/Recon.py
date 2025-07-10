@@ -14,7 +14,7 @@ async def make_recon_agent():
     llm = get_current_llm()
     if llm is None:
         from langchain_anthropic import ChatAnthropic
-        llm = ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=0)
+        llm = ChatAnthropic(model_name="claude-3-5-sonnet-latest", temperature=0, timeout=60, stop=None)
         print("Warning: Using default LLM model (Claude 3.5 Sonnet)")
     
     # 중앙 집중식 store 사용
