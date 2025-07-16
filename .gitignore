@@ -7,6 +7,7 @@ logs/
 data/
 tests/
 backup/
+pages/
 
 # Python byte-compiled files
 __pycache__/

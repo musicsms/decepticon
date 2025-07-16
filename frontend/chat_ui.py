@@ -36,17 +36,6 @@ class ChatUI:
         except Exception as e:
             print(f"Error loading CSS: {e}")
     
-    def format_timestamp(self, timestamp=None):
-        """현재 시간 또는 주어진 타임스탬프를 포맷팅"""
-        if timestamp:
-            try:
-                dt = datetime.fromisoformat(timestamp)
-                return dt.strftime("%H:%M:%S")
-            except (ValueError, TypeError):
-                pass
-        return datetime.now().strftime("%H:%M:%S")
-    
-
 
     def simulate_typing(self, text, placeholder, speed=0.005):
         """타이핑 애니메이션 시뮬레이션"""

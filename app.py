@@ -1,14 +1,14 @@
-# .env 파일 로드
-from dotenv import load_dotenv
-load_dotenv()
 import streamlit as st
 import time
 import os
 import asyncio
 import uuid
 from datetime import datetime
+from dotenv import load_dotenv
 import hashlib
 
+# .env 파일 로드
+load_dotenv()
 
 # persistence 설정 추가
 from src.utils.memory import (
@@ -46,7 +46,7 @@ theme_manager = st.session_state.theme_manager
 theme_manager.apply_theme()
 
 # 직접 실행 모듈 import
-from src.utils.executor import Executor
+from frontend.executor import DirectExecutor
 from frontend.message import CLIMessageProcessor
 from frontend.chat_ui import ChatUI
 from frontend.terminal_ui import TerminalUI
@@ -58,7 +58,6 @@ from frontend.components.chat_replay import ReplayManager
 terminal_ui = TerminalUI()
 terminal_ui.apply_terminal_css()
 
-os.environ.get("LANGSMITH_API_KEY")
 
 def get_env_config() -> dict:
     """환경 설정 로드"""
@@ -66,7 +65,7 @@ def get_env_config() -> dict:
         "debug_mode": os.getenv("DEBUG_MODE", "false").lower() == "true",
         "theme": os.getenv("THEME", "dark"),
         "docker_container": os.getenv("DOCKER_CONTAINER", "decepticon-kali"),
-        "chat_height": int(os.getenv("CHAT_HEIGHT", "700")),
+        "chat_height": int(os.getenv("CHAT_HEIGHT", "700"))
     }
 
 
@@ -112,7 +111,7 @@ class DecepticonApp:
         defaults = {
             "executor_ready": False,
             "messages": [],
-            "frontend_messages": [],
+            "structured_messages": [],
             "terminal_messages": [],
             "current_model": None,
             "workflow_running": False,
@@ -170,12 +169,12 @@ class DecepticonApp:
             log_debug("Minimal logger initialized")
     
     def _setup_executor(self):
-        """Executor 설정"""
-        if "executor" not in st.session_state:
-            st.session_state.executor = Executor()
-            log_debug("Executor created and stored in session state")
+        """DirectExecutor 설정"""
+        if "direct_executor" not in st.session_state:
+            st.session_state.direct_executor = DirectExecutor()
+            log_debug("DirectExecutor created and stored in session state")
         
-        self.executor = st.session_state.executor
+        self.executor = st.session_state.direct_executor
         
         if self.executor.is_ready() != st.session_state.executor_ready:
             st.session_state.executor_ready = self.executor.is_ready()
@@ -192,7 +191,7 @@ class DecepticonApp:
         import time
         
         reset_keys = [
-            "executor_ready", "messages", "frontend_messages", "terminal_messages",
+            "executor_ready", "messages", "structured_messages", "terminal_messages",
             "workflow_running", "active_agent", "completed_agents", "current_step",
             "agent_status_placeholders", "terminal_placeholder", "event_history",
             "initialization_in_progress", "initialization_error", "current_model"
@@ -205,7 +204,7 @@ class DecepticonApp:
             if key in st.session_state:
                 if key in ["agent_status_placeholders"]:
                     st.session_state[key] = {}
-                elif key in ["messages", "frontend_messages", "terminal_messages", 
+                elif key in ["messages", "structured_messages", "terminal_messages", 
                            "completed_agents", "event_history"]:
                     st.session_state[key] = []
                 elif key in ["current_step"]:
@@ -237,17 +236,17 @@ class DecepticonApp:
         # 모델 선택 단계로 돌아가기
         st.session_state.app_stage = "model_selection"
         
-        # Executor 재생성
-        st.session_state.executor = Executor()
-        self.executor = st.session_state.executor
+        # DirectExecutor 재생성
+        st.session_state.direct_executor = DirectExecutor()
+        self.executor = st.session_state.direct_executor
         
         log_debug("Session reset completed - including terminal UI cleanup")
         st.rerun()
     
     async def initialize_executor_async(self, model_info=None):
-        """비동기 실행기 초기화 """
+        """비동기 실행기 초기화"""
         try:
-            log_debug(f"Starting optimized async executor initialization with model: {model_info}")
+            log_debug(f"Starting async executor initialization with model: {model_info}")
             
             # 로거 초기화 확인 (안전 장치)
             if "logger" not in st.session_state or st.session_state.logger is None:
@@ -261,7 +260,6 @@ class DecepticonApp:
             st.session_state.logging_session_id = session_id
             log_debug(f"Started logging session: {session_id} with model: {model_display_name}")
             
-            # 대기 시간 없이 바로 초기화 시작
             if model_info:
                 await self.executor.initialize_swarm(model_info)
                 st.session_state.current_model = model_info
@@ -274,7 +272,7 @@ class DecepticonApp:
             st.session_state.initialization_in_progress = False
             st.session_state.initialization_error = None
             
-            log_debug("Optimized executor initialization completed successfully")
+            log_debug("Executor initialization completed successfully")
             return True
             
         except Exception as e:
@@ -287,6 +285,11 @@ class DecepticonApp:
             
             return False
     
+    # toggle_controls 메서드는 더 이상 사용하지 않으므로 제거하거나 유지
+    def toggle_controls(self):
+        """컨트롤 패널 토글 (레거시 - 새 UI에서는 사용하지 않음)"""
+        st.session_state.show_controls = not st.session_state.show_controls
+        log_debug(f"Controls toggled: {st.session_state.show_controls}")
     
     def set_debug_mode(self, mode):
         """디버그 모드 설정"""
@@ -350,7 +353,7 @@ class DecepticonApp:
         st.session_state.logger.log_user_input(user_input)
         
         user_message = self.message_processor._create_user_message(user_input)
-        st.session_state.frontend_messages.append(user_message)
+        st.session_state.structured_messages.append(user_message)
         
         with chat_area:
             self.chat_ui.display_user_message(user_input)
@@ -380,9 +383,9 @@ class DecepticonApp:
                             frontend_message = self.message_processor.process_cli_event(event)
                             
                             if not self.message_processor.is_duplicate_message(
-                                frontend_message, st.session_state.frontend_messages
+                                frontend_message, st.session_state.structured_messages
                             ):
-                                st.session_state.frontend_messages.append(frontend_message)
+                                st.session_state.structured_messages.append(frontend_message)
                                 
                                 agent_name = event.get("agent_name", "Unknown")
                                 message_type = event.get("message_type", "unknown")
@@ -422,13 +425,8 @@ class DecepticonApp:
                                 
                                 if frontend_message.get("type") == "tool":
                                     st.session_state.terminal_messages.append(frontend_message)
-                                    # 터미널 플레이스홀더가 존재하는지 확인 후 메시지 처리
                                     if st.session_state.terminal_placeholder:
-                                        try:
-                                            self.terminal_ui.process_frontend_messages([frontend_message])
-                                        except Exception as e:
-                                            log_debug(f"Error updating terminal during workflow: {e}")
-                                            # 에러 시 나중에 대상 메시지로 재처리되도록 남겨둘기
+                                        self.terminal_ui.process_structured_messages([frontend_message])
                         
                         elif event_type == "workflow_complete":
                             status.update(label="Processing complete!", state="complete")
@@ -484,32 +482,58 @@ class DecepticonApp:
         selected_model = self.model_ui.display_model_selection_ui()
         
         if selected_model:
-            # col2 레이아웃에 맞췄 실제 초기화 진행
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                with st.spinner(f"Initializing {selected_model['display_name']} for red team operations..."):
-                    async def init_and_proceed():
-                        try:
-                            success = await self.initialize_executor_async(selected_model)
-                            
-                            if success:
-                                st.session_state.app_stage = "main_app"
-                                st.success(f"{selected_model['display_name']} initialized successfully!")
-                                time.sleep(0.8)  # 짧은 대기 시간
-                                st.rerun()
-                            else:
-                                # 실패 시 에러 메시지
-                                st.error(f"Failed to initialize {selected_model['display_name']}")
-                                if st.session_state.initialization_error:
-                                    st.error(st.session_state.initialization_error)
-                        
-                        except Exception as e:
-                            st.error(f"Initialization error: {str(e)}")
+            # model.py에서 이미 스피너와 성공 메시지를 처리했으므로
+            # 여기서는 바로 초기화만 진행
+            async def init_and_proceed():
+                try:
+                    success = await self.initialize_executor_async(selected_model)
                     
-                    asyncio.run(init_and_proceed())
+                    if success:
+                        st.session_state.app_stage = "main_app"
+                        st.rerun()
+                    else:
+                        # 실패 시에만 에러 메시지 (model.py에서 이미 표시했을 수도 있음)
+                        if st.session_state.initialization_error:
+                            st.error(st.session_state.initialization_error)
+                
+                except Exception as e:
+                    st.error(f"Initialization error: {str(e)}")
+            
+            asyncio.run(init_and_proceed())
 
-    def _display_current_model_info(self, sidebar):
-        """현재 모델 정보 표시"""
+
+
+
+    def run_main_app(self):
+        """메인 애플리케이션 실행"""
+        current_theme = self.theme_manager.get_current_theme()
+        log_debug(f"Running Decepticon with theme: {current_theme}")
+
+        st.logo(
+            ICON_TEXT,
+            icon_image=ICON,
+            size="large",
+            link="https://purplelab.framer.ai"
+        )
+
+        st.title(":red[Decepticon]")
+
+        # 사이드바 설정 - 현대적인 AI UI/UX 스타일
+        sidebar = st.sidebar
+
+        # 🧠 Agent Status (타이틀 없이, 최상단)
+        with sidebar.container():
+            agents_container = st.container()
+            self.chat_ui.display_agent_status(
+                agents_container,
+                st.session_state.active_agent,
+                None,
+                st.session_state.completed_agents
+            )
+
+        sidebar.divider()
+
+        # 🤖 현재 모델 정보 (모던한 블랙테마 스타일)
         with sidebar.container():
             if st.session_state.current_model:
                 model_name = st.session_state.current_model.get('display_name', 'Unknown Model')
@@ -622,24 +646,26 @@ class DecepticonApp:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-    
-    def _display_action_buttons(self, sidebar):
-        """주요 액션 버튼들 표시"""
+
+        sidebar.divider()
+
+        # 주요 액션 버튼들 (타이틀 없이, 균일한 크기)
         with sidebar.container():
-            # 모든 버튼을 동일한 크기로 - CSS 클래스 추가로 테마 적용 보장
-            if st.button("🔁 Change Model", use_container_width=True, help="Switch to a different AI model", key="change_model_btn"):
+            # 모든 버튼을 동일한 크기로
+            if st.button("🔁 Change Model", use_container_width=True, help="Switch to a different AI model"):
                 st.session_state.app_stage = "model_selection"
                 st.rerun()
                 
-            if st.button("💬 Chat History", use_container_width=True, help="View conversation history and logs", key="chat_history_btn"):
+            if st.button("💬 Chat History", use_container_width=True, help="View conversation history and logs"):
                 st.session_state.app_stage = "log_manager"
                 st.rerun()
             
-            if st.button("✨ New Chat", use_container_width=True, help="Start a fresh conversation", key="new_chat_btn"):
+            if st.button("✨ New Chat", use_container_width=True, help="Start a fresh conversation"):
                 self.reset_session()
-    
-    def _display_settings_and_debug(self, sidebar):
-        """설정 및 디버그 옵션 표시"""
+
+        sidebar.divider()
+
+        # ⚙️ Settings & Debug
         with sidebar.container():
             st.markdown("### ⚙️ Settings")
             
@@ -654,11 +680,11 @@ class DecepticonApp:
             )
             self.set_debug_mode(debug_mode)
             
-            # 간단한 통계 정보 
+            # 간단한 통계 정보 (컴팩트하게)
             with st.expander("📊 Session Stats", expanded=False):
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.metric("Messages", len(st.session_state.frontend_messages))
+                    st.metric("Messages", len(st.session_state.structured_messages))
                     st.metric("Events", len(st.session_state.event_history))
                 with col2:
                     st.metric("Steps", st.session_state.current_step)
@@ -688,54 +714,6 @@ class DecepticonApp:
                             "events_count": len(current_session.events),
                         }
                         st.json(logging_info)
-                    
-                        
-                    
-                
-
-
-
-
-    def run_main_app(self):
-        """메인 애플리케이션 실행"""
-        current_theme = self.theme_manager.get_current_theme()
-        log_debug(f"Running Decepticon with theme: {current_theme}")
-
-        st.logo(
-            ICON_TEXT,
-            icon_image=ICON,
-            size="large",
-            link="https://purplelab.framer.ai"
-        )
-
-        st.title(":red[Decepticon]")
-
-        # 사이드바 설정 
-        sidebar = st.sidebar
-
-        with sidebar.container():
-            agents_container = st.container()
-            self.chat_ui.display_agent_status(
-                agents_container,
-                st.session_state.active_agent,
-                None,
-                st.session_state.completed_agents
-            )
-
-        sidebar.divider()
-
-        # 현재 모델 정보 
-        self._display_current_model_info(sidebar)
-
-        sidebar.divider()
-
-        # 주요 액션 버튼들 (타이틀 없이, 균일한 크기)
-        self._display_action_buttons(sidebar)
-
-        sidebar.divider()
-
-        # ⚙️ Settings & Debug
-        self._display_settings_and_debug(sidebar)
 
         # 레이아웃: 두 개의 열로 분할 (채팅과 터미널)
         chat_column, terminal_column = st.columns([2, 1])
@@ -750,21 +728,11 @@ class DecepticonApp:
                 # 터미널 UI 청소
                 self.terminal_ui.clear_terminal()
                 
-            # 터미널 컨테이너 생성 (항상 새로 생성)
             st.session_state.terminal_placeholder = self.terminal_ui.create_terminal(terminal_column)
 
             # 저장된 터미널 메시지 복원 (재현 모드에서도 올바르게 동작)
             if st.session_state.terminal_messages:
-                try:
-                    self.terminal_ui.process_frontend_messages(st.session_state.terminal_messages)
-                except Exception as e:
-                    log_debug(f"Error processing terminal messages: {e}")
-                    # 에러 시 터미널 클리어 후 다시 시도
-                    self.terminal_ui.clear_terminal()
-                    try:
-                        self.terminal_ui.process_frontend_messages(st.session_state.terminal_messages)
-                    except Exception as e2:
-                        log_debug(f"Second attempt failed: {e2}")
+                self.terminal_ui.process_structured_messages(st.session_state.terminal_messages)
 
         # 채팅 영역 처리
         with chat_column:
@@ -786,18 +754,9 @@ class DecepticonApp:
                             log_debug("Replay completed - updating terminal UI with all tool messages")
                             # 재현 완료 후 모든 터미널 메시지를 한 번에 업데이트
                             if st.session_state.terminal_messages and st.session_state.terminal_placeholder:
-                                try:
-                                    # 기존 터미널 클리어 후 새 메시지들 추가
-                                    self.terminal_ui.clear_terminal()
-                                    self.terminal_ui.process_frontend_messages(st.session_state.terminal_messages)
-                                except Exception as e:
-                                    log_debug(f"Error updating terminal during replay: {e}")
-                                    # 에러 시 터미널 재생성 시도
-                                    try:
-                                        st.session_state.terminal_placeholder = self.terminal_ui.create_terminal(terminal_column)
-                                        self.terminal_ui.process_frontend_messages(st.session_state.terminal_messages)
-                                    except Exception as e2:
-                                        log_debug(f"Terminal recreation failed: {e2}")
+                                # 기존 터미널 클리어 후 새 메시지들 추가
+                                self.terminal_ui.clear_terminal()
+                                self.terminal_ui.process_structured_messages(st.session_state.terminal_messages)
                         else:
                             # 재생 실패 시 에러 처리
                             st.error("Failed to start replay.")
@@ -814,9 +773,9 @@ class DecepticonApp:
                         st.warning("Debug Mode: Event data will be displayed during processing")
 
                     if not st.session_state.workflow_running:
-                        self.chat_ui.display_messages(st.session_state.frontend_messages, messages_area)
+                        self.chat_ui.display_messages(st.session_state.structured_messages, messages_area)
 
-            # 사용자 입력 처리
+            # 사용자 입력 처리 (chat_container 밖에서) - 디버깅 강화
             replay_mode = self.chat_replay.is_replay_mode()
             replay_completed = st.session_state.get("replay_completed", False)
             
@@ -849,7 +808,7 @@ class DecepticonApp:
                         st.session_state.pop("replay_completed", None)
                         
                         # 메시지 및 채팅 관련 상태 초기화
-                        st.session_state.frontend_messages = []
+                        st.session_state.structured_messages = []
                         st.session_state.terminal_messages = []
                         st.session_state.event_history = []
                         st.session_state.active_agent = None
@@ -884,9 +843,9 @@ class DecepticonApp:
                         import time
                         st.session_state.session_start_time = time.time()
                         
-                        # Executor 재초기화 (새로운 thread_id로)
-                        st.session_state.executor = Executor()
-                        self.executor = st.session_state.executor
+                        # DirectExecutor 재초기화 (새로운 thread_id로)
+                        st.session_state.direct_executor = DirectExecutor()
+                        self.executor = st.session_state.direct_executor
                         
                         # Executor를 현재 모델로 재초기화 (새로운 thread_config 사용)
                         current_model = st.session_state.get('current_model')
@@ -896,7 +855,7 @@ class DecepticonApp:
                                 thread_config=st.session_state.thread_config  # 새로운 thread_config 전달
                             ))
                             st.session_state.executor_ready = True
-                            log_debug(f"Executor reinitialized with new thread_config and model: {current_model['display_name']}")
+                            log_debug(f"DirectExecutor reinitialized with new thread_config and model: {current_model['display_name']}")
                         
                         # 현재 로깅 세션 종료 및 새 세션 시작 - 모델 정보 포함
                         if hasattr(st.session_state, 'logger') and st.session_state.logger and st.session_state.logger.current_session:
@@ -926,8 +885,7 @@ class DecepticonApp:
                     st.empty()
 
     def run_log_manager(self):
-        """로그 관리 화면 실행 - 사이드바는 CSS로 숨김"""
-        # 로그 관리 UI 표시 (로고는 LogManagerUI에서 처리)
+        """로그 관리 화면 실행"""
         self.log_manager_ui.display_log_page()
     
     def run(self):
