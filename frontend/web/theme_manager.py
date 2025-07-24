@@ -2,17 +2,23 @@ import streamlit as st
 import toml
 from pathlib import Path
 
+base_path = Path(__file__).parent
+while not (base_path / "pyproject.toml").exists() and base_path.parent != base_path:
+    base_path = base_path.parent
+
+
 class ThemeManager:
     """테마 관리 클래스"""
     
     def __init__(self):
         """테마 매니저 초기화"""
-        self.static_dir = Path(__file__).parent.parent / "static"
-        self.config_dir = Path(__file__).parent.parent / ".streamlit"
-        self.dark_theme_css = self.static_dir / "dark_theme.css"
-        self.light_theme_css = self.static_dir / "light_theme.css"
-        self.dark_theme_toml = self.static_dir / "dark_theme.toml"
-        self.light_theme_toml = self.static_dir / "light_theme.toml"
+        self.static_dir = base_path / "frontend" / "static"
+        self.config_dir = base_path / ".streamlit"
+        self.css_dir = base_path / "frontend" / "static" / "css"
+        self.dark_theme_css = self.css_dir / "dark_theme.css"
+        self.light_theme_css = self.css_dir / "light_theme.css"
+        self.dark_theme_toml = self.css_dir / "dark_theme.toml"
+        self.light_theme_toml = self.css_dir / "light_theme.toml"
         self.config_toml = self.config_dir / "config.toml"
         
         # 세션 상태 초기화
@@ -31,19 +37,14 @@ class ThemeManager:
             self.light_theme_toml
         ]
         
-        # CSS 디렉토리 확인
-        css_dir = self.static_dir / "css"
-        if not css_dir.exists():
-            css_dir.mkdir(parents=True, exist_ok=True)
-            print(f"Created CSS directory: {css_dir}")
         
         # 필수 CSS 파일 확인
         required_css_files = [
-            css_dir / "terminal.css",
-            css_dir / "chat_ui.css",
-            css_dir / "agent_status.css",
-            css_dir / "layout.css",
-            css_dir / "input_fix.css"
+            self.css_dir / "terminal.css",
+            self.css_dir / "chat_ui.css",
+            self.css_dir / "agent_status.css",
+            self.css_dir / "layout.css",
+            self.css_dir / "input_fix.css"
         ]
         
         for file in required_files + required_css_files:

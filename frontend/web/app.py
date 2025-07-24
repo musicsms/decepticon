@@ -6,7 +6,8 @@ import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 import hashlib
-
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 # .env 파일 로드
 load_dotenv()
 
@@ -33,7 +34,7 @@ st.set_page_config(
 )
 
 # 테마 관리자 임포트 
-from frontend.theme_manager import ThemeManager
+from frontend.web.theme_manager import ThemeManager
 
 # 테마 매니저 생성 및 세션 초기화
 if "theme_manager" not in st.session_state:
@@ -46,13 +47,13 @@ theme_manager = st.session_state.theme_manager
 theme_manager.apply_theme()
 
 # 직접 실행 모듈 import
-from frontend.executor import DirectExecutor
-from frontend.message import CLIMessageProcessor
-from frontend.chat_ui import ChatUI
-from frontend.terminal_ui import TerminalUI
-from frontend.model_selection_ui import ModelSelectionUI
-from frontend.components.log_manager import LogManagerUI
-from frontend.components.chat_replay import ReplayManager
+from frontend.web.executor import DirectExecutor
+from frontend.web.message import CLIMessageProcessor
+from frontend.web.chat_ui import ChatUI
+from frontend.web.terminal_ui import TerminalUI
+from frontend.web.model_selection_ui import ModelSelectionUI
+from frontend.web.components.log_manager import LogManagerUI
+from frontend.web.components.chat_replay import ReplayManager
 
 # 터미널 UI CSS 적용
 terminal_ui = TerminalUI()

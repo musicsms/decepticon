@@ -1,8 +1,10 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import re
 from datetime import datetime
 import time
 import os
+from .utils.float import float_css_helper
 
 class TerminalUI:
     """가상 터미널 UI를 관리하는 클래스 - CLI 방식에 맞게 단순화"""
@@ -19,7 +21,7 @@ class TerminalUI:
     
     def apply_terminal_css(self):
         """터미널 CSS 스타일 적용 - static/css에서 로드"""
-        css_path = "static/css/terminal.css"
+        css_path = "frontend/static/css/terminal.css"
         
         try:
             # CSS 파일에서 스타일 로드
@@ -286,3 +288,118 @@ class TerminalUI:
                     # 출력 추가
                     self.add_output(content)
                     self.processed_messages.add(message_id)
+
+
+# ================================
+# 터미널 관련 Helper 함수들
+# ================================
+
+def load_terminal_css():
+    """terminal.css 로드"""
+    css_path = "frontend/static/css/terminal.css"
+    try:
+        with open(css_path, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+    except Exception as e:
+        print(f"Warning: Could not load terminal.css: {e}")
+
+
+def create_floating_terminal(terminal_ui):
+    """플로팅 터미널 생성 - 터미널 UI 초기화 강화"""
+    
+    terminal_container = st.container()
+    
+    with terminal_container:
+        # 터미널 CSS 재적용 (플로팅 전에 적용)
+        terminal_ui.apply_terminal_css()
+        
+        # 터미널 생성 (MAC 헤더는 terminal_ui.create_terminal()에서 처리)
+        terminal_ui.create_terminal(st.container())
+        
+        # 디버깅: 터미널 메시지 상태 확인
+        terminal_messages = st.session_state.get("terminal_messages")
+        structured_messages = st.session_state.get("structured_messages", [])
+        terminal_history = st.session_state.get("terminal_history", [])
+        
+        # 디버깅 정보 표시 (디버그 모드에서만)
+        if st.session_state.get("debug_mode", False):
+            st.write(f"Debug - terminal_messages: {len(terminal_messages) if terminal_messages else 0}")
+            st.write(f"Debug - structured_messages: {len(structured_messages)}")
+            st.write(f"Debug - terminal_history: {len(terminal_history)}")
+            st.write(f"Debug - replay_mode: {st.session_state.get('replay_mode', False)}")
+            if terminal_messages:
+                st.write("Debug - terminal_messages sample:", terminal_messages[:2] if len(terminal_messages) > 0 else "Empty")
+        
+        # 터미널 메시지 복원 - 다양한 소스에서 메시지 처리
+        try:
+            # 1. terminal_messages에서 처리
+            if terminal_messages:
+                terminal_ui.process_structured_messages(terminal_messages)
+            
+            # 2. structured_messages에서 tool 메시지 처리
+            elif structured_messages:  # terminal_messages가 없을 때만
+                tool_messages = [msg for msg in structured_messages if msg.get("type") == "tool"]
+                if tool_messages:
+                    terminal_ui.process_structured_messages(tool_messages)
+                
+        except Exception as e:
+            if st.session_state.get("debug_mode", False):
+                st.error(f"Debug - Terminal message processing error: {e}")
+    
+    # Floating CSS 적용 (높이 제한 추가)
+    terminal_css = float_css_helper(
+        width="350px",
+        height="500px",
+        right="40px",
+        top="50%",
+        transform="translateY(-50%)",
+        z_index="1000",
+        border_radius="12px",
+        box_shadow="0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        backdrop_filter="blur(16px)",
+        background="linear-gradient(145deg, #1f2937 0%, #111827 100%)",
+        border="1px solid #374151",
+        max_height="500px",
+        overflow_y="auto"
+    )
+    
+    terminal_container.float(terminal_css)
+    
+    return terminal_container
+
+
+def create_floating_toggle_button():
+    """플로팅 토글 버튼 생성"""
+    
+    toggle_container = st.container()
+    
+    with toggle_container:
+        # 터미널 상태에 따른 버튼
+        if st.session_state.get("terminal_visible", True):
+            button_text = "💻 Hide Terminal"
+            button_type = "secondary"
+        else:
+            button_text = "💻 Show Terminal"
+            button_type = "primary"
+        
+        # 토글 버튼
+        if st.button(button_text, type=button_type, use_container_width=True):
+            st.session_state.terminal_visible = not st.session_state.get("terminal_visible", True)
+            st.rerun()
+    
+    # Floating CSS 적용
+    toggle_css = float_css_helper(
+        width="140px",
+        right="40px",
+        bottom="20px",
+        z_index="1001",
+        border_radius="12px",
+        box_shadow="0 8px 32px rgba(0,0,0,0.12)",
+        backdrop_filter="blur(16px)",
+        background="rgba(255, 255, 255, 0.9)"
+    )
+    
+    toggle_container.float(toggle_css)
+    
+    return toggle_container

@@ -19,7 +19,7 @@ class ChatUI:
         """스타일 설정"""
         try:
             # 외부 CSS 파일 로드
-            css_path = "static/css/chat_ui.css"
+            css_path = "frontend/static/css/chat_ui.css"
             with open(css_path, "r", encoding="utf-8") as f:
                 chat_css = f.read()
             
@@ -27,7 +27,7 @@ class ChatUI:
             st.html(f"<style>{chat_css}</style>")
             
             # 에이전트 상태 CSS 로드
-            agent_status_css_path = "static/css/agent_status.css"
+            agent_status_css_path = "frontend/static/css/agent_status.css"
             with open(agent_status_css_path, "r", encoding="utf-8") as f:
                 agent_status_css = f.read()
             

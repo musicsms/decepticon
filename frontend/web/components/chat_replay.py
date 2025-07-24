@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 from src.utils.logging.replay import get_replay_system
-from frontend.message import CLIMessageProcessor
+from frontend.web.message import CLIMessageProcessor
 
 class ReplayManager:
     """자동 재생 관리자 - Executor 및 MessageProcessor와 통합"""
@@ -21,8 +21,8 @@ class ReplayManager:
         """재생 모드인지 확인"""
         return st.session_state.get("replay_mode", False)
     
-    def handle_replay_in_main_app(self, chat_area, agents_container, chat_ui) -> bool:
-        """메인 앱에서 재현 처리 - Executor와 통합된 방식"""
+    def handle_replay_in_main_app(self, chat_area, agents_container, chat_ui, terminal_ui) -> bool:
+        """메인 앱에서 재현 처리 - Executor와 통합된 방식 + 터미널 처리"""
         if not self.is_replay_mode():
             return False
         
@@ -33,8 +33,8 @@ class ReplayManager:
         try:
             # 재현 시작
             if self.replay_system.start_replay(replay_session_id):
-                # Executor와 통합된 비동기 재현 실행
-                asyncio.run(self._execute_replay_with_executor(chat_area, agents_container, chat_ui))
+                # Executor와 통합된 비동기 재현 실행 (터미널 UI 포함)
+                asyncio.run(self._execute_replay_with_executor(chat_area, agents_container, chat_ui, terminal_ui))
                 
                 # 재현 완료 후 정리
                 self.replay_system.stop_replay()
@@ -48,8 +48,8 @@ class ReplayManager:
         
         return False
     
-    async def _execute_replay_with_executor(self, chat_area, agents_container, chat_ui):
-        """Executor와 동일한 방식으로 재현 실행"""
+    async def _execute_replay_with_executor(self, chat_area, agents_container, chat_ui, terminal_ui):
+        """Executor와 동일한 방식으로 재현 실행 + 터미널 처리"""
         session = st.session_state.get("replay_session")
         if not session or not session.events:
             return
@@ -104,8 +104,34 @@ class ReplayManager:
             
             # 메시지들을 한번에 세션 상태에 설정 (Executor와 동일한 변수명 사용)
             st.session_state.frontend_messages = replay_messages  # ✅ 올바른 변수명
+            st.session_state.structured_messages = replay_messages  # Chat UI에서 사용하는 변수명
             st.session_state.terminal_messages = terminal_messages
             st.session_state.event_history = event_history
+            
+            # 터미널 UI에 메시지 적용 및 초기화 강화
+            if terminal_ui:
+                try:
+                    # 터미널 CSS 재적용 (리플레이 모드에서 필수)
+                    terminal_ui.apply_terminal_css()
+                    
+                    # 터미널 히스토리 완전 초기화
+                    terminal_ui.clear_terminal()
+                    
+                    # 재현된 터미널 메시지들 처리 (초기 메시지는 추가하지 않음)
+                    if terminal_messages:
+                        terminal_ui.process_structured_messages(terminal_messages)
+                    
+                    # 세션 상태에 터미널 히스토리 저장
+                    st.session_state.terminal_history = terminal_ui.terminal_history
+                    
+                    # 디버그 정보 (디버그 모드에서만)
+                    if st.session_state.get("debug_mode", False):
+                        st.write(f"Debug - Replay terminal processing: {len(terminal_messages)} messages")
+                        st.write(f"Debug - Terminal history after replay: {len(terminal_ui.terminal_history)}")
+                    
+                except Exception as term_error:
+                    st.error(f"Terminal processing error during replay: {term_error}")
+                    print(f"Terminal processing error during replay: {term_error}")
             
             # 에이전트 상태 업데이트 (마지막 에이전트 활성화)
             if agent_activity:
@@ -132,9 +158,12 @@ class ReplayManager:
                         completed_agents
                     )
             
+            # 재현 완료 표시
+            st.session_state.replay_completed = True
+            
             # 완료
             status.update(
-                label=f"✅ Replay Complete! Loaded {len(replay_messages)} messages, {len(agent_activity)} agents active", 
+                label=f"✅ Replay Complete! Loaded {len(replay_messages)} messages, {len(terminal_messages)} terminal events, {len(agent_activity)} agents active", 
                 state="complete"
             )
     
