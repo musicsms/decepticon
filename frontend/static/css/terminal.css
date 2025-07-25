@@ -1,5 +1,33 @@
 /* 터미널 UI 스타일 - 맥 스타일 (테마 대응) */
 
+/* Streamlit 기본 컨테이너 스타일 오버라이드 */
+.terminal-wrapper {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* 터미널 관련 요소들의 Streamlit 기본 스타일 제거 */
+.terminal-wrapper .element-container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.terminal-wrapper [data-testid="stVerticalBlock"] {
+    background: transparent !important;
+    border: none !important;
+    gap: 0 !important;
+}
+
+.terminal-wrapper [data-testid="block-container"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+
 /* 터미널 컨테이너 스타일 - 기본값 (다크 모드 기준) */
 .terminal-container {
     background-color: #1E1E1E;

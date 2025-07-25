@@ -2,7 +2,6 @@ import streamlit as st
 import time
 
 class ModelSelectionUI:
-    """Simple Dropdown Model Selection UI Class"""
     
     def __init__(self, theme_manager):
         """UI initialization"""
@@ -121,7 +120,6 @@ class ModelSelectionUI:
         return default_provider, default_model
 
     def display_model_selection_ui(self):
-        """Simple dropdown-based model selection UI - 헤더 제거, 부모 컴포넌트에서 레이아웃 처리"""
         # 개선된 캐싱: 모델 데이터 로드 (첫 번째만 또는 캐시 만료시)
         cache_key = "models_cache_timestamp"
         cache_duration = 300  # 5분 캐시

@@ -1,5 +1,5 @@
 """
-DirectExecutor 관리 모듈 (리팩토링됨)
+DirectExecutor 관리 모듈
 - DirectExecutor 초기화 및 설정
 - 모델 정보 기반 스웜 초기화
 - 실행기 상태 관리
@@ -14,7 +14,7 @@ import sys
 # 프로젝트 루트 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from frontend.web.core.executor import DirectExecutor
+from web.executor import DirectExecutor
 from src.utils.logging.logger import get_logger
 
 

@@ -1,27 +1,21 @@
-"""
-페이지 공통 유틸리티 모듈
-- 페이지 설정 및 레이아웃
-- 공통 UI 컴포넌트
-- 네비게이션 헬퍼
-"""
-
+from dotenv import load_dotenv
+from web.theme_manager import ThemeManager
 import streamlit as st
 import os
 import sys
 from typing import Optional, Dict, Any
+from web.theme_manager import ThemeManager
+from web.core.app_state import get_app_state_manager
 
 # 프로젝트 루트 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-
-from web.theme_manager import ThemeManager
-from web.core.app_state import get_app_state_manager
 
 # 아이콘 및 이미지 경로
 ICON = "assets/logo.png"
 ICON_TEXT = "assets/logo_text1.png"
 
 
-def setup_page_config(page_title: str = "Decepticon", page_icon: str = "🤖"):
+def setup_page_config(page_title: str = "Decepticon"):
     """페이지 기본 설정"""
     st.set_page_config(
         page_title=page_title,
@@ -41,16 +35,6 @@ def setup_theme():
     theme_manager.apply_theme()
     
     return theme_manager
-
-
-def display_logo(link: str = "https://purplelab.framer.ai"):
-    """로고 표시"""
-    st.logo(
-        ICON_TEXT,
-        icon_image=ICON,
-        size="large",
-        link=link
-    )
 
 
 def display_current_model_info():
@@ -167,6 +151,21 @@ def display_current_model_info():
         </div>
         """, unsafe_allow_html=True)
 
+def display_logo(link: str = "https://purplelab.framer.ai"):
+    """로고 표시"""
+    st.logo(
+        ICON_TEXT,
+        icon_image=ICON,
+        size="large",
+        link=link
+    )
+
+def show_page_header(title: str, subtitle: Optional[str] = None):
+    """페이지 헤더 표시"""
+    display_logo()
+    st.title(title)
+    if subtitle:
+        st.markdown(subtitle)
 
 def create_navigation_sidebar():
     """네비게이션 사이드바 생성"""
@@ -251,14 +250,6 @@ def create_new_chat_button():
         st.rerun()
 
 
-def show_page_header(title: str, subtitle: Optional[str] = None):
-    """페이지 헤더 표시"""
-    display_logo()
-    st.title(title)
-    if subtitle:
-        st.markdown(subtitle)
-
-
 def check_model_required(redirect_page: str = "streamlit_app.py") -> bool:
     """모델이 필요한 페이지에서 모델 선택 여부 확인
     
@@ -292,28 +283,59 @@ def create_loading_spinner(text: str = "Loading..."):
     return st.spinner(text)
 
 
-class PageLayout:
-    """페이지 레이아웃 헬퍼 클래스"""
+
+def get_env_config() -> Dict[str, Any]:
+    """환경 설정 로드"""
+    load_dotenv()
     
-    @staticmethod
-    def two_column_layout(ratio: list = [2, 1]):
-        """2컬럼 레이아웃 생성"""
-        return st.columns(ratio)
+    return {
+        "debug_mode": os.getenv("DEBUG_MODE", "false").lower() == "true",
+        "theme": os.getenv("THEME", "dark"),
+        "docker_container": os.getenv("DOCKER_CONTAINER", "decepticon-kali"),
+        "chat_height": int(os.getenv("CHAT_HEIGHT", "700"))
+    }
+
+
+def log_debug(message: str, data=None):
+    """디버그 로깅"""
+    config = get_env_config()
+    if config.get("debug_mode", False):
+        print(f"[DEBUG] {message}")
+        if data:
+            print(f"[DEBUG] Data: {data}")
+
+
+def validate_environment() -> Dict[str, Any]:
+    """환경 설정 검증"""
+    config = get_env_config()
+    validation_result = {
+        "valid": True,
+        "errors": [],
+        "warnings": [],
+        "config": config
+    }
     
-    @staticmethod
-    def three_column_layout(ratio: list = [1, 2, 1]):
-        """3컬럼 레이아웃 생성"""
-        return st.columns(ratio)
+    # API 키 확인
+    api_keys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"]
+    available_keys = []
     
-    @staticmethod
-    def center_content():
-        """컨텐츠 중앙 정렬용 컬럼 반환"""
-        col1, col2, col3 = st.columns([1, 2, 1])
-        return col2
+    for key in api_keys:
+        value = os.getenv(key)
+        if value and value != "your-api-key":
+            available_keys.append(key)
     
-    @staticmethod
-    def create_container(height: Optional[int] = None, border: bool = False):
-        """컨테이너 생성"""
-        if height:
-            return st.container(height=height, border=border)
-        return st.container(border=border)
+    if not available_keys:
+        validation_result["errors"].append("No API keys configured")
+        validation_result["valid"] = False
+    else:
+        validation_result["warnings"].append(f"Available API keys: {', '.join(available_keys)}")
+    
+    # CLI 모듈 확인
+    try:
+        from src.graphs.swarm import create_dynamic_swarm
+        from src.utils.message import extract_message_content
+    except ImportError as e:
+        validation_result["errors"].append(f"CLI modules not available: {str(e)}")
+        validation_result["valid"] = False
+    
+    return validation_result

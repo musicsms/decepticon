@@ -1,116 +1,131 @@
 """
-워크플로우 실행 처리 모듈
+워크플로우 실행 처리 모듈 (리팩토링됨 - 순수 비즈니스 로직)
 - 사용자 입력 처리
 - 워크플로우 이벤트 스트림 관리
-- 메시지 처리 및 UI 업데이트
+- 메시지 처리 로직
+- UI는 콜백으로 분리됨
 """
 
 import streamlit as st
 import asyncio
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 import os
 import sys
 
 # 프로젝트 루트 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from web.message import CLIMessageProcessor
-from web.core.executor_manager import get_executor_manager
+from frontend.web.core.message_processor import MessageProcessor
+from frontend.web.core.executor_manager import get_executor_manager
 
 
 class WorkflowHandler:
-    """워크플로우 실행 핸들러"""
+    """워크플로우 실행 핸들러 - 순수 비즈니스 로직"""
     
     def __init__(self):
         """워크플로우 핸들러 초기화"""
-        self.message_processor = CLIMessageProcessor()
+        self.message_processor = MessageProcessor()
         self.executor_manager = get_executor_manager()
     
-    async def execute_user_input(
-        self, 
-        user_input: str,
-        chat_ui,
-        terminal_ui,
-        agents_container,
-        chat_area
-    ) -> bool:
-        """사용자 입력 실행
+    def validate_execution_state(self) -> Dict[str, Any]:
+        """실행 가능한 상태인지 검증
+        
+        Returns:
+            Dict: {"can_execute": bool, "error_message": str}
+        """
+        if not self.executor_manager.is_ready():
+            return {
+                "can_execute": False,
+                "error_message": "AI agents not ready. Please initialize first."
+            }
+        
+        if st.session_state.workflow_running:
+            return {
+                "can_execute": False,
+                "error_message": "Another workflow is already running. Please wait."
+            }
+        
+        return {"can_execute": True, "error_message": ""}
+    
+    def prepare_user_input(self, user_input: str) -> Dict[str, Any]:
+        """사용자 입력을 워크플로우용으로 준비
         
         Args:
             user_input: 사용자 입력 텍스트
-            chat_ui: 채팅 UI 인스턴스
-            terminal_ui: 터미널 UI 인스턴스  
-            agents_container: 에이전트 상태 컨테이너
-            chat_area: 채팅 영역 컨테이너
             
         Returns:
-            bool: 실행 성공 여부
+            Dict: 처리된 사용자 메시지
         """
-        if not self.executor_manager.is_ready():
-            st.error("AI agents not ready. Please initialize first.")
-            return False
-        
-        if st.session_state.workflow_running:
-            st.warning("Another workflow is already running. Please wait.")
-            return False
-        
-        # 사용자 메시지 처리
         user_message = self.message_processor._create_user_message(user_input)
         st.session_state.structured_messages.append(user_message)
+        return user_message
+    
+    async def execute_workflow_logic(
+        self, 
+        user_input: str,
+        ui_callbacks: Dict[str, Callable] = None
+    ) -> Dict[str, Any]:
+        """워크플로우 실행 핵심 로직
         
-        # 사용자 메시지 표시
-        with chat_area:
-            chat_ui.display_user_message(user_input)
+        Args:
+            user_input: 사용자 입력 텍스트
+            ui_callbacks: UI 콜백 함수들
+            
+        Returns:
+            Dict: 실행 결과
+        """
+        # UI 콜백 기본값 설정
+        if ui_callbacks is None:
+            ui_callbacks = {}
         
-        # 워크플로우 실행
+        # 워크플로우 실행 상태 설정
         st.session_state.workflow_running = True
         
+        execution_result = {
+            "success": False,
+            "event_count": 0,
+            "agent_activity": {},
+            "error_message": ""
+        }
+        
         try:
-            with st.status("Processing...", expanded=True) as status:
-                event_count = 0
-                agent_activity = {}
+            event_count = 0
+            agent_activity = {}
+            
+            async for event in self.executor_manager.execute_workflow(
+                user_input,
+                config=st.session_state.thread_config
+            ):
+                event_count += 1
+                st.session_state.event_history.append(event)
                 
-                async for event in self.executor_manager.execute_workflow(
-                    user_input,
-                    config=st.session_state.thread_config
-                ):
-                    event_count += 1
-                    st.session_state.event_history.append(event)
+                try:
+                    # 이벤트 처리
+                    success = await self._process_event_logic(
+                        event, 
+                        agent_activity,
+                        ui_callbacks
+                    )
                     
-                    try:
-                        # 디버그 모드에서 이벤트 표시
-                        if st.session_state.debug_mode:
-                            with chat_area:
-                                st.json(event)
-                        
-                        # 이벤트 처리
-                        success = await self._process_event(
-                            event, 
-                            chat_ui, 
-                            terminal_ui, 
-                            chat_area, 
-                            status,
-                            agent_activity
-                        )
-                        
-                        if not success:
-                            break
-                        
-                        # 에이전트 상태 업데이트
-                        self._update_agent_status(agents_container, chat_ui)
-                        
-                    except Exception as e:
-                        if st.session_state.debug_mode:
-                            st.error(f"Event processing error: {str(e)}")
-                
-                # 완료 상태 업데이트
-                if agent_activity:
-                    summary_text = f"Completed! Events: {event_count}, Active agents: {', '.join(agent_activity.keys())}"
-                    status.update(label=summary_text, state="complete")
+                    if not success:
+                        break
+                    
+                    # 에이전트 상태 업데이트 (순수 로직)
+                    self._update_agent_status_logic()
+                    
+                except Exception as e:
+                    if st.session_state.debug_mode:
+                        execution_result["error_message"] = f"Event processing error: {str(e)}"
+            
+            # 실행 결과 설정
+            execution_result.update({
+                "success": True,
+                "event_count": event_count,
+                "agent_activity": agent_activity
+            })
         
         except Exception as e:
-            st.error(f"Workflow execution error: {str(e)}")
-            return False
+            execution_result["error_message"] = f"Workflow execution error: {str(e)}"
         
         finally:
             st.session_state.workflow_running = False
@@ -118,26 +133,20 @@ class WorkflowHandler:
             if "logger" in st.session_state and st.session_state.logger:
                 st.session_state.logger.save_session()
         
-        return True
+        return execution_result
     
-    async def _process_event(
+    async def _process_event_logic(
         self,
         event: Dict[str, Any],
-        chat_ui,
-        terminal_ui, 
-        chat_area,
-        status,
-        agent_activity: Dict[str, int]
+        agent_activity: Dict[str, int],
+        ui_callbacks: Dict[str, Callable]
     ) -> bool:
-        """단일 이벤트 처리
+        """이벤트 처리 순수 로직
         
         Args:
             event: 처리할 이벤트
-            chat_ui: 채팅 UI 인스턴스
-            terminal_ui: 터미널 UI 인스턴스
-            chat_area: 채팅 영역
-            status: 상태 표시기
             agent_activity: 에이전트 활동 추적
+            ui_callbacks: UI 콜백 함수들
             
         Returns:
             bool: 처리 성공 여부
@@ -145,30 +154,28 @@ class WorkflowHandler:
         event_type = event.get("type", "")
         
         if event_type == "message":
-            return await self._process_message_event(
-                event, chat_ui, terminal_ui, chat_area, status, agent_activity
+            return await self._process_message_event_logic(
+                event, agent_activity, ui_callbacks
             )
         elif event_type == "workflow_complete":
-            status.update(label="Processing complete!", state="complete")
+            if "on_workflow_complete" in ui_callbacks:
+                ui_callbacks["on_workflow_complete"]()
             return True
         elif event_type == "error":
             error_msg = event.get("error", "Unknown error")
-            status.update(label=f"Error: {error_msg}", state="error")
-            st.error(f"Workflow error: {error_msg}")
+            if "on_error" in ui_callbacks:
+                ui_callbacks["on_error"](error_msg)
             return False
         
         return True
     
-    async def _process_message_event(
+    async def _process_message_event_logic(
         self,
         event: Dict[str, Any],
-        chat_ui,
-        terminal_ui,
-        chat_area,
-        status,
-        agent_activity: Dict[str, int]
+        agent_activity: Dict[str, int],
+        ui_callbacks: Dict[str, Callable]
     ) -> bool:
-        """메시지 이벤트 처리"""
+        """메시지 이벤트 처리 순수 로직"""
         # 메시지 변환
         frontend_message = self.message_processor.process_cli_event(event)
         
@@ -190,44 +197,39 @@ class WorkflowHandler:
             agent_activity[agent_name] = 0
         agent_activity[agent_name] += 1
         
-        # 상태 업데이트
-        status.update(label="Processing...", state="running")
+        # UI 콜백 호출 (메시지 표시)
+        if "on_message_ready" in ui_callbacks:
+            ui_callbacks["on_message_ready"](frontend_message)
         
-        # UI에 메시지 표시
-        with chat_area:
-            self._display_message(frontend_message, chat_ui)
-        
-        # 터미널 메시지 처리 - 수정된 버전
+        # 터미널 메시지 처리 로직
         if frontend_message.get("type") == "tool":
-            # terminal_messages 초기화 확인
-            if "terminal_messages" not in st.session_state:
-                st.session_state.terminal_messages = []
-            
-            # 터미널 메시지 저장
-            st.session_state.terminal_messages.append(frontend_message)
-            
-            # 직접 터미널 UI에 메시지 추가
-            try:
-                tool_name = frontend_message.get("tool_display_name", "Tool")
-                content = frontend_message.get("content", "")
-                
-                if tool_name and content:
-                    # 명령어와 출력 추가
-                    terminal_ui.add_command(tool_name)
-                    terminal_ui.add_output(content)
-                    
-                    # 디버깅 로그
-                    if st.session_state.get("debug_mode", False):
-                        print(f"Debug - Added to terminal: {tool_name} -> {content[:100]}...")
-                        
-            except Exception as e:
-                if st.session_state.get("debug_mode", False):
-                    print(f"Debug - Terminal message processing error: {e}")
+            self._process_terminal_message_logic(frontend_message, ui_callbacks)
         
         return True
     
+    def _process_terminal_message_logic(
+        self, 
+        frontend_message: Dict[str, Any], 
+        ui_callbacks: Dict[str, Callable]
+    ):
+        """터미널 메시지 처리 순수 로직"""
+        # terminal_messages 초기화 확인
+        if "terminal_messages" not in st.session_state:
+            st.session_state.terminal_messages = []
+        
+        # 터미널 메시지 저장
+        st.session_state.terminal_messages.append(frontend_message)
+        
+        # 터미널 UI 콜백 호출
+        if "on_terminal_message" in ui_callbacks:
+            tool_name = frontend_message.get("tool_display_name", "Tool")
+            content = frontend_message.get("content", "")
+            
+            if tool_name and content:
+                ui_callbacks["on_terminal_message"](tool_name, content)
+    
     def _log_message_event(self, event: Dict[str, Any], frontend_message: Dict[str, Any]):
-        """메시지 이벤트 로깅"""
+        """메시지 이벤트 로깅 로직"""
         if "logger" not in st.session_state or not st.session_state.logger:
             return
         
@@ -255,17 +257,8 @@ class WorkflowHandler:
                     output=content
                 )
     
-    def _display_message(self, message: Dict[str, Any], chat_ui):
-        """메시지 UI 표시"""
-        message_type = message.get("type", "")
-        
-        if message_type == "ai":
-            chat_ui.display_agent_message(message, streaming=True)
-        elif message_type == "tool":
-            chat_ui.display_tool_message(message)
-    
-    def _update_agent_status(self, agents_container, chat_ui):
-        """에이전트 상태 업데이트"""
+    def _update_agent_status_logic(self):
+        """에이전트 상태 업데이트 순수 로직"""
         # 최근 이벤트에서 활성 에이전트 찾기
         active_agent = None
         for event in reversed(st.session_state.event_history):
@@ -287,14 +280,14 @@ class WorkflowHandler:
             st.session_state.active_agent or st.session_state.completed_agents
         ):
             st.session_state.keep_initial_ui = False
-        
-        # 에이전트 상태 표시
-        chat_ui.display_agent_status(
-            agents_container,
-            st.session_state.active_agent,
-            None,
-            st.session_state.completed_agents
-        )
+    
+    def get_agent_status(self) -> Dict[str, Any]:
+        """현재 에이전트 상태 반환"""
+        return {
+            "active_agent": st.session_state.active_agent,
+            "completed_agents": st.session_state.completed_agents,
+            "keep_initial_ui": st.session_state.get("keep_initial_ui", True)
+        }
 
 
 # 전역 워크플로우 핸들러 인스턴스

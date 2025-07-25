@@ -1,5 +1,5 @@
 """
-Direct Executor - CLI 로직을 프론트엔드에서 직접 실행하는 모듈 (수정 버전)
+Direct Executor - CLI 로직을 프론트엔드에서 직접 실행하는 모듈 (리팩토링됨)
 세션 상태와 연동하여 안정적인 상태 관리
 """
 
@@ -26,8 +26,6 @@ from src.utils.message import (
 
 
 class DirectExecutor:
-    """CLI의 swarm 실행 로직을 프론트엔드에서 직접 사용하는 클래스"""
-    
     def __init__(self):
         # 초기화 상태
         self._initialized = False
