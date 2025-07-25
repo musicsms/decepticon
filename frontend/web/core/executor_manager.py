@@ -1,6 +1,6 @@
 """
-DirectExecutor 관리 모듈 (리팩토링됨)
-- DirectExecutor 초기화 및 설정
+Executor 관리 모듈 (리팩토링됨)
+- Executor 초기화 및 설정
 - 모델 정보 기반 스웜 초기화
 - 실행기 상태 관리
 """
@@ -14,12 +14,12 @@ import sys
 # 프로젝트 루트 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from frontend.web.core.executor import DirectExecutor
+from frontend.web.core.executor import Executor
 from src.utils.logging.logger import get_logger
 
 
 class ExecutorManager:
-    """DirectExecutor 관리 클래스"""
+    """Executor 관리 클래스"""
     
     def __init__(self):
         """실행기 관리자 초기화"""
@@ -27,9 +27,9 @@ class ExecutorManager:
         self._ensure_executor()
     
     def _ensure_executor(self):
-        """DirectExecutor 인스턴스 확보"""
+        """Executor 인스턴스 확보"""
         if "direct_executor" not in st.session_state or st.session_state.direct_executor is None:
-            st.session_state.direct_executor = DirectExecutor()
+            st.session_state.direct_executor = Executor()
         
         self.executor = st.session_state.direct_executor
     
@@ -111,11 +111,11 @@ class ExecutorManager:
     
     def reset(self):
         """실행기 리셋"""
-        st.session_state.direct_executor = DirectExecutor()
+        st.session_state.direct_executor = Executor()
         self.executor = st.session_state.direct_executor
         st.session_state.executor_ready = False
     
-    def get_executor(self) -> Optional[DirectExecutor]:
+    def get_executor(self) -> Optional[Executor]:
         """현재 실행기 인스턴스 반환"""
         self._ensure_executor()
         return self.executor

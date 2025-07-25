@@ -8,6 +8,7 @@ data/
 tests/
 backup/
 pages/
+ex_version/
 
 # Python byte-compiled files
 __pycache__/

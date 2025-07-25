@@ -38,6 +38,7 @@ class ChatMessagesComponent:
         except Exception as e:
             print(f"Error loading CSS: {e}")
     
+    
     def simulate_typing(self, text: str, placeholder, speed: float = 0.005):
         """타이핑 애니메이션 시뮬레이션
         

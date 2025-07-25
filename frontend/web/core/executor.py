@@ -25,7 +25,7 @@ from src.utils.message import (
 )
 
 
-class DirectExecutor:
+class Executor:
     def __init__(self):
         # 초기화 상태
         self._initialized = False
