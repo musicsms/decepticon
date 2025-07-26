@@ -39,7 +39,7 @@
 
 </br>
 
-![web](https://github.com/user-attachments/assets/fd553dba-adb4-4aeb-a364-098d89130817)
+https://github.com/user-attachments/assets/fd553dba-adb4-4aeb-a364-098d89130817
 
 </br>
 
