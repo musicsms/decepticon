@@ -10,6 +10,7 @@ backup/
 pages/
 ex_version/
 ex_version/
+.cursor/
 
 # Python byte-compiled files
 __pycache__/
