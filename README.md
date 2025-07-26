@@ -39,7 +39,7 @@
 
 | | Demo |
 |---|------|
-| **Web** | ![web](.github/webV3.gif) • [Full Demo](https://github.com/user-attachments/assets/dfbe2c1e-d81a-42b8-a89d-bb9ee1415f17) |
+| **Web** | ![web](.github/web.gif) • [Full Demo](https://github.com/user-attachments/assets/dfbe2c1e-d81a-42b8-a89d-bb9ee1415f17) |
 | **CLI** | ![cli](.github/cli.gif) • [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
 
 </div>
