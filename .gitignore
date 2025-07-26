@@ -9,10 +9,11 @@ tests/
 backup/
 pages/
 ex_version/
+ex_version/
 
 # Python byte-compiled files
 __pycache__/
 *.py[cod]
 *$py.class
 
-cliv2.py
+cliv3.py
