@@ -39,12 +39,15 @@
 
 </br>
 
-![web](.github/web.gif)
+![web](https://github.com/user-attachments/assets/fd553dba-adb4-4aeb-a364-098d89130817)
+
 </br>
 
 [CLI Demo](.github/cli.gif)
 
 </div>
+
+
 
 ---
 
