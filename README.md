@@ -37,10 +37,12 @@
 
 <div align="center">
 
-| | Demo |
-|---|------|
-| **Web** | ![web](.github/web.gif) • [Full Demo](https://github.com/user-attachments/assets/dfbe2c1e-d81a-42b8-a89d-bb9ee1415f17) |
-| **CLI** | ![cli](.github/cli.gif) • [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
+</br>
+
+![web](.github/web.gif)
+</br>
+
+[CLI Demo](.github/cli.gif)
 
 </div>
 
@@ -81,13 +83,11 @@
 
 ---
 
-> ⚠️ <strong style="color:red">Disclaimer</strong>  
-> <span style="color:red">Do not attempt to use this project on any system or network without explicit authorization.</span>  
-> <span style="color:red"><strong>You are solely responsible for your actions.</strong></span>
+> ## ⚠️ Disclaimer
+> Do not attempt to use this project on any system or network without explicit authorization.
+> You are solely responsible for your actions.
 
-
-
-> ## **💡 Community Contribution**
+> ## 💡 **Community Contribution**
 > If you have interesting penetration testing scenarios, export your **logs** and share them with the community through PR! 
 > Your experiences will greatly help other users in their learning journey.
 > Please refer to the Replay section for more details.
@@ -152,7 +152,7 @@ docker-compose up -d --build
 
 #### Option 2: Run manually
 ```bash
-python src/tools/mcp/...
+python src/tools/mcp/(your mcp server).py
 ```
 
 ### 4. Run CLI or Web interface
@@ -248,33 +248,27 @@ docker-compose up -d
 
 ### 5. Run MCP Server
 ```bash
-python src/tools/mcp/Inital_Access.py
-python src/tools/mcp/Recoonaissance.py
+python src/tools/mcp/(your mcp server).py
 ```
 
 ### 6. CLI 
 ```bash
 # Run CLI
-python cli.py
+python frontend/cli/cli.py
 ```
 
 ### 7. Web Interface
 
 ```bash
 # Run web interface
-streamlit run app.py
+streamlit run frontend/web/streamlit_app.py
 ```
 
 ## Advanced AI Models
 
-Support for **15+ AI providers** and **30+ models**:
-
 ### ☁️ Cloud Models
 - **OpenAI**: 4.1, 4o, 4o Mini, o4 Mini, o3 Mini, o1 Mini, o1, o3
 - **Anthropic**: Sonnet 4, Opus 4, Sonnet 3.7, Sonnet 3.5, Haiku 3.5, 
-- **Google**: Planned
-- **Groq**: Planned
-- **OpenRouter**
 
 ### 🏠 Local Models (Ollama)
 - your installed Models
