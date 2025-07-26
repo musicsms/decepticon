@@ -1,27 +1,28 @@
 {
     "planner": {
-
+        "terminal": {
+            "url": "http://localhost:3003/mcp",
+            "transport": "streamable_http"
+        }
     },
 
     "summary": {
-        
+        "terminal": {
+            "url": "http://localhost:3003/mcp",
+            "transport": "streamable_http"
+        }        
     },
 
     "reconnaissance": {
-        "reconnaissance": {
-            "url": "http://localhost:3001/mcp",
+        "terminal": {
+            "url": "http://localhost:3003/mcp",
             "transport": "streamable_http"
         }
     },
     "initial_access": {
-        "initial_access": {
-            "url": "http://localhost:3002/mcp",
-            "transport": "streamable_http"
-        },
-        "interactive_exec": {
+        "terminal": {
             "url": "http://localhost:3003/mcp",
             "transport": "streamable_http"
         }
     }
-
 }

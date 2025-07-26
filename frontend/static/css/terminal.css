@@ -1,0 +1,184 @@
+/* 터미널 UI 스타일 - 맥 스타일 (테마 대응) */
+
+/* Streamlit 기본 컨테이너 스타일 오버라이드 */
+.terminal-wrapper {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* 터미널 관련 요소들의 Streamlit 기본 스타일 제거 */
+.terminal-wrapper .element-container {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.terminal-wrapper [data-testid="stVerticalBlock"] {
+    background: transparent !important;
+    border: none !important;
+    gap: 0 !important;
+}
+
+.terminal-wrapper [data-testid="block-container"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+
+/* 터미널 컨테이너 스타일 - 기본값 (다크 모드 기준) */
+.terminal-container {
+    background-color: #1E1E1E;
+    color: #FFFFFF;
+    font-family: 'Courier New', monospace;
+    border-radius: 0 0 5px 5px;
+    padding: 10px;
+    height: 650px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+    scroll-behavior: smooth;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    border-left: 1px solid #333333;
+    border-right: 1px solid #333333;
+    border-bottom: 1px solid #333333;
+    /* 상단 그라데이션 추가 */
+    background-image: linear-gradient(to bottom, #333333 0%, #1E1E1E 20px);
+    transition: all 0.3s ease;
+}
+
+/* 맥 스타일 헤더 - 기본값 (다크 모드 기준) */
+.mac-terminal-header {
+    background-color: #333333;
+    background: linear-gradient(to bottom, #515151, #333333);
+    color: #FFFFFF;
+    padding: 8px 10px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-left: 1px solid #333333;
+    border-right: 1px solid #333333;
+    border-top: 1px solid #333333;
+    border-bottom: none;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+    height: 35px;
+    transition: all 0.3s ease;
+}
+
+/* 맥 스타일 버튼들 */
+.mac-buttons {
+    display: flex;
+    align-items: center;
+    margin-right: auto;
+}
+
+/* 헤더 버튼 스타일 */
+.terminal-header-button {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 6px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.terminal-header-button.red {
+    background: radial-gradient(#ff5f57, #ff5f57 60%, #ce4a41);
+    border: 1px solid #b03a37;
+}
+
+.terminal-header-button.yellow {
+    background: radial-gradient(#ffbd2e, #ffbd2e 60%, #dda012);
+    border: 1px solid #b38416;
+}
+
+.terminal-header-button.green {
+    background: radial-gradient(#28c940, #28c940 60%, #17a82b);
+    border: 1px solid #178323;
+}
+
+/* 터미널 프롬프트 스타일 - 기본값 (다크 모드 기준) */
+.terminal-prompt {
+    margin-bottom: 5px;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+/* root@kali 부분 - 기본값 (다크 모드 기준) */
+.terminal-user {
+    color: #4EC9B0;
+    transition: color 0.3s ease;
+}
+
+/* 프롬프트 텍스트 부분(:~$) - 기본값 (다크 모드 기준) */
+.terminal-prompt-text {
+    color: #FFFFFF;
+    transition: color 0.3s ease;
+}
+
+/* 명령어 텍스트 부분 - 기본값 (다크 모드 기준) */
+.terminal-command-text {
+    color: #DCDCAA;
+    font-weight: normal;
+    transition: color 0.3s ease;
+}
+
+/* 터미널 명령어 스타일 - 기본값 (다크 모드 기준) */
+.terminal-command {
+    color: #DCDCAA;
+    margin-bottom: 5px;
+    padding-left: 10px;
+    transition: color 0.3s ease;
+}
+
+/* 터미널 출력 스타일 - 기본값 (다크 모드 기준) */
+.terminal-output {
+    color: #CCCCCC;
+    margin-bottom: 10px;
+    padding-left: 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    transition: color 0.3s ease;
+}
+
+/* 커서 깜빡임 애니메이션 */
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+.terminal-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 15px;
+    background-color: #FFFFFF;
+    margin-left: 2px;
+    animation: blink 1s infinite;
+}
+
+/* 스크롤바 스타일 - 기본값 (다크 모드 기준) */
+.terminal-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.terminal-container::-webkit-scrollbar-track {
+    background: #1E1E1E;
+    transition: background 0.3s ease;
+}
+
+.terminal-container::-webkit-scrollbar-thumb {
+    background-color: #333333;
+    border-radius: 4px;
+    transition: background-color 0.3s ease;
+}
+
+.terminal-container::-webkit-scrollbar-thumb:hover {
+    background: #4EC9B0;
+    transition: background 0.2s ease;
+}

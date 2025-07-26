@@ -8,6 +8,8 @@ license = {text = "Apache-2.0"}
 dependencies = [
     "cvss>=3.4",
     "fastapi>=0.95.0",
+    "flask>=3.1.1",
+    "flask-socketio==5.3.6",
     "ipython>=8.18.1",
     "langchain-anthropic>=0.3.13",
     "langchain-deepseek>=0.1.3",
@@ -27,11 +29,19 @@ dependencies = [
     "langgraph-supervisor>=0.0.21",
     "langgraph-swarm>=0.0.11",
     "langmem>=0.0.25",
+    "langsmith>=0.3.42",
     "mcp>=1.8.1",
     "pymetasploit3>=1.0.6",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+    "python-dotenv>=1.1.0",
+    "python-engineio==4.7.1",
+    "python-socketio==5.8.0",
     "requests>=2.32.3",
     "rich>=14.0.0",
     "streamlit>=1.45.1",
+    "streamlit-antd-components>=0.3.2",
+    "streamlit-option-menu>=0.4.0",
 ]
 
 [build-system]
@@ -39,4 +49,5 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["."] 
+include = ["decepticon*"]

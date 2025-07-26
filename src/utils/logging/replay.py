@@ -30,10 +30,10 @@ class ReplaySystem:
             st.session_state.replay_session_id = session_id
             
             # 기존 메시지들 백업 (재현 완료 후 복원용)
-            if "structured_messages" in st.session_state:
-                st.session_state.backup_structured_messages = st.session_state.structured_messages.copy()
+            if "frontend_messages" in st.session_state:  # ✅ 올바른 변수명
+                st.session_state.backup_frontend_messages = st.session_state.frontend_messages.copy()
             else:
-                st.session_state.backup_structured_messages = []
+                st.session_state.backup_frontend_messages = []
             
             # 기존 터미널 메시지들 백업
             if "terminal_messages" in st.session_state:
@@ -52,7 +52,7 @@ class ReplaySystem:
             st.session_state.backup_completed_agents = st.session_state.get("completed_agents", []).copy()
             
             # 🔥 중복 출력 방지: 재현 시작 시 기존 메시지들 완전히 초기화
-            st.session_state.structured_messages = []
+            st.session_state.frontend_messages = []  # ✅ 올바른 변수명
             st.session_state.terminal_messages = []
             st.session_state.event_history = []
             st.session_state.active_agent = None
@@ -74,7 +74,7 @@ class ReplaySystem:
         # backup된 에이전트 상태는 복원하지 않음
         
         # 백업 데이터 삭제 (복원하지 않음)
-        for backup_key in ["backup_structured_messages", "backup_terminal_messages", 
+        for backup_key in ["backup_frontend_messages", "backup_terminal_messages", 
                           "backup_event_history", "backup_active_agent", "backup_completed_agents"]:
             if backup_key in st.session_state:
                 del st.session_state[backup_key]
@@ -126,7 +126,7 @@ class ReplaySystem:
             
             # 메시지들을 한번에 세션 상태에 설정 (기존 메시지 대체)
             if replay_messages:
-                st.session_state.structured_messages = replay_messages
+                st.session_state.frontend_messages = replay_messages  # ✅ 올바른 변수명
             
             # 터미널 메시지들도 한번에 설정 (기존 메시지 대체)
             if terminal_messages:

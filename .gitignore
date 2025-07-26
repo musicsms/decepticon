@@ -5,8 +5,16 @@ decepticon.egg-info/
 load_env.bat
 logs/
 data/
+tests/
+backup/
+pages/
+ex_version/
+ex_version/
+.cursor/
 
 # Python byte-compiled files
 __pycache__/
 *.py[cod]
 *$py.class
+
+cliv3.py

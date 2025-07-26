@@ -37,12 +37,17 @@
 
 <div align="center">
 
-| | Demo |
-|---|------|
-| **Web** | ![web](.github/webV3.gif) • [Full Demo](https://github.com/user-attachments/assets/dfbe2c1e-d81a-42b8-a89d-bb9ee1415f17) |
-| **CLI** | ![cli](.github/cli.gif) • [Full Demo](https://github.com/user-attachments/assets/29d005ac-89c7-4d45-b11c-e0e7b2ddf094) |
+</br>
+
+https://github.com/user-attachments/assets/fd553dba-adb4-4aeb-a364-098d89130817
+
+</br>
+
+[CLI Demo](.github/cli.gif)
 
 </div>
+
+
 
 ---
 
@@ -59,7 +64,6 @@
     - [🔵 Utility Agents](#-utility-agents)
   - [Multi-Agent-System Architecture](#multi-agent-system-architecture)
   - [Replay](#replay)
-
 - [Installation](#-installation)
 - [Advanced AI Models](#-advanced-ai-models)
   - [☁️ Cloud Models](#️-cloud-models)
@@ -69,7 +73,7 @@
   - [`mcp_config.json` Structure](#-mcp_configjson-structure)
   - [Example](#-example)
 - [⚠️ Experimental Technology Disclaimer](#️-experimental-technology-disclaimer)
-- [🤝 Contributing](#-contributing)
+- [🤝 Contributing](#-contribution)
   - [What You Can Contribute](#-what-you-can-contribute)
     - [Migrate Security Tools to MCP Format](#-migrate-security-tools-to-mcp-format)
     - [Develop ReAct-style Red Team Agents](#-develop-react-style-red-team-agents)
@@ -82,13 +86,11 @@
 
 ---
 
-> ⚠️ <strong style="color:red">Disclaimer</strong>  
-> <span style="color:red">Do not attempt to use this project on any system or network without explicit authorization.</span>  
-> <span style="color:red"><strong>You are solely responsible for your actions.</strong></span>
+> ## ⚠️ Disclaimer
+> Do not attempt to use this project on any system or network without explicit authorization.
+> You are solely responsible for your actions.
 
-
-
-> ## **💡 Community Contribution**
+> ## 💡 **Community Contribution**
 > If you have interesting penetration testing scenarios, export your **logs** and share them with the community through PR! 
 > Your experiences will greatly help other users in their learning journey.
 > Please refer to the Replay section for more details.
@@ -135,7 +137,7 @@ uv pip install -e .
 cp .env.example .env
 ```
 
-### 3. Docker
+### 3. Docker (10m ~ 20m)
 ```bash
 docker-compose up -d --build
 ```
@@ -153,14 +155,13 @@ docker-compose up -d --build
 
 #### Option 2: Run manually
 ```bash
-python src/tools/mcp/Inital_Access.py
-python src/tools/mcp/Recoonaissance.py
+python src/tools/mcp/(your mcp server).py
 ```
 
 ### 4. Run CLI or Web interface
 ```bash
-python cli.py
-streamlit run app.py
+python frontend/cli/cli.py
+streamlit run frontend/web/streamlit_app.py
 ```
 
 
@@ -250,33 +251,27 @@ docker-compose up -d
 
 ### 5. Run MCP Server
 ```bash
-python src/tools/mcp/Inital_Access.py
-python src/tools/mcp/Recoonaissance.py
+python src/tools/mcp/(your mcp server).py
 ```
 
 ### 6. CLI 
 ```bash
 # Run CLI
-python cli.py
+python frontend/cli/cli.py
 ```
 
 ### 7. Web Interface
 
 ```bash
 # Run web interface
-streamlit run app.py
+streamlit run frontend/web/streamlit_app.py
 ```
 
 ## Advanced AI Models
 
-Support for **15+ AI providers** and **30+ models**:
-
 ### ☁️ Cloud Models
 - **OpenAI**: 4.1, 4o, 4o Mini, o4 Mini, o3 Mini, o1 Mini, o1, o3
 - **Anthropic**: Sonnet 4, Opus 4, Sonnet 3.7, Sonnet 3.5, Haiku 3.5, 
-- **Google**: Planned
-- **Groq**: Planned
-- **OpenRouter**
 
 ### 🏠 Local Models (Ollama)
 - your installed Models

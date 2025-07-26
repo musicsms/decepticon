@@ -110,7 +110,7 @@ def get_message_type(message):
         return None
 
 # 메시지 content 
-def extract_message_content(message):
+def extract_message_content(message, escape_markup=True):
     """메시지에서 내용 추출 - 안전한 처리"""
     try:
         if hasattr(message, 'content'):
@@ -119,9 +119,7 @@ def extract_message_content(message):
             content = str(message)
         
         if isinstance(content, str):
-            # Rich 마크업 escape 제거 - 원본 문자열 반환
             result = content.strip() if content else ""
-            return result
         elif isinstance(content, list):
             text_parts = []
             for item in content:
@@ -133,12 +131,19 @@ def extract_message_content(message):
                 elif isinstance(item, str):
                     text_parts.append(item)
             result = "\n".join(text_parts) if text_parts else str(content)
-            return result
         else:
             result = str(content)
-            return result
+        
+        # Rich 마크업 이스케이프 (기본적으로 활성화)
+        if escape_markup:
+            result = markup.escape(result)
+            
+        return result
     except Exception as e:
         error_msg = f"Content extraction error: {str(e)}\n{str(message)}"
+        # 에러 메시지도 이스케이프
+        if escape_markup:
+            error_msg = markup.escape(error_msg)
         return error_msg
 
 # Tool calls 추출 함수
@@ -158,30 +163,5 @@ def extract_tool_calls(message, event_data: Optional[Dict[str, Any]] = None) -> 
                 "args": tool_call.get('args', {})
             })
     
-    # # 2. event_data에서 직접 추출
-    # elif event_data and 'tool_calls' in event_data:
-    #     tool_calls = event_data['tool_calls']
-    
-    # # 3. additional_kwargs에서 추출 (OpenAI 형식)
-    # elif raw_message and hasattr(raw_message, 'additional_kwargs') and 'tool_calls' in raw_message.additional_kwargs:
-    #     for tc in raw_message.additional_kwargs['tool_calls']:
-    #         if 'function' in tc:
-    #             # OpenAI function call 형식
-    #             try:
-    #                 args = json.loads(tc['function'].get('arguments', '{}')) if tc['function'].get('arguments') else {}
-    #             except (json.JSONDecodeError, TypeError):
-    #                 args = {}
-    #             tool_calls.append({
-    #                 "id": tc.get('id', ''),
-    #                 "name": tc['function'].get('name', 'Unknown Tool'),
-    #                 "args": args
-    #             })
-    #         else:
-    #             # 일반 tool call 형식
-    #             tool_calls.append({
-    #                 "id": tc.get('id', ''),
-    #                 "name": tc.get('name', 'Unknown Tool'),
-    #                 "args": tc.get('args', {})
-    #             })
     
     return tool_calls
