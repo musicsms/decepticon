@@ -152,14 +152,13 @@ docker-compose up -d --build
 
 #### Option 2: Run manually
 ```bash
-python src/tools/mcp/Inital_Access.py
-python src/tools/mcp/Recoonaissance.py
+python src/tools/mcp/...
 ```
 
 ### 4. Run CLI or Web interface
 ```bash
-python cli.py
-streamlit run app.py
+python frontend/cli/cli.py
+streamlit run frontend/web/streamlit_app.py
 ```
 
 
