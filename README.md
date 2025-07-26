@@ -48,6 +48,7 @@
 
 <details>
 <summary><strong>📚 Table of Contents</strong></summary>
+
 - [💡 Community Contribution ](#-community-contribution)
 - [💡 What is Vibe Hacking ?](#-what-is-vibe-hacking-)
 - [💡 Why Decepticon?](#-why-decepticon)
@@ -58,7 +59,6 @@
     - [🔵 Utility Agents](#-utility-agents)
   - [Multi-Agent-System Architecture](#multi-agent-system-architecture)
   - [Replay](#replay)
-
 - [Installation](#-installation)
 - [Advanced AI Models](#-advanced-ai-models)
   - [☁️ Cloud Models](#️-cloud-models)
@@ -68,7 +68,7 @@
   - [`mcp_config.json` Structure](#-mcp_configjson-structure)
   - [Example](#-example)
 - [⚠️ Experimental Technology Disclaimer](#️-experimental-technology-disclaimer)
-- [🤝 Contributing](#-contributing)
+- [🤝 Contributing](#-contribution)
   - [What You Can Contribute](#-what-you-can-contribute)
     - [Migrate Security Tools to MCP Format](#-migrate-security-tools-to-mcp-format)
     - [Develop ReAct-style Red Team Agents](#-develop-react-style-red-team-agents)
