@@ -3,52 +3,47 @@
 
 <h1 align="center"> Decepticon : Vibe Hacking Agent</h1>
 
-
 <div align="center">
-  <!-- GitHub License -->
-  <a href="https://github.com/PurpleAILAB/Decepticon/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/PurpleAILAB/Decepticon?style=for-the-badge&color=blue" alt="License: Apache 2.0">
-  </a>
 
-  <!-- GitHub Stars -->
-  <a href="https://github.com/PurpleAILAB/Decepticon/stargazers">
-    <img src="https://img.shields.io/github/stars/PurpleAILAB/Decepticon?style=for-the-badge&color=yellow" alt="Stargazers">
-  </a>
+<!-- GitHub License -->
+<a href="https://github.com/PurpleAILAB/Decepticon/blob/main/LICENSE">
+  <img src="https://img.shields.io/github/license/PurpleAILAB/Decepticon?style=for-the-badge&color=blue" alt="License: Apache 2.0">
+</a>
 
-  <!-- GitHub Contributors -->
-  <a href="https://github.com/PurpleAILAB/Decepticon/graphs/contributors">
-    <img src="https://img.shields.io/github/contributors/PurpleAILAB/Decepticon?style=for-the-badge&color=orange" alt="Contributors">
-  </a>
+<!-- GitHub Stars -->
+<a href="https://github.com/PurpleAILAB/Decepticon/stargazers">
+  <img src="https://img.shields.io/github/stars/PurpleAILAB/Decepticon?style=for-the-badge&color=yellow" alt="Stargazers">
+</a>
 
-  <br/>
+<!-- GitHub Contributors -->
+<a href="https://github.com/PurpleAILAB/Decepticon/graphs/contributors">
+  <img src="https://img.shields.io/github/contributors/PurpleAILAB/Decepticon?style=for-the-badge&color=orange" alt="Contributors">
+</a>
 
-  <!-- Discord -->
-  <a href="https://discord.gg/TZUYsZgrRG">
-    <img src="https://img.shields.io/badge/Discord-Join%20Us-7289DA?logo=discord&logoColor=white&style=for-the-badge" alt="Join us on Discord">
-  </a>
+<br/>
 
-  <!-- Website -->
-  <a href="https://purplelab.framer.ai">
-    <img src="https://img.shields.io/badge/Visit%20Website-brightgreen?logo=vercel&logoColor=white&style=for-the-badge" alt="Visit Website">
-  </a>
+<!-- Discord -->
+<a href="https://discord.gg/TZUYsZgrRG">
+  <img src="https://img.shields.io/badge/Discord-Join%20Us-7289DA?logo=discord&logoColor=white&style=for-the-badge" alt="Join us on Discord">
+</a>
 
-![Decepticon Logo](assets/decepticon_log.png)
-
+<!-- Website -->
+<a href="https://purplelab.framer.ai">
+  <img src="https://img.shields.io/badge/Visit%20Website-brightgreen?logo=vercel&logoColor=white&style=for-the-badge" alt="Visit Website">
+</a>
 </div>
 
 <div align="center">
-
-</br>
+<!-- Logo Image -->
+<img src="assets/decepticon_logo.png" alt="Decepticon Logo" width="256" height="256" />
 
 https://github.com/user-attachments/assets/fd553dba-adb4-4aeb-a364-098d89130817
 
-</br>
+<br>
 
 [CLI Demo](.github/cli.gif)
 
 </div>
-
-
 
 ---
 
