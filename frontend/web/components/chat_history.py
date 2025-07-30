@@ -327,9 +327,10 @@ class ChatHistoryComponent:
         return False
     
     def show_replay_start_message(self, session_id: str):
-        """재현 시작 메시지 표시
+        """재현 시작 메시지 표시 (제거됨 - 바로 재현)
         
         Args:
             session_id: 세션 ID
         """
-        st.success(f"🎬 Starting replay for session {session_id[:16]}...")
+        # 메시지 출력 제거 - 바로 이전 대화 내역 재현
+        pass

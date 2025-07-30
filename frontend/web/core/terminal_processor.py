@@ -286,12 +286,30 @@ class TerminalProcessor:
         """현재 터미널 히스토리 반환"""
         return st.session_state.get("terminal_history", [])
     
+    def update_terminal_history_realtime(self, new_entries: List[Dict[str, Any]]):
+        """터미널 히스토리 실시간 업데이트 (더 이상 사용 안함)
+        
+        Args:
+            new_entries: 새로 추가할 터미널 엔트리
+        """
+        # 단순한 히스토리 업데이트로 대체
+        self.update_terminal_history(new_entries)
+    
     def update_terminal_history(self, new_entries: List[Dict[str, Any]]):
-        """터미널 히스토리 업데이트"""
+        """터미널 히스토리 업데이트 (기본 버전)
+        
+        Args:
+            new_entries: 새로 추가할 터미널 엔트리
+        """
         if "terminal_history" not in st.session_state:
             st.session_state.terminal_history = []
         
         st.session_state.terminal_history.extend(new_entries)
+    
+    def _trigger_terminal_ui_update(self):
+        """터미널 UI 실시간 업데이트 트리거 (더 이상 사용 안함)"""
+        # 더 이상 실시간 업데이트 트리거 안함
+        pass
 
 
 # 전역 터미널 프로세서 인스턴스

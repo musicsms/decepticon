@@ -37,7 +37,7 @@ class AppStateManager:
         self._initialize_logging()
     
     def _initialize_session_state(self):
-        """세션 상태 초기화"""
+        """세션 상태 초기화 (여러 번 호출되어도 안전)"""
         defaults = {
             # 실행기 관련
             "executor_ready": False,
@@ -198,15 +198,24 @@ class AppStateManager:
     
     def get_session_stats(self) -> Dict[str, Any]:
         """세션 통계 정보 반환"""
-        elapsed_time = int(time.time() - st.session_state.session_start_time) if hasattr(st.session_state, 'session_start_time') else 0
+        # 세션 상태 변수들을 안전하게 접근
+        session_start_time = getattr(st.session_state, 'session_start_time', time.time())
+        elapsed_time = int(time.time() - session_start_time)
+        
+        # 기본값으로 안전하게 접근
+        structured_messages = getattr(st.session_state, 'structured_messages', [])
+        event_history = getattr(st.session_state, 'event_history', [])
+        current_step = getattr(st.session_state, 'current_step', 0)
+        active_agent = getattr(st.session_state, 'active_agent', None)
+        completed_agents = getattr(st.session_state, 'completed_agents', [])
         
         return {
-            "messages_count": len(st.session_state.structured_messages),
-            "events_count": len(st.session_state.event_history),
-            "steps_count": st.session_state.current_step,
+            "messages_count": len(structured_messages),
+            "events_count": len(event_history),
+            "steps_count": current_step,
             "elapsed_time": elapsed_time,
-            "active_agent": st.session_state.active_agent,
-            "completed_agents_count": len(st.session_state.completed_agents)
+            "active_agent": active_agent,
+            "completed_agents_count": len(completed_agents)
         }
     
     def get_debug_info(self) -> Dict[str, Any]:
@@ -214,8 +223,8 @@ class AppStateManager:
         debug_info = {
             "user_id": st.session_state.get("user_id", "Not set"),
             "thread_id": st.session_state.get("thread_config", {}).get("configurable", {}).get("thread_id", "Not set"),
-            "executor_ready": st.session_state.executor_ready,
-            "workflow_running": st.session_state.workflow_running,
+            "executor_ready": getattr(st.session_state, 'executor_ready', False),
+            "workflow_running": getattr(st.session_state, 'workflow_running', False),
         }
         
         # 로깅 정보 추가

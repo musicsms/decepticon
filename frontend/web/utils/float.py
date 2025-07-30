@@ -90,6 +90,7 @@ def sf_float(self, css=None):
     if css is not None:
         new_id = str(uuid.uuid4())[:8]
         
+        # 기본 float CSS
         new_css = f'''
         <style>
         div.element-container[data-testid="element-container"]:has(>div div.flt-{new_id}) {{
@@ -103,6 +104,7 @@ def sf_float(self, css=None):
         
         self.markdown(new_css + f'\n<div class="float flt-{new_id}"></div>', unsafe_allow_html=True)
         
+        # 기본 JavaScript
         js_code = f'''
         <script>
         (function() {{
@@ -112,11 +114,15 @@ def sf_float(self, css=None):
                 float_el_parent.id = "float-this-component-{new_id}";
                 float_el_parent.style.cssText = 'display:flex; flex-direction:column; position:fixed; z-index:99; {css}';
                 
-                const iframe = parent.document.querySelectorAll('iframe[srcdoc*="{new_id}"]');
-                if (iframe.length > 0) {{
-                    iframe[0].parentNode.style.display = 'none';
-                }}
+                // 기본 이프레임 숨김
+                const iframes = parent.document.querySelectorAll('iframe[srcdoc*="{new_id}"]');
+                iframes.forEach(iframe => {{
+                    if (iframe.parentNode) {{
+                        iframe.parentNode.style.display = 'none';
+                    }}
+                }});
                 
+                // Float 요소 자체 숨김
                 const float_el_hide = parent.document.querySelectorAll('div[class="float flt-{new_id}"]')[0].closest("div > .element-container");
                 if (float_el_hide) {{
                     float_el_hide.style.display = 'none';

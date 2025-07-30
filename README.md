@@ -3,6 +3,7 @@
 
 <h1 align="center"> Decepticon : Vibe Hacking Agent</h1>
 
+
 <div align="center">
   <!-- GitHub License -->
   <a href="https://github.com/PurpleAILAB/Decepticon/blob/main/LICENSE">
@@ -31,7 +32,7 @@
     <img src="https://img.shields.io/badge/Visit%20Website-brightgreen?logo=vercel&logoColor=white&style=for-the-badge" alt="Visit Website">
   </a>
 
-
+![Decepticon Logo](assets/decepticon_log.png)
 
 </div>
 

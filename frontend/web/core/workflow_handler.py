@@ -63,7 +63,8 @@ class WorkflowHandler:
     async def execute_workflow_logic(
         self, 
         user_input: str,
-        ui_callbacks: Dict[str, Callable] = None
+        ui_callbacks: Dict[str, Callable] = None,
+        terminal_ui = None
     ) -> Dict[str, Any]:
         """워크플로우 실행 핵심 로직
         
@@ -85,7 +86,8 @@ class WorkflowHandler:
             "success": False,
             "event_count": 0,
             "agent_activity": {},
-            "error_message": ""
+            "error_message": "",
+            "terminal_ui": terminal_ui  # 터미널 UI 인스턴스 저장
         }
         
         try:
@@ -104,7 +106,8 @@ class WorkflowHandler:
                     success = await self._process_event_logic(
                         event, 
                         agent_activity,
-                        ui_callbacks
+                        ui_callbacks,
+                        terminal_ui
                     )
                     
                     if not success:
@@ -139,7 +142,8 @@ class WorkflowHandler:
         self,
         event: Dict[str, Any],
         agent_activity: Dict[str, int],
-        ui_callbacks: Dict[str, Callable]
+        ui_callbacks: Dict[str, Callable],
+        terminal_ui = None
     ) -> bool:
         """이벤트 처리 순수 로직
         
@@ -155,7 +159,7 @@ class WorkflowHandler:
         
         if event_type == "message":
             return await self._process_message_event_logic(
-                event, agent_activity, ui_callbacks
+                event, agent_activity, ui_callbacks, terminal_ui
             )
         elif event_type == "workflow_complete":
             if "on_workflow_complete" in ui_callbacks:
@@ -173,7 +177,8 @@ class WorkflowHandler:
         self,
         event: Dict[str, Any],
         agent_activity: Dict[str, int],
-        ui_callbacks: Dict[str, Callable]
+        ui_callbacks: Dict[str, Callable],
+        terminal_ui = None
     ) -> bool:
         """메시지 이벤트 처리 순수 로직"""
         # 메시지 변환
@@ -201,8 +206,27 @@ class WorkflowHandler:
         if "on_message_ready" in ui_callbacks:
             ui_callbacks["on_message_ready"](frontend_message)
         
-        # 터미널 메시지 처리 로직
-        if frontend_message.get("type") == "tool":
+        # 터미널 메시지 처리 - 이전 버전의 직접 호출 방식
+        if frontend_message.get("type") == "tool" and terminal_ui:
+            try:
+                tool_name = frontend_message.get("tool_display_name", "Tool")
+                content = frontend_message.get("content", "")
+                
+                if tool_name and content:
+                    # 명령어와 출력 직접 추가 (이전 버전 방식)
+                    terminal_ui.add_command(tool_name)
+                    terminal_ui.add_output(content)
+                    
+                    # 디버깅 로그
+                    if st.session_state.get("debug_mode", False):
+                        print(f"Terminal direct update: {tool_name} -> {content[:100]}...")
+                        
+            except Exception as e:
+                if st.session_state.get("debug_mode", False):
+                    print(f"Terminal direct update error: {e}")
+        
+                # 기존 콜백 방식도 유지 (호환성)
+        elif frontend_message.get("type") == "tool":
             self._process_terminal_message_logic(frontend_message, ui_callbacks)
         
         return True
@@ -212,7 +236,7 @@ class WorkflowHandler:
         frontend_message: Dict[str, Any], 
         ui_callbacks: Dict[str, Callable]
     ):
-        """터미널 메시지 처리 순수 로직"""
+        """터미널 메시지 처리 순수 로직 (간소화된 버전)"""
         # terminal_messages 초기화 확인
         if "terminal_messages" not in st.session_state:
             st.session_state.terminal_messages = []
@@ -220,7 +244,7 @@ class WorkflowHandler:
         # 터미널 메시지 저장
         st.session_state.terminal_messages.append(frontend_message)
         
-        # 터미널 UI 콜백 호출
+        # 터미널 UI 콜백 호출 (더 이상 강제 업데이트 안함)
         if "on_terminal_message" in ui_callbacks:
             tool_name = frontend_message.get("tool_display_name", "Tool")
             content = frontend_message.get("content", "")
