@@ -3,7 +3,7 @@
 
 
 <div align="center">
-  <img src="assets/decepticon_banner1.png" alt="Decepticon Logo">
+  <img src="assets/logo_banner.png" alt="Decepticon Logo">
 </div>
 
 <h1 align="center"> Decepticon - Vibe Hacking Agent</h1>
