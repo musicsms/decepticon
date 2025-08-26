@@ -1,9 +1,15 @@
 [![English](https://img.shields.io/badge/Language-English-blue?style=for-the-badge)](README.md)
 [![한국어](https://img.shields.io/badge/Language-한국어-red?style=for-the-badge)](./docs/README_KO.md)
 
-<h1 align="center"> Decepticon : Vibe Hacking Agent</h1>
 
 <div align="center">
+  <img src="assets/logo_banner.png" alt="Decepticon Logo">
+</div>
+
+<h1 align="center"> Decepticon - Vibe Hacking Agent</h1>
+
+<div align="center">
+
 
 <!-- GitHub License -->
 <a href="https://github.com/PurpleAILAB/Decepticon/blob/main/LICENSE">
@@ -35,7 +41,7 @@
 
 <div align="center">
 <!-- Logo Image -->
-<img src="assets/decepticon_logo.png" alt="Decepticon Logo" width="256" height="256" />
+<!-- <img src="assets/decepticon_logo.png" alt="Decepticon Logo" width="256" height="256" /> -->
 
 https://github.com/user-attachments/assets/92e1dffd-92af-4d63-b682-c4a1810586a9
 
