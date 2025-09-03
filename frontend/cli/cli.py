@@ -28,6 +28,10 @@ from rich.padding import Padding
 from rich.prompt import Prompt
 from rich import markup
 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
 
 # Decepticon imports
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage

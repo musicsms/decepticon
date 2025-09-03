@@ -1,27 +1,21 @@
 {
     "planner": {
-        "terminal": {
-            "url": "http://localhost:3003/mcp",
-            "transport": "streamable_http"
-        }
+
     },
 
     "summary": {
-        "terminal": {
-            "url": "http://localhost:3003/mcp",
-            "transport": "streamable_http"
-        }        
+    
     },
 
     "reconnaissance": {
         "terminal": {
-            "url": "http://localhost:3003/mcp",
+            "url": "http://localhost:3001/mcp",
             "transport": "streamable_http"
         }
     },
     "initial_access": {
         "terminal": {
-            "url": "http://localhost:3003/mcp",
+            "url": "http://localhost:3002/mcp",
             "transport": "streamable_http"
         }
     }

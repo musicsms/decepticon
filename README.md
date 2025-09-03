@@ -131,6 +131,8 @@ Delegate repetitive and manual tasks to agents, and focus on intuition and decis
 ### 1. Set up the environment with
 ```bash
 uv venv
+uv sync
+or
 uv pip install -e .
 ```
 
@@ -163,7 +165,7 @@ python src/tools/mcp/(your mcp server).py
 ### 4. Run CLI or Web interface
 ```bash
 python frontend/cli/cli.py
-streamlit run frontend/web/streamlit_app.py
+streamlit run frontend/streamlit_app.py
 ```
 
 
