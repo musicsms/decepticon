@@ -138,17 +138,6 @@ def _perform_model_initialization_in_container(model_info):
         st.session_state.initialization_in_progress = False
 
 
-def _perform_model_initialization(model_info, placeholder):
-    """모델 초기화 수행 (기존 방식 - 더 이상 사용 안함)"""
-    # 이 함수는 더 이상 사용되지 않음
-    pass
-
-
-def _handle_initialization_error(model_info, placeholder, error_message=None):
-    """초기화 에러 처리 (더 이상 사용 안함)"""
-    # 이 함수는 더 이상 사용되지 않음
-    pass
-
 
 def _display_model_selection():
     """모델 선택 UI 표시"""

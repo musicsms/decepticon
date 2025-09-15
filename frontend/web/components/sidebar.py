@@ -212,7 +212,7 @@ class SidebarComponent:
             if "on_chat_history" in callbacks:
                 callbacks["on_chat_history"]()
             else:
-                st.switch_page("pages/02_📋_Chat_History.py")
+                st.switch_page("pages/02_Chat_History.py")
         
         # 새 채팅 버튼
         if st.button("✨ New Chat", use_container_width=True):
