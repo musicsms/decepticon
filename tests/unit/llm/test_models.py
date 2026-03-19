@@ -2,7 +2,16 @@
 
 import pytest
 
-from decepticon.llm.models import LLMModelMapping, ModelAssignment, ProxyConfig
+from decepticon.llm.models import (
+    GPT_5,
+    HAIKU,
+    OPUS,
+    SONNET,
+    LLMModelMapping,
+    ModelAssignment,
+    ModelProfile,
+    ProxyConfig,
+)
 
 
 class TestModelAssignment:
@@ -41,7 +50,7 @@ class TestLLMModelMapping:
     def test_get_assignment_valid(self):
         mapping = LLMModelMapping()
         assignment = mapping.get_assignment("recon")
-        assert assignment.primary == "anthropic/claude-haiku-4-5"
+        assert assignment.primary == HAIKU
 
     def test_get_assignment_invalid(self):
         mapping = LLMModelMapping()
@@ -52,12 +61,12 @@ class TestLLMModelMapping:
         """Orchestrator and planner need strongest reasoning — Opus 4.6."""
         mapping = LLMModelMapping()
         for role in ("decepticon", "planning"):
-            assert mapping.get_assignment(role).primary == "anthropic/claude-opus-4-6"
+            assert mapping.get_assignment(role).primary == OPUS
 
     def test_precision_agent_uses_sonnet(self):
         """Exploit needs precision + tool calling balance — Sonnet 4.6."""
         mapping = LLMModelMapping()
-        assert mapping.get_assignment("exploit").primary == "anthropic/claude-sonnet-4-6"
+        assert mapping.get_assignment("exploit").primary == SONNET
 
     def test_tactical_agents_cross_provider_fallback(self):
         """Tactical agents fall back across providers for resilience."""
@@ -72,10 +81,63 @@ class TestLLMModelMapping:
         assert "openai" in post.fallback
 
     def test_all_roles_have_fallback(self):
-        """Every role has a fallback for resilience."""
+        """Every role has a fallback for resilience (default profile)."""
         mapping = LLMModelMapping()
         for role in ("decepticon", "planning", "exploit", "recon", "postexploit"):
             assert mapping.get_assignment(role).fallback is not None
+
+
+class TestModelProfile:
+    """Profile-based model preset tests."""
+
+    def test_default_profile_matches_bare_constructor(self):
+        default = LLMModelMapping.from_profile("default")
+        bare = LLMModelMapping()
+        for role in ("decepticon", "planning", "exploit", "recon", "postexploit"):
+            assert default.get_assignment(role).primary == bare.get_assignment(role).primary
+            assert default.get_assignment(role).fallback == bare.get_assignment(role).fallback
+
+    def test_high_profile_uses_opus_everywhere(self):
+        """High profile puts Opus on all roles except recon (Sonnet)."""
+        high = LLMModelMapping.from_profile(ModelProfile.HIGH)
+        for role in ("decepticon", "planning", "exploit", "postexploit"):
+            assert high.get_assignment(role).primary == OPUS
+        # Recon uses Sonnet for tool-calling speed at high quality
+        assert high.get_assignment("recon").primary == SONNET
+
+    def test_high_profile_anthropic_only_fallbacks(self):
+        """High profile fallbacks stay within Anthropic where possible."""
+        high = LLMModelMapping.from_profile("high")
+        # Planning, exploit, postexploit fall back to Sonnet (Anthropic)
+        for role in ("planning", "exploit", "postexploit"):
+            assert high.get_assignment(role).fallback == SONNET
+        # Recon falls back to Opus
+        assert high.get_assignment("recon").fallback == OPUS
+        # Orchestrator falls back to GPT-5.4 (cross-provider resilience)
+        assert high.get_assignment("decepticon").fallback == GPT_5
+
+    def test_test_profile_all_haiku(self):
+        """Test profile uses Haiku everywhere for minimum cost."""
+        test = LLMModelMapping.from_profile("test")
+        for role in ("decepticon", "planning", "exploit", "recon", "postexploit"):
+            assignment = test.get_assignment(role)
+            assert assignment.primary == HAIKU
+            assert assignment.fallback is None
+
+    def test_profile_from_string(self):
+        """Profile can be created from string value."""
+        for name in ("default", "high", "test"):
+            mapping = LLMModelMapping.from_profile(name)
+            assert mapping is not None
+
+    def test_invalid_profile_raises(self):
+        with pytest.raises(ValueError):
+            LLMModelMapping.from_profile("nonexistent")
+
+    def test_profile_enum_values(self):
+        assert ModelProfile.DEFAULT == "default"
+        assert ModelProfile.HIGH == "high"
+        assert ModelProfile.TEST == "test"
 
 
 class TestProxyConfig:

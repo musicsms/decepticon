@@ -5,10 +5,13 @@ Provider API keys are configured in .env / docker-compose.yml.
 
 Architecture:
     LLMFactory(proxy, mapping)
-      → get_model("recon")  → ChatOpenAI(model="claude-sonnet-4-20250514")
-      → get_fallback_models("recon") → [ChatOpenAI(model="gpt-4o")]
+      → get_model("recon")  → ChatOpenAI(model="anthropic/claude-haiku-4-5")
+      → get_fallback_models("recon") → [ChatOpenAI(model="gemini/gemini-2.5-flash")]
                                          ↓
-                        LiteLLM proxy → Anthropic/OpenAI/etc.
+                        LiteLLM proxy → Anthropic/OpenAI/Google/etc.
+
+Profile-aware: when no explicit mapping is provided, resolves
+DECEPTICON_MODEL_PROFILE (default/high/test) from DecepticonConfig.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
 from decepticon.core.logging import get_logger
-from decepticon.llm.models import LLMModelMapping, ProxyConfig
+from decepticon.llm.models import LLMModelMapping, ModelProfile, ProxyConfig
 from decepticon.llm.router import ModelRouter
 
 log = get_logger("llm.factory")
@@ -29,17 +32,34 @@ class LLMFactory:
 
     Routes all models through LiteLLM proxy. Supports primary + fallback
     model resolution via ModelRouter.
+
+    When constructed without an explicit mapping, uses the model profile
+    from DecepticonConfig (env: DECEPTICON_MODEL_PROFILE).
     """
 
     def __init__(
         self,
         proxy: ProxyConfig | None = None,
         mapping: LLMModelMapping | None = None,
+        profile: ModelProfile | str | None = None,
     ):
         self._proxy = proxy or ProxyConfig()
-        self._mapping = mapping or LLMModelMapping()
+        if mapping is not None:
+            self._mapping = mapping
+        elif profile is not None:
+            self._mapping = LLMModelMapping.from_profile(profile)
+        else:
+            self._mapping = self._resolve_profile_mapping()
         self._router = ModelRouter(self._mapping)
         self._cache: dict[str, BaseChatModel] = {}
+
+    @staticmethod
+    def _resolve_profile_mapping() -> LLMModelMapping:
+        """Resolve model mapping from config's model_profile setting."""
+        from decepticon.core.config import load_config
+
+        config = load_config()
+        return LLMModelMapping.from_profile(config.model_profile)
 
     @property
     def proxy_url(self) -> str:
@@ -100,12 +120,17 @@ class LLMFactory:
             return False
 
 
-def create_llm(role: str, config: object | None = None) -> BaseChatModel:
+def create_llm(
+    role: str,
+    config: object | None = None,
+    profile: ModelProfile | str | None = None,
+) -> BaseChatModel:
     """Convenience function — creates primary model for a role.
 
     Backward-compatible wrapper around LLMFactory.
     The `config` parameter is accepted but ignored (kept for call-site compat).
+    Pass `profile` to override the config-level model profile.
     """
-    factory = LLMFactory()
+    factory = LLMFactory(profile=profile)
     role_str = role.value if hasattr(role, "value") else role
     return factory.get_model(role_str)

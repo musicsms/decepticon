@@ -11,6 +11,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
+from decepticon.llm.models import ModelProfile
+
 
 def _project_root() -> Path:
     """Project root (where docker-compose.yml lives)."""
@@ -38,11 +40,18 @@ class DockerConfig(BaseModel):
 
 
 class DecepticonConfig(BaseSettings):
-    """Root configuration."""
+    """Root configuration.
+
+    Set DECEPTICON_MODEL_PROFILE to switch model presets:
+      default — Balanced Anthropic-first (production)
+      high    — Opus everywhere (high-value targets)
+      test    — Haiku-only (development/CI, $1/$5 per MTok)
+    """
 
     model_config = {"env_prefix": "DECEPTICON_", "env_nested_delimiter": "__"}
 
     debug: bool = False
+    model_profile: ModelProfile = ModelProfile.DEFAULT
     llm: LLMConfig = Field(default_factory=LLMConfig)
     docker: DockerConfig = Field(default_factory=DockerConfig)
 

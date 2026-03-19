@@ -1,30 +1,32 @@
-"""LLM model definitions — per-role model assignments with fallbacks.
+"""LLM model definitions — per-role model assignments with profile-based presets.
 
-Each agent role gets a primary model and optional fallback. The assignments
-reflect agent characteristics and leverage the latest models (March 2026):
+Each agent role gets a primary model and optional fallback. Three profiles
+control the cost/performance tradeoff:
 
-Ensemble strategy:
-  - Orchestrator:  Claude Opus 4.6 — strongest reasoning for strategic kill chain
-                   coordination, adaptive re-planning, and multi-agent delegation.
-                   Fallback: GPT-5.4 (comparable reasoning, cross-provider resilience).
+  default — Balanced Anthropic-first ensemble (production engagements)
+  high    — Maximum performance, Opus everywhere (high-value targets)
+  test    — Haiku-only, cheapest possible (development and CI)
 
-  - Planner:       Claude Opus 4.6 — legal-precision document generation (RoE, CONOPS,
-                   OPPLAN). Requires strong structured output and schema adherence.
-                   Fallback: GPT-5.4 (strong writing, 1M context).
+Profile selection: DECEPTICON_MODEL_PROFILE=high (env var) or config.
 
-  - Exploit:       Claude Sonnet 4.6 — high-precision attack path selection with
-                   excellent tool calling for exploit frameworks. Opus overkill for
-                   tool-heavy sequential execution; Sonnet balances precision + speed.
-                   Fallback: GPT-4.1 (strong tool use, 1M context, cost-efficient).
+Profiles (March 2026):
 
-  - Recon:         Claude Haiku 4.5 — best cost-efficiency for high-volume scanning
-                   (nmap, nuclei, subfinder) at $1/$5 per MTok. Anthropic-first for
-                   Cybench-proven cybersecurity capability and prompt caching synergy.
-                   Fallback: Gemini 2.5 Flash (cross-provider, fastest tool calling).
+  default:
+    Orchestrator  Opus 4.6        → GPT-5.4         $5/$25
+    Planner       Opus 4.6        → GPT-5.4         $5/$25
+    Exploit       Sonnet 4.6      → GPT-4.1         $3/$15
+    Recon         Haiku 4.5       → Gemini 2.5 Flash $1/$5
+    PostExploit   Sonnet 4.6      → GPT-4.1         $3/$15
 
-  - PostExploit:   Claude Sonnet 4.6 — iterative lateral movement loop needs strong
-                   reasoning + tool calling. Runs many iterations so cost matters.
-                   Fallback: GPT-4.1 (strong tool use, cost-efficient at $2/M input).
+  high:
+    Orchestrator  Opus 4.6        → GPT-5.4         $5/$25
+    Planner       Opus 4.6        → Sonnet 4.6      $5/$25
+    Exploit       Opus 4.6        → Sonnet 4.6      $5/$25
+    Recon         Sonnet 4.6      → Opus 4.6        $3/$15
+    PostExploit   Opus 4.6        → Sonnet 4.6      $5/$25
+
+  test:
+    All roles     Haiku 4.5       → (none)           $1/$5
 
 Model names use LiteLLM provider-prefix format for direct proxy routing.
 Fallbacks activate via ModelFallbackMiddleware on API failure (outage, rate limit).
@@ -32,7 +34,26 @@ Fallbacks activate via ModelFallbackMiddleware on API failure (outage, rate limi
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, Field, field_validator
+
+
+class ModelProfile(StrEnum):
+    """Model cost/performance profile."""
+
+    DEFAULT = "default"
+    HIGH = "high"
+    TEST = "test"
+
+
+# ── Model constants ──────────────────────────────────────────────────────
+OPUS = "anthropic/claude-opus-4-6"
+SONNET = "anthropic/claude-sonnet-4-6"
+HAIKU = "anthropic/claude-haiku-4-5"
+GPT_5 = "openai/gpt-5.4"
+GPT_4 = "openai/gpt-4.1"
+GEMINI_FLASH = "gemini/gemini-2.5-flash"
 
 
 class ProxyConfig(BaseModel):
@@ -64,6 +85,7 @@ class LLMModelMapping(BaseModel):
     """Role → model assignment mapping.
 
     Model names use LiteLLM provider-prefix format for direct routing.
+    Use from_profile() to get a preset configuration.
     """
 
     # ── Strategic tier ──────────────────────────────────────────────
@@ -71,25 +93,13 @@ class LLMModelMapping(BaseModel):
 
     decepticon: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            # Opus 4.6: strongest reasoning for kill chain orchestration,
-            # adaptive re-planning, and sub-agent delegation decisions.
-            # 1M context + prompt caching for long orchestration sessions.
-            primary="anthropic/claude-opus-4-6",
-            # GPT-5.4: comparable frontier reasoning, cross-provider resilience.
-            # 1M context, configurable reasoning effort.
-            fallback="openai/gpt-5.4",
-            temperature=0.4,
+            primary=OPUS, fallback=GPT_5, temperature=0.4,
         )
     )
 
     planning: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            # Opus 4.6: legal-precision document generation (RoE, CONOPS, OPPLAN).
-            # Excellent structured output, schema validation, interview skills.
-            primary="anthropic/claude-opus-4-6",
-            # GPT-5.4: strong writing and structured output for document gen.
-            fallback="openai/gpt-5.4",
-            temperature=0.4,
+            primary=OPUS, fallback=GPT_5, temperature=0.4,
         )
     )
 
@@ -98,14 +108,7 @@ class LLMModelMapping(BaseModel):
 
     exploit: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            # Sonnet 4.6: strong reasoning + excellent tool calling for exploit
-            # frameworks (sqlmap, Impacket, Certipy). Balances precision and speed
-            # better than Opus for sequential tool-heavy execution.
-            primary="anthropic/claude-sonnet-4-6",
-            # GPT-4.1: strong tool use, 1M context, cost-efficient ($2/M input).
-            # Good at parsing exploit output and iterating.
-            fallback="openai/gpt-4.1",
-            temperature=0.3,
+            primary=SONNET, fallback=GPT_4, temperature=0.3,
         )
     )
 
@@ -114,28 +117,13 @@ class LLMModelMapping(BaseModel):
 
     recon: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            # Haiku 4.5: best cost-efficiency for high-volume scanning ($1/$5 per MTok).
-            # Matches Sonnet 4 performance on agent/tool-use tasks. 200K context
-            # sufficient with output offloading. Anthropic-first for Cybench-proven
-            # cybersecurity capability and prompt caching synergy.
-            primary="anthropic/claude-haiku-4-5",
-            # Gemini 2.5 Flash: cross-provider fallback, fastest tool calling,
-            # 1M context for large scan outputs ($0.30/M input).
-            fallback="gemini/gemini-2.5-flash",
-            temperature=0.3,
+            primary=HAIKU, fallback=GEMINI_FLASH, temperature=0.3,
         )
     )
 
     postexploit: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            # Sonnet 4.6: strong reasoning + tool calling for iterative
-            # lateral movement loop. Balances quality and cost for the
-            # 5-20+ iterations typical in post-exploitation.
-            primary="anthropic/claude-sonnet-4-6",
-            # GPT-4.1: strong tool use, cost-efficient for many iterations.
-            # 1M context handles growing credential inventories.
-            fallback="openai/gpt-4.1",
-            temperature=0.3,
+            primary=SONNET, fallback=GPT_4, temperature=0.3,
         )
     )
 
@@ -147,3 +135,57 @@ class LLMModelMapping(BaseModel):
         if not hasattr(self, role):
             raise KeyError(f"No model assignment for role: {role}")
         return getattr(self, role)
+
+    @classmethod
+    def from_profile(cls, profile: ModelProfile | str) -> LLMModelMapping:
+        """Create a model mapping from a named profile.
+
+        Profiles:
+          default — Balanced Anthropic-first (Opus/Sonnet/Haiku mix)
+          high    — Maximum performance (Opus + Sonnet everywhere)
+          test    — Cheapest possible (Haiku-only, no fallbacks)
+        """
+        profile = ModelProfile(profile)
+
+        if profile == ModelProfile.DEFAULT:
+            return cls()
+
+        if profile == ModelProfile.HIGH:
+            return cls(
+                decepticon=ModelAssignment(
+                    primary=OPUS, fallback=GPT_5, temperature=0.4,
+                ),
+                planning=ModelAssignment(
+                    primary=OPUS, fallback=SONNET, temperature=0.4,
+                ),
+                exploit=ModelAssignment(
+                    primary=OPUS, fallback=SONNET, temperature=0.3,
+                ),
+                recon=ModelAssignment(
+                    primary=SONNET, fallback=OPUS, temperature=0.3,
+                ),
+                postexploit=ModelAssignment(
+                    primary=OPUS, fallback=SONNET, temperature=0.3,
+                ),
+            )
+
+        if profile == ModelProfile.TEST:
+            return cls(
+                decepticon=ModelAssignment(
+                    primary=HAIKU, temperature=0.4,
+                ),
+                planning=ModelAssignment(
+                    primary=HAIKU, temperature=0.4,
+                ),
+                exploit=ModelAssignment(
+                    primary=HAIKU, temperature=0.3,
+                ),
+                recon=ModelAssignment(
+                    primary=HAIKU, temperature=0.3,
+                ),
+                postexploit=ModelAssignment(
+                    primary=HAIKU, temperature=0.3,
+                ),
+            )
+
+        raise ValueError(f"Unknown profile: {profile}")
