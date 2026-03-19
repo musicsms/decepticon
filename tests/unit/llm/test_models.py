@@ -41,7 +41,7 @@ class TestLLMModelMapping:
     def test_get_assignment_valid(self):
         mapping = LLMModelMapping()
         assignment = mapping.get_assignment("recon")
-        assert assignment.primary == "claude-sonnet-4-20250514"
+        assert assignment.primary == "gemini/gemini-2.5-flash"
 
     def test_get_assignment_invalid(self):
         mapping = LLMModelMapping()
@@ -49,14 +49,33 @@ class TestLLMModelMapping:
             mapping.get_assignment("nonexistent")
 
     def test_strategic_agents_use_opus(self):
+        """Orchestrator and planner need strongest reasoning — Opus 4.6."""
         mapping = LLMModelMapping()
-        for role in ("decepticon", "planning", "exploit"):
-            assert "opus" in mapping.get_assignment(role).primary
+        for role in ("decepticon", "planning"):
+            assert mapping.get_assignment(role).primary == "anthropic/claude-opus-4-6"
 
-    def test_tactical_agents_use_sonnet(self):
+    def test_precision_agent_uses_sonnet(self):
+        """Exploit needs precision + tool calling balance — Sonnet 4.6."""
         mapping = LLMModelMapping()
-        for role in ("recon", "postexploit"):
-            assert "sonnet" in mapping.get_assignment(role).primary
+        assert mapping.get_assignment("exploit").primary == "anthropic/claude-sonnet-4-6"
+
+    def test_tactical_agents_cross_provider_fallback(self):
+        """Tactical agents fall back across providers for resilience."""
+        mapping = LLMModelMapping()
+        # Recon: Gemini primary → Anthropic fallback
+        recon = mapping.get_assignment("recon")
+        assert "gemini" in recon.primary
+        assert "anthropic" in recon.fallback
+        # PostExploit: Anthropic primary → OpenAI fallback
+        post = mapping.get_assignment("postexploit")
+        assert "anthropic" in post.primary
+        assert "openai" in post.fallback
+
+    def test_all_roles_have_fallback(self):
+        """Every role has a fallback for resilience."""
+        mapping = LLMModelMapping()
+        for role in ("decepticon", "planning", "exploit", "recon", "postexploit"):
+            assert mapping.get_assignment(role).fallback is not None
 
 
 class TestProxyConfig:

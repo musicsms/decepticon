@@ -23,7 +23,7 @@ class TestLLMFactory:
     def test_get_model_returns_chat_model(self):
         model = self.factory.get_model("recon")
         assert model is not None
-        assert model.model_name == "claude-sonnet-4-20250514"
+        assert model.model_name == "gemini/gemini-2.5-flash"
 
     def test_get_model_caches_instances(self):
         model1 = self.factory.get_model("recon")
@@ -46,7 +46,7 @@ class TestLLMFactory:
     def test_get_fallback_models_with_fallback(self):
         models = self.factory.get_fallback_models("recon")
         assert len(models) == 1
-        assert models[0].model_name == "gpt-4o"
+        assert models[0].model_name == "anthropic/claude-sonnet-4-6"
 
     def test_get_fallback_models_without_fallback(self):
         # Create a mapping with no fallback for a role

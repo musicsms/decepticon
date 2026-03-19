@@ -13,23 +13,23 @@ class TestModelRouter:
 
     def test_resolve_returns_primary_model(self):
         model = self.router.resolve("recon")
-        assert model == "claude-sonnet-4-20250514"
+        assert model == "gemini/gemini-2.5-flash"
 
     def test_resolve_decepticon(self):
         model = self.router.resolve("decepticon")
-        assert model == "claude-opus-4-20250514"
+        assert model == "anthropic/claude-opus-4-6"
 
     def test_resolve_with_fallback_returns_chain(self):
         chain = self.router.resolve_with_fallback("recon")
         assert len(chain) == 2
-        assert chain[0] == "claude-sonnet-4-20250514"
-        assert chain[1] == "gpt-4o"
+        assert chain[0] == "gemini/gemini-2.5-flash"
+        assert chain[1] == "anthropic/claude-sonnet-4-6"
 
     def test_resolve_with_fallback_strategic(self):
-        chain = self.router.resolve_with_fallback("exploit")
+        chain = self.router.resolve_with_fallback("decepticon")
         assert len(chain) == 2
-        assert chain[0] == "claude-opus-4-20250514"
-        assert chain[1] == "claude-sonnet-4-20250514"
+        assert chain[0] == "anthropic/claude-opus-4-6"
+        assert chain[1] == "openai/gpt-5.4"
 
     def test_resolve_unknown_role_raises(self):
         with pytest.raises(KeyError, match="No model assignment"):
@@ -38,5 +38,5 @@ class TestModelRouter:
     def test_get_assignment_returns_full_config(self):
         assignment = self.router.get_assignment("recon")
         assert isinstance(assignment, ModelAssignment)
-        assert assignment.primary == "claude-sonnet-4-20250514"
+        assert assignment.primary == "gemini/gemini-2.5-flash"
         assert assignment.temperature == 0.3

@@ -1,15 +1,33 @@
 """LLM model definitions — per-role model assignments with fallbacks.
 
 Each agent role gets a primary model and optional fallback. The assignments
-reflect agent characteristics:
+reflect agent characteristics and leverage the latest models (March 2026):
 
-  - Strategic agents (orchestrator, planner, exploit): opus primary — needs
-    strong reasoning and precision
-  - Tactical agents (recon, postexploit): sonnet primary — tool-heavy
-    workloads where cost/capability balance matters
+Ensemble strategy:
+  - Orchestrator:  Claude Opus 4.6 — strongest reasoning for strategic kill chain
+                   coordination, adaptive re-planning, and multi-agent delegation.
+                   Fallback: GPT-5.4 (comparable reasoning, cross-provider resilience).
 
-Fallbacks activate automatically via ModelFallbackMiddleware when the
-primary model fails (API outage, rate limit, missing key).
+  - Planner:       Claude Opus 4.6 — legal-precision document generation (RoE, CONOPS,
+                   OPPLAN). Requires strong structured output and schema adherence.
+                   Fallback: GPT-5.4 (strong writing, 1M context).
+
+  - Exploit:       Claude Sonnet 4.6 — high-precision attack path selection with
+                   excellent tool calling for exploit frameworks. Opus overkill for
+                   tool-heavy sequential execution; Sonnet balances precision + speed.
+                   Fallback: GPT-4.1 (strong tool use, 1M context, cost-efficient).
+
+  - Recon:         Gemini 2.5 Flash — fastest tool calling at lowest cost for
+                   high-volume scanning (nmap, nuclei, subfinder). 1M context handles
+                   large scan outputs. Hybrid reasoning for scan coordination.
+                   Fallback: Claude Sonnet 4.6 (reliable tool use across providers).
+
+  - PostExploit:   Claude Sonnet 4.6 — iterative lateral movement loop needs strong
+                   reasoning + tool calling. Runs many iterations so cost matters.
+                   Fallback: GPT-4.1 (strong tool use, cost-efficient at $2/M input).
+
+Model names use LiteLLM provider-prefix format for direct proxy routing.
+Fallbacks activate via ModelFallbackMiddleware on API failure (outage, rate limit).
 """
 
 from __future__ import annotations
@@ -45,44 +63,76 @@ class ModelAssignment(BaseModel):
 class LLMModelMapping(BaseModel):
     """Role → model assignment mapping.
 
-    Model names use LiteLLM format. The proxy routes to the correct provider.
+    Model names use LiteLLM provider-prefix format for direct routing.
     """
 
-    # Strategic agents — opus primary (strong reasoning, document generation)
+    # ── Strategic tier ──────────────────────────────────────────────
+    # Reasoning-heavy, few iterations, quality > cost
+
     decepticon: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary="claude-opus-4-20250514",
-            fallback="claude-sonnet-4-20250514",
+            # Opus 4.6: strongest reasoning for kill chain orchestration,
+            # adaptive re-planning, and sub-agent delegation decisions.
+            # 1M context + prompt caching for long orchestration sessions.
+            primary="anthropic/claude-opus-4-6",
+            # GPT-5.4: comparable frontier reasoning, cross-provider resilience.
+            # 1M context, configurable reasoning effort.
+            fallback="openai/gpt-5.4",
             temperature=0.4,
         )
     )
+
     planning: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary="claude-opus-4-20250514",
-            fallback="claude-sonnet-4-20250514",
+            # Opus 4.6: legal-precision document generation (RoE, CONOPS, OPPLAN).
+            # Excellent structured output, schema validation, interview skills.
+            primary="anthropic/claude-opus-4-6",
+            # GPT-5.4: strong writing and structured output for document gen.
+            fallback="openai/gpt-5.4",
             temperature=0.4,
         )
     )
+
+    # ── Precision tier ──────────────────────────────────────────────
+    # High-stakes execution, moderate iterations, precision critical
+
     exploit: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary="claude-opus-4-20250514",
-            fallback="claude-sonnet-4-20250514",
+            # Sonnet 4.6: strong reasoning + excellent tool calling for exploit
+            # frameworks (sqlmap, Impacket, Certipy). Balances precision and speed
+            # better than Opus for sequential tool-heavy execution.
+            primary="anthropic/claude-sonnet-4-6",
+            # GPT-4.1: strong tool use, 1M context, cost-efficient ($2/M input).
+            # Good at parsing exploit output and iterating.
+            fallback="openai/gpt-4.1",
             temperature=0.3,
         )
     )
 
-    # Tactical agents — sonnet primary (tool-heavy, cost/capability balance)
+    # ── Tactical tier ───────────────────────────────────────────────
+    # Tool-heavy, many iterations, speed + cost efficiency matter
+
     recon: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary="claude-sonnet-4-20250514",
-            fallback="gpt-4o",
+            # Gemini 2.5 Flash: fastest tool calling at lowest cost ($0.30/M input).
+            # 1M context for large scan outputs. Hybrid reasoning for coordinating
+            # parallel scans (nmap background + curl foreground).
+            primary="gemini/gemini-2.5-flash",
+            # Sonnet 4.6: reliable tool use as cross-provider fallback.
+            fallback="anthropic/claude-sonnet-4-6",
             temperature=0.3,
         )
     )
+
     postexploit: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary="claude-sonnet-4-20250514",
-            fallback="gpt-4o",
+            # Sonnet 4.6: strong reasoning + tool calling for iterative
+            # lateral movement loop. Balances quality and cost for the
+            # 5-20+ iterations typical in post-exploitation.
+            primary="anthropic/claude-sonnet-4-6",
+            # GPT-4.1: strong tool use, cost-efficient for many iterations.
+            # 1M context handles growing credential inventories.
+            fallback="openai/gpt-4.1",
             temperature=0.3,
         )
     )
