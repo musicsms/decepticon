@@ -23,12 +23,6 @@ HELP_TEXT = """
   [yellow]/exploit[/yellow]    Switch to Exploit Agent (initial access & vulnerability exploitation)
   [yellow]/postexploit[/yellow] Switch to PostExploit Agent (post-exploitation: creds, privesc, lateral)
 
-[bold cyan]Ralph Loop (autonomous execution):[/bold cyan]
-  [yellow]/ralph <dir>[/yellow]         Start autonomous loop on engagement directory
-  [yellow]/ralph status <dir>[/yellow]  Show loop progress
-  [yellow]/ralph resume <dir>[/yellow]  Resume interrupted loop
-  [yellow]/ralph help[/yellow]          Show ralph loop help
-
 [bold cyan]Session:[/bold cyan]
   [yellow]/clear[/yellow]      Clear screen & conversation history
   [yellow]/compact[/yellow]    Compact conversation context (summarize old tool outputs)

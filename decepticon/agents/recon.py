@@ -59,7 +59,7 @@ def create_recon_agent():
         full content loaded on-demand when the agent activates a skill
       - System prompt uses XML-tagged sections for clear attention boundaries
       - No TodoListMiddleware: opplan.json handles task tracking
-      - No SubAgentMiddleware: Ralph loop handles agent orchestration
+      - No SubAgentMiddleware: Decepticon orchestrator handles agent delegation
       - No BASE_AGENT_PROMPT: recon.md is the complete system prompt
     """
     config = load_config()
