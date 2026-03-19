@@ -2,6 +2,8 @@
 
 from pathlib import PurePosixPath
 
+from rich.status import Status
+
 from decepticon.core.streaming import UIRenderer
 from decepticon.ui.cli.console import console
 from decepticon.ui.cli.renderers import (
@@ -45,6 +47,7 @@ class CLIRenderer(UIRenderer):
         self._last_bash_session_outputs: dict[str, str] = {}
         self._subagent_bash_outputs: dict[str, str] = {}
         self._active_agent: str = ""
+        self._bash_spinner: Status | None = None
 
     def set_active_agent(self, name: str) -> None:
         """Set the active agent name for message labeling."""
@@ -52,9 +55,22 @@ class CLIRenderer(UIRenderer):
 
     # ── Top-level agent events ────────────────────────────────────────
 
+    def _stop_bash_spinner(self) -> None:
+        if self._bash_spinner is not None:
+            self._bash_spinner.__exit__(None, None, None)
+            self._bash_spinner = None
+
     def on_tool_call(self, tool_name: str, tool_args: dict) -> None:
         if tool_name == "bash":
-            return  # Rendered in on_tool_result with Kali-style prompt
+            session = tool_args.get("session", "main")
+            self._bash_spinner = Status(
+                f"[dim]bash[/dim] [dim cyan]({session})[/dim cyan]",
+                console=console,
+                spinner="dots",
+                spinner_style="cyan",
+            )
+            self._bash_spinner.__enter__()
+            return
         if tool_name == "task":
             return  # Sub-agent events streamed via on_subagent_* methods
         skill = _is_skill_load(tool_name, tool_args)
@@ -64,6 +80,7 @@ class CLIRenderer(UIRenderer):
         display_tool_call(tool_name, tool_args)
 
     def on_tool_result(self, tool_name: str, tool_args: dict, content: str) -> None:
+        self._stop_bash_spinner()
         if tool_name == "task":
             return  # Already streamed via sub-agent callbacks
         if tool_name == "write_todos":
@@ -84,16 +101,12 @@ class CLIRenderer(UIRenderer):
     def on_ai_message(self, text: str) -> None:
         display_ai_message(text, agent_name=self._active_agent)
 
-    def on_tool_progress(self, tool_name: str, session: str, status: str, detail: str) -> None:
-        if status == "stalled":
-            console.print(f"  [dim]\u23f3 '{session}' 세션에서 명령 완료 대기 중...[/dim]")
-        elif status == "resumed":
-            console.print("  [dim]  └─ 출력 재개됨[/dim]")
-
     def on_cancelled(self) -> None:
+        self._stop_bash_spinner()
         console.print("\n[yellow]Interrupted — agent stopped. You can continue or /clear.[/yellow]")
 
     def on_stream_end(self) -> None:
+        self._stop_bash_spinner()
         console.print()
 
     # ── Sub-agent streaming events ────────────────────────────────────

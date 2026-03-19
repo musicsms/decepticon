@@ -24,7 +24,6 @@ class UIRenderer(Protocol):
     def on_ai_message(self, text: str) -> None: ...
     def on_stream_end(self) -> None: ...
     def on_cancelled(self) -> None: ...
-    def on_tool_progress(self, tool_name: str, session: str, status: str, detail: str) -> None: ...
 
     # Sub-agent streaming — emitted by StreamingRunnable during task() execution
     def on_subagent_start(self, name: str, prompt: str) -> None: ...
@@ -232,7 +231,7 @@ class StreamingEngine:
             if content.startswith("[Observation masked"):
                 continue
             # Mask status-signal responses regardless of size (polling artifacts)
-            if content.startswith(("[RUNNING]", "[IDLE]", "[STALLED]", "[TIMEOUT]", "[BACKGROUND]")):
+            if content.startswith(("[RUNNING]", "[IDLE]", "[TIMEOUT]", "[BACKGROUND]")):
                 msg.content = "[Observation masked — status check]"
                 masked_count += 1
                 continue
