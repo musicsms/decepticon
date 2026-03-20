@@ -1,8 +1,6 @@
 <div align="center">
-  <img src="assets/cli.png" alt="Decepticon CLI">
+  <img src="assets/logo_banner.png" alt="Decepticon" width="600">
 </div>
-
-<h1 align="center">Decepticon</h1>
 
 <p align="center">AI-powered autonomous red team framework.</p>
 
@@ -27,7 +25,11 @@
 
 > **Warning**: Do not use this project on any system or network without explicit authorization.
 
-> **Note**: Decepticon 2.0 is currently under active development. For full documentation, architecture details, and philosophy, visit **[purpleailab.mintlify.app](https://purpleailab.mintlify.app)**.
+> Decepticon 2.0 is under active development. For architecture, philosophy, and full documentation visit **[purpleailab.mintlify.app](https://purpleailab.mintlify.app)**.
+
+<div align="center">
+  <img src="assets/cli.png" alt="Decepticon CLI" width="800">
+</div>
 
 ---
 
@@ -36,27 +38,46 @@
 ### Prerequisites
 
 - Python 3.13+
+- Node.js 20+
 - [uv](https://docs.astral.sh/uv/)
 - Docker & Docker Compose
 
-### Install
+### 1. Clone & Install
 
 ```bash
 git clone -b refactor https://github.com/PurpleAILAB/Decepticon.git
 cd Decepticon
 
+# Python (agents + LangGraph server)
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-cp .env.example .env
-# Edit .env — add your API keys
+# CLI client
+cd clients/cli && npm install && cd ../..
 ```
 
-### Run
+### 2. Configure
 
 ```bash
+cp .env.example .env
+# Edit .env — set ANTHROPIC_API_KEY and/or OPENAI_API_KEY
+```
+
+### 3. Start Services
+
+```bash
+# Core: LiteLLM proxy + PostgreSQL + Kali sandbox + LangGraph server
 docker compose up -d --build
-decepticon
+
+# (Optional) Demo targets for testing
+docker compose --profile victims up -d
+```
+
+### 4. Run CLI
+
+```bash
+cd clients/cli
+npm run dev
 ```
 
 ## License
