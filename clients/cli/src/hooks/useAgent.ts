@@ -1,0 +1,414 @@
+/**
+ * useAgent — LangGraph SDK streaming hook for Ink.
+ *
+ * Uses stream_mode="values" (full state snapshots) and diffs the messages
+ * array to detect new entries — the same approach as Python StreamingEngine.
+ *
+ * Also subscribes to stream_mode="custom" for sub-agent events emitted by
+ * StreamingRunnable via get_stream_writer(). This enables real-time visibility
+ * into sub-agent tool calls, bash execution, and AI reasoning.
+ */
+
+import { useState, useCallback, useRef } from "react";
+import { Client } from "@langchain/langgraph-sdk";
+import type { AgentEvent } from "../types.js";
+
+interface LangChainMessage {
+  type: string; // "human", "ai", "tool"
+  name?: string; // tool name (on ToolMessage)
+  content: string | Array<{ type: string; text?: string }>;
+  tool_calls?: Array<{
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+  }>;
+  tool_call_id?: string;
+  status?: string; // "success" | "error" on tool messages
+  response_metadata?: {
+    token_usage?: {
+      completion_tokens?: number;
+      prompt_tokens?: number;
+      total_tokens?: number;
+    };
+  };
+}
+
+/** Custom event payload from StreamingRunnable's get_stream_writer(). */
+interface SubagentCustomEvent {
+  type:
+    | "subagent_start"
+    | "subagent_end"
+    | "subagent_tool_call"
+    | "subagent_tool_result"
+    | "subagent_message";
+  agent: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  content?: string;
+  text?: string;
+  prompt?: string;
+  elapsed?: number;
+  status?: string;
+  cancelled?: boolean;
+  error?: boolean;
+}
+
+interface UseAgentOptions {
+  apiUrl?: string;
+}
+
+interface PendingTool {
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface StreamStats {
+  startTime: number;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+interface UseAgentReturn {
+  submit: (message: string) => void;
+  /** Cancel the current streaming run. */
+  cancel: () => void;
+  events: AgentEvent[];
+  isStreaming: boolean;
+  pendingTool: PendingTool | null;
+  streamStats: StreamStats | null;
+  /** Currently active agent name (e.g. "decepticon", "recon"). */
+  activeAgent: string | null;
+  error: string | null;
+  clearEvents: () => void;
+  addSystemEvent: (content: string) => void;
+}
+
+/** Extract text from AIMessage content (string or content_block array). */
+function extractText(content: LangChainMessage["content"]): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => (typeof block === "string" ? block : block.text ?? ""))
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+const ASSISTANT_ID = "decepticon";
+
+export function useAgent({
+  apiUrl = "http://localhost:2024",
+}: UseAgentOptions = {}): UseAgentReturn {
+  const clientRef = useRef(new Client({ apiUrl }));
+  const threadIdRef = useRef<string | null>(null);
+  const eventsRef = useRef<AgentEvent[]>([]);
+  const lastCountRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const [events, setEvents] = useState<AgentEvent[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [pendingTool, setPendingTool] = useState<PendingTool | null>(null);
+  const [streamStats, setStreamStats] = useState<StreamStats | null>(null);
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const addEvent = useCallback(
+    (partial: Omit<AgentEvent, "id" | "timestamp">) => {
+      const newEvent: AgentEvent = {
+        ...partial,
+        id: `${Date.now()}-${Math.random()}`,
+        timestamp: Date.now(),
+      };
+      eventsRef.current = [...eventsRef.current, newEvent];
+      setEvents(eventsRef.current);
+    },
+    [],
+  );
+
+  const addSystemEvent = useCallback(
+    (content: string) => {
+      addEvent({ type: "system", content });
+    },
+    [addEvent],
+  );
+
+  const resetStreamState = useCallback(() => {
+    setIsStreaming(false);
+    setPendingTool(null);
+    setStreamStats(null);
+    setActiveAgent(null);
+  }, []);
+
+  const cancel = useCallback(() => {
+    // Abort the local stream
+    abortRef.current?.abort();
+    abortRef.current = null;
+
+    // Cancel all running runs on the server
+    const threadId = threadIdRef.current;
+    if (threadId) {
+      clientRef.current.runs
+        .cancelMany({ threadId, status: "running", action: "interrupt" })
+        .catch(() => {});
+    }
+
+    resetStreamState();
+    addEvent({ type: "system", content: "Cancelled." });
+  }, [addEvent, resetStreamState]);
+
+  const clearEvents = useCallback(() => {
+    eventsRef.current = [];
+    setEvents([]);
+    threadIdRef.current = null;
+    lastCountRef.current = 0;
+  }, []);
+
+  const submit = useCallback(
+    (message: string): void => {
+      addEvent({ type: "user", content: message });
+
+      const runStream = async () => {
+        const client = clientRef.current;
+        setError(null);
+
+        // Create thread if needed
+        if (!threadIdRef.current) {
+          try {
+            const thread = await client.threads.create();
+            threadIdRef.current = thread.thread_id;
+          } catch (err) {
+            const msg =
+              err instanceof Error ? err.message : "Failed to create thread";
+            setError(`Connection failed: ${msg}`);
+            return;
+          }
+        }
+
+        const abortController = new AbortController();
+        abortRef.current = abortController;
+
+        setIsStreaming(true);
+        setPendingTool(null);
+        setActiveAgent("decepticon");
+        setStreamStats({ startTime: Date.now(), totalTokens: 0, promptTokens: 0, completionTokens: 0 });
+
+        // Track tool_call args and names by ID for matching with results
+        const toolCallArgs = new Map<string, Record<string, unknown>>();
+        const toolCallNames = new Map<string, string>();
+        // Cumulative token counts
+        let cumTotal = 0;
+        let cumPrompt = 0;
+        let cumCompletion = 0;
+
+        // Handler for custom sub-agent events from StreamingRunnable
+        const handleCustomEvent = (data: SubagentCustomEvent) => {
+          switch (data.type) {
+            case "subagent_start":
+              setActiveAgent(data.agent);
+              break;
+
+            case "subagent_tool_call":
+              setPendingTool({
+                name: data.tool ?? "",
+                args: data.args ?? {},
+              });
+              break;
+
+            case "subagent_tool_result": {
+              setPendingTool(null);
+              const status: "success" | "error" =
+                data.status === "error" ? "error" : "success";
+
+              if (data.tool === "bash") {
+                addEvent({
+                  type: "bash_result",
+                  content: data.content ?? "",
+                  toolName: "bash",
+                  toolArgs: data.args ?? {},
+                  status,
+                  subagent: data.agent,
+                });
+              } else {
+                addEvent({
+                  type: "tool_result",
+                  content: data.content ?? "",
+                  toolName: data.tool ?? "",
+                  toolArgs: data.args ?? {},
+                  status,
+                  subagent: data.agent,
+                });
+              }
+              break;
+            }
+
+            case "subagent_message":
+              addEvent({
+                type: "ai_message",
+                content: data.text ?? "",
+                subagent: data.agent,
+              });
+              break;
+
+            case "subagent_end":
+              // Pop back to parent
+              setActiveAgent("decepticon");
+              setPendingTool(null);
+              break;
+          }
+        };
+
+        try {
+          const stream = client.runs.stream(
+            threadIdRef.current!,
+            ASSISTANT_ID,
+            {
+              input: {
+                messages: [{ role: "user", content: message }],
+              },
+              streamMode: ["values", "custom"],
+            },
+          );
+
+          for await (const event of stream) {
+            if (abortController.signal.aborted) break;
+
+            // Handle server-side errors (LLM connection failures, etc.)
+            if (event.event === "error") {
+              const errData = event.data as
+                | { message?: string; error?: string }
+                | string;
+              const errMsg =
+                typeof errData === "string"
+                  ? errData
+                  : errData?.message ?? errData?.error ?? "Server error";
+              setError(errMsg);
+              continue;
+            }
+
+            // Handle custom events (sub-agent streaming from StreamingRunnable)
+            if (event.event === "custom") {
+              const data = event.data as SubagentCustomEvent;
+              if (data && typeof data === "object" && "type" in data) {
+                handleCustomEvent(data);
+              }
+              continue;
+            }
+
+            if (event.event !== "values") continue;
+
+            const data = event.data as {
+              messages?: LangChainMessage[];
+            };
+            const messages = data.messages ?? [];
+            const newMessages = messages.slice(lastCountRef.current);
+            lastCountRef.current = messages.length;
+
+            for (const msg of newMessages) {
+              if (msg.type === "human") continue;
+
+              if (msg.type === "ai") {
+                // Extract token usage
+                const usage = msg.response_metadata?.token_usage;
+                if (usage) {
+                  cumTotal += usage.total_tokens ?? 0;
+                  cumPrompt += usage.prompt_tokens ?? 0;
+                  cumCompletion += usage.completion_tokens ?? 0;
+                  setStreamStats((prev) =>
+                    prev
+                      ? { ...prev, totalTokens: cumTotal, promptTokens: cumPrompt, completionTokens: cumCompletion }
+                      : prev,
+                  );
+                }
+
+                if (msg.tool_calls?.length) {
+                  for (const tc of msg.tool_calls) {
+                    toolCallArgs.set(tc.id, tc.args);
+                    toolCallNames.set(tc.id, tc.name);
+                    // Don't show pending indicator for task() — sub-agent events handle that
+                    if (tc.name !== "task") {
+                      setPendingTool({ name: tc.name, args: tc.args });
+                    }
+                  }
+                } else {
+                  // AI text response
+                  const text = extractText(msg.content)
+                    .replace(/<\/?result>/g, "")
+                    .trim();
+                  if (text) {
+                    setPendingTool(null);
+                    addEvent({ type: "ai_message", content: text });
+                  }
+                }
+              } else if (msg.type === "tool") {
+                const content =
+                  typeof msg.content === "string"
+                    ? msg.content
+                    : extractText(msg.content);
+                const tcId = msg.tool_call_id ?? "";
+                const args = toolCallArgs.get(tcId) ?? {};
+                const toolName = msg.name ?? toolCallNames.get(tcId) ?? "";
+                const status: "success" | "error" =
+                  msg.status === "error" ? "error" : "success";
+
+                setPendingTool(null);
+
+                // Suppress task() tool results — already shown via sub-agent custom events
+                if (toolName === "task") continue;
+
+                if (toolName === "bash") {
+                  addEvent({
+                    type: "bash_result",
+                    content,
+                    toolName: "bash",
+                    toolArgs: args,
+                    status,
+                  });
+                } else {
+                  addEvent({
+                    type: "tool_result",
+                    content,
+                    toolName,
+                    toolArgs: args,
+                    status,
+                  });
+                }
+              }
+            }
+          }
+        } catch (err) {
+          // Ignore abort errors — triggered by cancel()
+          if (abortController.signal.aborted) return;
+          const msg =
+            err instanceof Error ? err.message : "Unknown streaming error";
+          setError(msg);
+        }
+
+        abortRef.current = null;
+        resetStreamState();
+      };
+
+      runStream().catch((err) => {
+        if (abortRef.current?.signal.aborted) return;
+        setError(err instanceof Error ? err.message : "Unknown error");
+        abortRef.current = null;
+        resetStreamState();
+      });
+    },
+    [addEvent],
+  );
+
+  return {
+    submit,
+    cancel,
+    events,
+    isStreaming,
+    pendingTool,
+    streamStats,
+    activeAgent,
+    error,
+    clearEvents,
+    addSystemEvent,
+  };
+}

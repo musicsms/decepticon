@@ -31,8 +31,6 @@ from deepagents.middleware.summarization import create_summarization_middleware
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelFallbackMiddleware, TodoListMiddleware
 from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
-from langgraph.checkpoint.memory import MemorySaver
-
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
@@ -76,8 +74,6 @@ def create_decepticon_agent():
 
     system_prompt = _load_system_prompt()
 
-    checkpointer = MemorySaver()
-
     # Route /skills/ to host filesystem; everything else goes into the container
     backend = CompositeBackend(
         default=sandbox,
@@ -90,6 +86,9 @@ def create_decepticon_agent():
     from decepticon.agents.postexploit import create_postexploit_agent
     from decepticon.agents.recon import create_recon_agent
 
+    # Wrap each sub-agent with StreamingRunnable so their tool calls, results,
+    # and AI messages stream through both Python CLI (UIRenderer) and
+    # LangGraph Platform HTTP API (get_stream_writer → custom events).
     subagents = [
         CompiledSubAgent(
             name="planner",
@@ -155,9 +154,12 @@ def create_decepticon_agent():
         system_prompt=system_prompt,
         tools=[bash],
         middleware=middleware,
-        checkpointer=checkpointer,
         name="decepticon",
     )
 
     # Orchestrator needs a higher recursion budget than sub-agents (40).
     return agent.with_config({"recursion_limit": 200})
+
+
+# Module-level graph for LangGraph Platform (langgraph serve)
+graph = create_decepticon_agent()

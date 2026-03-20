@@ -43,7 +43,7 @@ class LLMFactory:
         mapping: LLMModelMapping | None = None,
         profile: ModelProfile | str | None = None,
     ):
-        self._proxy = proxy or ProxyConfig()
+        self._proxy = proxy or self._resolve_proxy_config()
         if mapping is not None:
             self._mapping = mapping
         elif profile is not None:
@@ -52,6 +52,19 @@ class LLMFactory:
             self._mapping = self._resolve_profile_mapping()
         self._router = ModelRouter(self._mapping)
         self._cache: dict[str, BaseChatModel] = {}
+
+    @staticmethod
+    def _resolve_proxy_config() -> ProxyConfig:
+        """Resolve proxy config from DecepticonConfig (env vars)."""
+        from decepticon.core.config import load_config
+
+        config = load_config()
+        return ProxyConfig(
+            url=config.llm.proxy_url,
+            api_key=config.llm.proxy_api_key,
+            timeout=config.llm.timeout,
+            max_retries=config.llm.max_retries,
+        )
 
     @staticmethod
     def _resolve_profile_mapping() -> LLMModelMapping:

@@ -20,13 +20,6 @@ services:
     networks:
       - decepticon-net
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
   # PostgreSQL — Persistent storage for LiteLLM
   # Stores: virtual keys, spend logs, user budgets, rate limits
   postgres:
@@ -67,6 +60,33 @@ services:
       - NET_BIND_SERVICE
     volumes:
       - ./.decepticon:/workspace
+    restart: unless-stopped
+
+  # LangGraph Platform — Agent API Server
+  # Exposes all agents (decepticon, recon, planner, exploit, postexploit)
+  # as a streaming API on port 2024. Ink CLI connects here.
+  langgraph:
+    build:
+      context: .
+      dockerfile: containers/langgraph.Dockerfile
+    container_name: decepticon-langgraph
+    ports:
+      - "${LANGGRAPH_PORT:-2024}:2024"
+    env_file: .env
+    environment:
+      - DECEPTICON_LLM__PROXY_URL=http://litellm:4000
+      - DECEPTICON_LLM__PROXY_API_KEY=${LITELLM_MASTER_KEY:-sk-decepticon-master}
+      - DECEPTICON_DOCKER__SANDBOX_CONTAINER_NAME=decepticon-sandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./.decepticon:/workspace
+    depends_on:
+      litellm:
+        condition: service_started
+      sandbox:
+        condition: service_started
+    networks:
+      - decepticon-net
     restart: unless-stopped
 
   # ── Victim Infrastructure (demo / testing only) ──────────────────────

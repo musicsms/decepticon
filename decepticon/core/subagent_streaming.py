@@ -4,13 +4,15 @@ When the Decepticon orchestrator delegates to a sub-agent via task(),
 SubAgentMiddleware calls runnable.invoke() which normally runs silently.
 
 This module wraps the runnable so that invoke() uses stream() internally,
-emitting tool calls, results, and AI messages to the active UIRenderer
-in real time — so the user sees the sub-agent working, not just the final result.
+emitting tool calls, results, and AI messages through two channels:
+
+  1. UIRenderer context var — for the Python CLI (StreamingEngine)
+  2. LangGraph stream writer — for LangGraph Platform HTTP API (custom events)
 
 Architecture:
   StreamingRunnable wraps a compiled LangGraph agent
   → intercepts invoke() → uses stream(mode="values") internally
-  → emits events via contextvars-based renderer callback
+  → emits events via both channels
   → returns same result as invoke() for SubAgentMiddleware compatibility
 """
 
@@ -18,7 +20,7 @@ from __future__ import annotations
 
 import contextvars
 import time
-from typing import Any
+from typing import Any, Callable
 
 # Context variable for the active renderer — set by StreamingEngine.run()
 _active_renderer: contextvars.ContextVar[Any] = contextvars.ContextVar(
@@ -36,13 +38,26 @@ def clear_subagent_renderer(token: contextvars.Token) -> None:
     _active_renderer.reset(token)
 
 
+def _get_writer() -> Callable | None:
+    """Get the LangGraph stream writer if available (for HTTP API streaming)."""
+    try:
+        from langgraph.config import get_stream_writer
+
+        return get_stream_writer()
+    except Exception:
+        return None
+
+
 class StreamingRunnable:
     """Wraps a compiled LangGraph agent to stream events during invoke().
 
     Drop-in replacement for the runnable field in CompiledSubAgent.
-    When a renderer is active (set via context var by StreamingEngine),
-    invoke() streams internally and emits events. Otherwise falls back
-    to plain invoke().
+
+    Two streaming channels:
+      - UIRenderer (contextvars): Used by Python CLI's StreamingEngine
+      - get_stream_writer(): Used by LangGraph Platform HTTP API (custom events)
+
+    If neither channel is available, falls back to plain invoke().
 
     All attribute access except invoke() is delegated to the underlying runnable.
     """
@@ -52,11 +67,15 @@ class StreamingRunnable:
         self._name = name
 
     def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
-        """Stream sub-agent execution, emitting events to the active renderer."""
+        """Stream sub-agent execution, emitting events to available channels."""
         renderer = _active_renderer.get(None)
+        has_renderer = renderer is not None and hasattr(renderer, "on_subagent_start")
 
-        # No renderer active — fall back to normal invoke
-        if renderer is None or not hasattr(renderer, "on_subagent_start"):
+        # Capture the parent graph's stream writer BEFORE entering sub-agent execution
+        writer = _get_writer()
+
+        # Neither channel available — fall back to normal invoke
+        if not has_renderer and writer is None:
             return self._runnable.invoke(input, config, **kwargs)
 
         from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -71,7 +90,12 @@ class StreamingRunnable:
                         prompt = str(m.content)[:200]
                         break
 
-        renderer.on_subagent_start(self._name, prompt)
+        # ── Emit: subagent_start ──
+        if has_renderer:
+            renderer.on_subagent_start(self._name, prompt)
+        if writer:
+            writer({"type": "subagent_start", "agent": self._name, "prompt": prompt})
+
         start = time.monotonic()
 
         last_state = None
@@ -107,34 +131,68 @@ class StreamingRunnable:
                                 .strip()
                             )
                             if text:
-                                renderer.on_subagent_message(self._name, text)
+                                # ── Emit: subagent_message ──
+                                if has_renderer:
+                                    renderer.on_subagent_message(self._name, text)
+                                if writer:
+                                    writer({"type": "subagent_message", "agent": self._name, "text": text})
 
                         if hasattr(msg, "tool_calls") and msg.tool_calls:
                             for tc in msg.tool_calls:
                                 active_tool_calls[tc["id"]] = tc
-                                renderer.on_subagent_tool_call(
-                                    self._name, tc["name"], tc["args"]
-                                )
+                                # Serialize args safely for JSON
+                                tc_args = {k: str(v) if not isinstance(v, (str, int, float, bool)) else v for k, v in tc["args"].items()}
+                                # ── Emit: subagent_tool_call ──
+                                if has_renderer:
+                                    renderer.on_subagent_tool_call(
+                                        self._name, tc["name"], tc["args"]
+                                    )
+                                if writer:
+                                    writer({"type": "subagent_tool_call", "agent": self._name, "tool": tc["name"], "args": tc_args})
 
                     elif isinstance(msg, ToolMessage):
                         tc = active_tool_calls.get(msg.tool_call_id)
                         tool_name = tc["name"] if tc else "unknown"
                         tool_args = tc["args"] if tc else {}
-                        renderer.on_subagent_tool_result(
-                            self._name, tool_name, tool_args, str(msg.content)
-                        )
+                        content = str(msg.content)
+                        status = getattr(msg, "status", "success") or "success"
+                        tc_args = {k: str(v) if not isinstance(v, (str, int, float, bool)) else v for k, v in tool_args.items()}
+                        # ── Emit: subagent_tool_result ──
+                        if has_renderer:
+                            renderer.on_subagent_tool_result(
+                                self._name, tool_name, tool_args, content
+                            )
+                        if writer:
+                            writer({
+                                "type": "subagent_tool_result",
+                                "agent": self._name,
+                                "tool": tool_name,
+                                "args": tc_args,
+                                "content": content,
+                                "status": status,
+                            })
 
         except KeyboardInterrupt:
             elapsed = time.monotonic() - start
-            renderer.on_subagent_end(self._name, elapsed, cancelled=True)
+            if has_renderer:
+                renderer.on_subagent_end(self._name, elapsed, cancelled=True)
+            if writer:
+                writer({"type": "subagent_end", "agent": self._name, "elapsed": elapsed, "cancelled": True})
             raise
         except Exception:
             elapsed = time.monotonic() - start
-            renderer.on_subagent_end(self._name, elapsed, error=True)
+            if has_renderer:
+                renderer.on_subagent_end(self._name, elapsed, error=True)
+            if writer:
+                writer({"type": "subagent_end", "agent": self._name, "elapsed": elapsed, "error": True})
             raise
 
         elapsed = time.monotonic() - start
-        renderer.on_subagent_end(self._name, elapsed)
+        # ── Emit: subagent_end ──
+        if has_renderer:
+            renderer.on_subagent_end(self._name, elapsed)
+        if writer:
+            writer({"type": "subagent_end", "agent": self._name, "elapsed": elapsed})
 
         if last_state is None:
             # Fallback — stream yielded nothing (shouldn't happen)

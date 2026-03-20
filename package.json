@@ -1,0 +1,9 @@
+{
+  "name": "decepticon",
+  "private": true,
+  "workspaces": ["clients/cli"],
+  "scripts": {
+    "cli": "npm run start --workspace=@decepticon/cli",
+    "cli:dev": "npm run dev --workspace=@decepticon/cli"
+  }
+}
