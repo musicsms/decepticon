@@ -137,7 +137,7 @@ def create_decepticon_agent():
     middleware = [
         SkillsMiddleware(backend=backend, sources=["/skills/decepticon/", "/skills/shared/"]),
         FilesystemMiddleware(backend=backend),
-        SubAgentMiddleware(subagents=subagents),
+        SubAgentMiddleware(backend=backend, subagents=subagents),
         TodoListMiddleware(),
     ]
     if fallback_models:

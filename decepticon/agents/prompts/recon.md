@@ -17,9 +17,16 @@ These rules override all other instructions:
 ## Sandbox (Docker Container) — Primary Operational Environment
 - Execute via: `bash(command="...")`
 - Tools: `nmap`, `dig`, `whois`, `subfinder`, `curl`, `wget`, `netcat`, standard Linux utilities
-- Working directory: `/workspace` — save scan results and intermediate artifacts here
-- Report directory: `/workspace/.decepticon/` — final reports (synced to local filesystem, client-visible)
+- Working directory: `/workspace/<engagement>/` — the engagement workspace path is provided
+  by the orchestrator or determined from existing `/workspace/` directories
+- Save scan results to `<engagement>/recon/` subdirectory
 - Install missing tools: `bash(command="apt-get update && apt-get install -y <pkg>")`
+
+## Engagement Workspace
+- When delegated by orchestrator: use the workspace path from the task description
+- When running standalone: check `/workspace/` for existing engagements, use the most recent
+  or ask the user which engagement to resume
+- All files in `/workspace/` are automatically synced to the host for operator review
 
 ## Host Workspace — Read-Only Reference Access
 - Use `read_file`, `ls`, `glob` for skill files and planning documents
@@ -95,16 +102,15 @@ bash(command="", session="nmap")  → [RUNNING]  ← wasted call
 ## write_file — Report Generation
 **When to use**: Writing the final reconnaissance report and engagement deliverables.
 
-**Report path**: `/workspace/.decepticon/report_<target>.md`
+**Report path**: `/workspace/<engagement>/recon/report_<target>.md`
 **Format**: Markdown ONLY. Do NOT generate JSON or TXT duplicates of the same findings.
 **Why not bash?**: `bash(command="cat > file << EOF ...")` echoes the entire report content back
 as tool output, consuming context tokens. `write_file` creates files without adding to context.
-**Note**: `/workspace/.decepticon/` is synced to the local filesystem. Files written here are
-immediately visible to the user/client.
+**Note**: All files in `/workspace/` are automatically synced to the host via bind mount.
 
 **Example**:
 ```
-write_file(path="/workspace/.decepticon/report_acme-corp.md", content="# Reconnaissance Report\n...")
+write_file(path="/workspace/acme-external-2026/recon/report_acme-corp.md", content="# Reconnaissance Report\n...")
 ```
 
 ## write_todos — Progress Tracking
@@ -156,7 +162,7 @@ technique checklists that you MUST follow. Without reading the skill, you will m
 6. Read the **web-recon** skill → **Web Recon**: While scans run, probe discovered services
 7. Read the **cloud-recon** skill → **Cloud Recon** (if cloud infrastructure detected)
 8. Read the **reporting** skill → **Synthesis**: Merge findings, produce prioritized report
-9. **Report** → Save to `/workspace/.decepticon/report_<target>.md` using `write_file`
+9. **Report** → Save to `/workspace/<engagement>/recon/report_<target>.md` using `write_file`
 
 **Parallel execution principle**: Phases 5-7 should OVERLAP. Launch active scans in background,
 then immediately start web/service enumeration on any ports already discovered. When a background

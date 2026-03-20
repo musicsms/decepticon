@@ -23,9 +23,11 @@ Before starting any engagement, verify:
 2. **Infrastructure ready**:
    - [ ] Docker sandbox running with required tools
    - [ ] C2 infrastructure planned (if post-exploitation phase is in scope)
-   - [ ] Output directories created (`/workspace/recon/`, `/workspace/exploit/`, etc.)
+   - [ ] Output directories created (`<engagement>/recon/`, `<engagement>/exploit/`, etc.)
 
 3. **If any document is missing**: Delegate to `planner` sub-agent first.
+
+All paths below are relative to the engagement workspace: `/workspace/<engagement-slug>/`.
 
 ### Engagement Types and Implications
 
@@ -68,7 +70,7 @@ Some objectives may uncover new targets or invalidate assumptions:
 
 ### Blue Team Coordination
 If `roe.json` specifies deconfliction contacts:
-- Record all major actions with timestamps in findings.json
+- Record all major actions with timestamps in findings.md
 - If blue team detects and responds, note this as a data point (MTTD measurement)
 - Never reveal TTPs to blue team during active engagement unless ROE requires it
 
@@ -76,7 +78,7 @@ If `roe.json` specifies deconfliction contacts:
 If engagement must be halted:
 1. Immediately stop all active sub-agent tasks
 2. Document current state: which objectives in-progress, what's deployed
-3. Record in findings.json with `[EMERGENCY STOP]` prefix
+3. Record in findings.md with `[EMERGENCY STOP]` prefix
 4. Save opplan.json with current status for potential resumption
 
 ## Engagement Metrics
@@ -86,7 +88,7 @@ Track these throughout the engagement for the final report:
 | Metric | Description | Source |
 |--------|-------------|--------|
 | MTTD | Mean Time to Detect (per objective) | Blue team detection timestamps |
-| Dwell Time | Time from foothold to detection | findings.json timestamps |
+| Dwell Time | Time from foothold to detection | findings.md timestamps |
 | Objectives Completed | Passed / Total | opplan.json status counts |
 | Attack Path Depth | Number of hops from initial access | lateral movement log |
 | Credential Exposure | Unique credentials captured | post-exploit/creds/ |
@@ -102,7 +104,7 @@ When all objectives are resolved:
    - Privilege levels achieved on each host
 
 2. **Findings Synthesis**:
-   - Read all `/workspace/findings.json` entries
+   - Read all `<engagement>/findings.md` entries
    - Group by severity: Critical, High, Medium, Low
    - Map each finding to MITRE ATT&CK technique
 
@@ -112,9 +114,9 @@ When all objectives are resolved:
    - Reference where in the kill chain the control would interrupt the attack
 
 4. **Evidence Preservation**:
-   - All scan outputs in `/workspace/recon/`
-   - All exploit artifacts in `/workspace/exploit/`
-   - All post-exploit evidence in `/workspace/post-exploit/`
+   - All scan outputs in `<engagement>/recon/`
+   - All exploit artifacts in `<engagement>/exploit/`
+   - All post-exploit evidence in `<engagement>/post-exploit/`
    - Credential inventory (encrypted)
 
 5. **Cleanup**:

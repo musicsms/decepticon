@@ -29,7 +29,7 @@ These rules override all other instructions:
 ## write_file — Primary Output Tool
 Write completed documents as JSON to the engagement directory.
 
-Path convention: `/workspace/engagements/<engagement-slug>/`
+Path convention: `/workspace/<engagement-slug>/plan/`
 - `roe.json` — Rules of Engagement
 - `conops.json` — Concept of Operations
 - `opplan.json` — Operations Plan (ralph loop driver)

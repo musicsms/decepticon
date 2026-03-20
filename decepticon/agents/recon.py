@@ -12,9 +12,8 @@ Middleware stack (selected for recon):
   6. PatchToolCallsMiddleware — repair dangling tool calls
 
 Backend routing (CompositeBackend):
-  /skills/*                → FilesystemBackend (host FS, read-only SKILL.md access)
-  /workspace/.decepticon/* → FilesystemBackend (host FS, client-visible reports)
-  default                  → DockerSandbox     (all file ops + bash execution in container)
+  /skills/*  → FilesystemBackend (host FS, read-only SKILL.md access)
+  default    → DockerSandbox     (all file ops + bash execution in container)
 """
 
 from pathlib import Path
@@ -51,7 +50,6 @@ def create_recon_agent():
 
     Context engineering decisions:
       - CompositeBackend: /skills/* → host FS (read-only), default → Docker sandbox
-      - /workspace/.decepticon/ → host FS (always <project_root>/.decepticon/)
       - InMemoryStore: cross-thread memory for persisting findings across sessions
       - ModelFallbackMiddleware: haiku 4.5 primary → gemini 2.5 flash fallback on failure
       - No TodoListMiddleware: opplan.json handles task tracking
@@ -75,15 +73,11 @@ def create_recon_agent():
     store = InMemoryStore()
 
     # Route /skills/ to host filesystem; everything else goes into the container.
-    report_dir = _REPO_ROOT / ".decepticon"
-    report_dir.mkdir(parents=True, exist_ok=True)
-
-    routes: dict[str, FilesystemBackend] = {
-        "/skills/": FilesystemBackend(root_dir=_REPO_ROOT / "skills", virtual_mode=True),
-        "/workspace/.decepticon/": FilesystemBackend(root_dir=report_dir),
-    }
-
-    backend = CompositeBackend(default=sandbox, routes=routes)
+    # Engagement files in /workspace/ are auto-synced to host via bind mount.
+    backend = CompositeBackend(
+        default=sandbox,
+        routes={"/skills/": FilesystemBackend(root_dir=_REPO_ROOT / "skills", virtual_mode=True)},
+    )
 
     # Assemble middleware stack
     middleware = [

@@ -66,7 +66,7 @@ services:
       - NET_ADMIN
       - NET_BIND_SERVICE
     volumes:
-      - sandbox_data:/workspace
+      - ./.decepticon:/workspace
     restart: unless-stopped
 
   # ── Victim Infrastructure (demo / testing only) ──────────────────────
@@ -97,7 +97,6 @@ services:
 
 volumes:
   postgres_data:
-  sandbox_data:
 
 networks:
   decepticon-net:
