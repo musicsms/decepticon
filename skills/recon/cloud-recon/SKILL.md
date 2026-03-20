@@ -175,10 +175,10 @@ curl -s "https://<project>.firebaseio.com/.json"
 ### cloud_enum (Automated Discovery)
 ```bash
 # Enumerate across all major cloud providers
-cloud_enum -k <target> -l /workspace/cloud_enum_<target>.txt
+cloud_enum -k <target> -l cloud_enum_<target>.txt
 
 # With mutation file
-cloud_enum -k <target> -m mutations.txt -l /workspace/cloud_enum_<target>.txt
+cloud_enum -k <target> -m mutations.txt -l cloud_enum_<target>.txt
 ```
 
 ### Manual Multi-Cloud Checklist
@@ -253,7 +253,7 @@ curl -s "https://gcr.io/v2/<project>/tags/list"
 
 ## 9. Output Files
 ```
-/workspace/
+./
 ├── cloud_enum_<target>.txt           # cloud_enum results
 ├── s3_buckets_<target>.txt           # AWS S3 discovery
 ├── azure_storage_<target>.txt        # Azure blob discovery

@@ -38,14 +38,14 @@ Every objective MUST include these three types:
 
 1. **Scope check:** "All targets verified against roe.json in-scope list"
 2. **OPSEC check:** At least one OPSEC criterion (rate limit, timing, UA)
-3. **Output persistence:** "Results saved to /workspace/..." with specific path
+3. **Output persistence:** "Results saved to <engagement>/recon/..." (or exploit/, post-exploit/) with specific path
 
 ## Rule 4: Verifiable Criteria Only
 
 Every acceptance criterion must be mechanically checkable.
 
 **Bad:** "Thorough reconnaissance achieved", "Good coverage", "Comprehensive results"
-**Good:** "subfinder results saved to /workspace/recon/subfinder.txt", "Scan rate ≤ 10 req/sec"
+**Good:** "subfinder results saved to <engagement>/recon/subfinder.txt", "Scan rate ≤ 10 req/sec"
 
 ## Rule 5: MITRE ATT&CK Mapping
 

@@ -27,7 +27,7 @@ Before starting any engagement, verify:
 
 3. **If any document is missing**: Delegate to `planner` sub-agent first.
 
-All paths below are relative to the engagement workspace: `/workspace/<engagement-slug>/`.
+All paths below are relative to the engagement working directory (set via `cd` before commands run).
 
 ### Engagement Types and Implications
 

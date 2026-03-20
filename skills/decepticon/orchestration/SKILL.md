@@ -19,7 +19,7 @@ Every `task()` delegation MUST include:
 3. **Context** — Relevant findings from previous phases
 4. **Lessons** — Known gotchas, failed approaches, OPSEC warnings
 5. **Acceptance Criteria** — How the sub-agent knows it's done
-6. **Output Location** — Where to save results (`/workspace/<phase>/`)
+6. **Output Location** — Where to save results (e.g. `recon/`, `exploit/`)
 
 ### Delegation Template
 ```
@@ -42,7 +42,7 @@ task(
   - [ ] {criterion_1}
   - [ ] {criterion_2}
 
-  Save all results to /workspace/{phase}/
+  Save all results to {phase}/
   """,
   subagent_type="{agent_name}"
 )
@@ -73,7 +73,7 @@ task(description="Recon subnet 10.0.1.0/24...", subagent_type="recon")
 
 ### Engagement State Files
 ```
-/workspace/
+./
 ├── roe.json              # Immutable scope boundaries (read every iteration)
 ├── conops.json           # Operation concept
 ├── opplan.json           # Objective tracker (update status after each sub-agent)
@@ -92,7 +92,7 @@ task(description="Recon subnet 10.0.1.0/24...", subagent_type="recon")
 ### Context Window Budget
 - Read findings.json each iteration (keep last ~3000 chars)
 - Summarize verbose sub-agent outputs before appending to findings
-- Use /workspace/ files as persistent memory — don't rely on conversation history
+- Use files on disk as persistent memory — don't rely on conversation history
 
 ## Adaptive Re-planning
 

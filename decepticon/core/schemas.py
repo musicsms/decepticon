@@ -304,16 +304,28 @@ class EngagementBundle(BaseModel):
     opplan: OPPLAN
     deconfliction: DeconflictionPlan
 
-    def save(self, directory: str) -> dict[str, str]:
-        """Save all documents as JSON files to a directory.
+    def save(self, engagement_dir: str) -> dict[str, str]:
+        """Save all documents to an engagement workspace directory.
+
+        Layout:
+          <engagement_dir>/plan/roe.json, conops.json, opplan.json, deconfliction.json
+          <engagement_dir>/findings.md
+          <engagement_dir>/recon/  (created empty)
+          <engagement_dir>/exploit/  (created empty)
+          <engagement_dir>/post-exploit/  (created empty)
 
         Returns a mapping of document type → file path.
         """
         import json
         from pathlib import Path
 
-        out_dir = Path(directory)
-        out_dir.mkdir(parents=True, exist_ok=True)
+        root = Path(engagement_dir)
+        plan_dir = root / "plan"
+        plan_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create execution subdirectories
+        for subdir in ("recon", "exploit", "post-exploit"):
+            (root / subdir).mkdir(parents=True, exist_ok=True)
 
         files = {}
         for name, doc in [
@@ -322,23 +334,20 @@ class EngagementBundle(BaseModel):
             ("opplan", self.opplan),
             ("deconfliction", self.deconfliction),
         ]:
-            path = out_dir / f"{name}.json"
+            path = plan_dir / f"{name}.json"
             path.write_text(
                 json.dumps(doc.model_dump(), indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
             files[name] = str(path)
 
-        # Initialize empty findings.txt
-        findings_path = out_dir / "findings.txt"
+        # Initialize empty findings.md
+        findings_path = root / "findings.md"
         if not findings_path.exists():
             findings_path.write_text(
-                f"# Findings Log — {self.roe.engagement_name}\n"
-                f"# Started: {datetime.now().isoformat()}\n"
-                "---\n\n"
-                "## Codebase Patterns\n"
-                "- (none yet)\n"
-                "---\n",
+                f"# Findings Log — {self.roe.engagement_name}\n\n"
+                f"Started: {datetime.now().isoformat()}\n\n"
+                "---\n\n",
                 encoding="utf-8",
             )
             files["findings"] = str(findings_path)

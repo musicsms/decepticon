@@ -17,13 +17,13 @@ OSINT collects publicly available information about targets without any direct i
 ### theHarvester
 ```bash
 # Comprehensive email harvesting
-theHarvester -d <target> -b all -l 500 -f /workspace/theharvester_<target>.html
+theHarvester -d <target> -b all -l 500 -f theharvester_<target>.html
 
 # Specific sources
 theHarvester -d <target> -b google,bing,linkedin,twitter -l 200
 
 # Output formats
-theHarvester -d <target> -b all -f /workspace/theharvester_<target> --screenshot /workspace/screenshots/
+theHarvester -d <target> -b all -f theharvester_<target> --screenshot screenshots/
 ```
 
 ### Manual Email Pattern Discovery
@@ -94,7 +94,7 @@ curl -s "https://api.github.com/orgs/<target>/repos?per_page=100" | \
 trufflehog github --org <target> --only-verified
 
 # Using gitleaks (if available)
-gitleaks detect --source /path/to/repo --report-path /workspace/gitleaks_<target>.json
+gitleaks detect --source /path/to/repo --report-path gitleaks_<target>.json
 
 # Manual grep patterns in discovered repos
 grep -rn "api[_-]key\|secret\|password\|token\|aws_access" --include="*.py" --include="*.js" --include="*.yaml" --include="*.env"
@@ -133,10 +133,10 @@ curl -s "https://api.abuseipdb.com/api/v2/check?ipAddress=<IP>" \
 ```bash
 # Historical snapshots
 curl -s "https://web.archive.org/cdx/search/cdx?url=*.example.com/*&output=text&fl=original&collapse=urlkey" | \
-    sort -u > /workspace/wayback_<target>.txt
+    sort -u > wayback_<target>.txt
 
 # Look for old admin panels, login pages, API docs
-grep -iE "(admin|login|api|swagger|debug|config)" /workspace/wayback_<target>.txt
+grep -iE "(admin|login|api|swagger|debug|config)" wayback_<target>.txt
 ```
 
 ## 5. Breach & Credential Data
@@ -215,7 +215,7 @@ site:<target> "not for distribution" | "confidential" | "internal use only"
 
 ## 9. Output Files
 ```
-/workspace/
+./
 ├── theharvester_<target>.html     # Email harvesting results
 ├── emails_<target>.txt            # Cleaned email list
 ├── org_chart_<target>.md          # Organizational mapping

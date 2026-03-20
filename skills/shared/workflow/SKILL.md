@@ -233,7 +233,7 @@ The `defense-evasion` skill applies to **exploitation and post-exploitation phas
 To determine "what's next", check for these artifacts:
 
 ```
-/workspace/
+./
 ├── roe.json               → Planning Phase 1 complete
 ├── conops.json            → Planning Phase 3 complete
 ├── deconfliction.json     → Planning Phase 3 complete

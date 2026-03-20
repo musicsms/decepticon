@@ -15,22 +15,22 @@ Active reconnaissance **directly interacts with target systems**. Every packet s
 ## Quick Reference — Common Scan Patterns
 ```bash
 # Stealth SYN scan with version detection (recommended starting point)
-nmap -sS -sV -p 22,80,443,8080,8443 <TARGET> -oN /workspace/nmap_<TARGET>.txt -oX /workspace/nmap_<TARGET>.xml
+nmap -sS -sV -p 22,80,443,8080,8443 <TARGET> -oN nmap_<TARGET>.txt -oX nmap_<TARGET>.xml
 
 # Full top-1000 port scan
-nmap -sS -sV --top-ports 1000 -T2 <TARGET> -oN /workspace/nmap_full_<TARGET>.txt
+nmap -sS -sV --top-ports 1000 -T2 <TARGET> -oN nmap_full_<TARGET>.txt
 
 # Script enumeration on discovered ports
-nmap -sC -sV -p <PORTS> <TARGET> -oN /workspace/nmap_scripts_<TARGET>.txt
+nmap -sC -sV -p <PORTS> <TARGET> -oN nmap_scripts_<TARGET>.txt
 
 # UDP scan (DNS, SNMP, NTP)
-nmap -sU -p 53,161,123 <TARGET> -oN /workspace/nmap_udp_<TARGET>.txt
+nmap -sU -p 53,161,123 <TARGET> -oN nmap_udp_<TARGET>.txt
 
 # Web directory fuzzing
-ffuf -u https://<TARGET>/FUZZ -w /usr/share/wordlists/dirb/common.txt -mc 200,301,302,403 -o /workspace/ffuf_<TARGET>.json
+ffuf -u https://<TARGET>/FUZZ -w /usr/share/wordlists/dirb/common.txt -mc 200,301,302,403 -o ffuf_<TARGET>.json
 
 # Vulnerability scan
-nuclei -u https://<TARGET> -severity critical,high -o /workspace/nuclei_<TARGET>.txt
+nuclei -u https://<TARGET> -severity critical,high -o nuclei_<TARGET>.txt
 ```
 
 ## 1. OPSEC Principles for Active Scanning
@@ -62,7 +62,7 @@ nmap -sS -sV --top-ports 1000 <target_ip>
 nmap -sS -p- --min-rate 1000 <target_ip>
 
 # Save results
-nmap -sS -sV -p 22,80,443 <target_ip> -oN /workspace/nmap_scan.txt -oX /workspace/nmap_scan.xml
+nmap -sS -sV -p 22,80,443 <target_ip> -oN nmap_scan.txt -oX nmap_scan.xml
 ```
 
 ### Service Version Detection
@@ -179,12 +179,12 @@ ffuf -u https://<target>/ -H "Host: FUZZ.<target>" -w /usr/share/wordlists/subdo
 ffuf -u https://<target>/api/FUZZ -w /usr/share/wordlists/api-endpoints.txt -mc 200,201,401,403
 
 # Save JSON output
-ffuf -u https://<target>/FUZZ -w wordlist.txt -o /workspace/ffuf_results.json -of json
+ffuf -u https://<target>/FUZZ -w wordlist.txt -o ffuf_results.json -of json
 ```
 
 ### gobuster (Alternative)
 ```bash
-gobuster dir -u https://<target> -w /usr/share/wordlists/dirb/common.txt -o /workspace/gobuster_<target>.txt
+gobuster dir -u https://<target> -w /usr/share/wordlists/dirb/common.txt -o gobuster_<target>.txt
 gobuster dns -d <target> -w /usr/share/wordlists/subdomains.txt
 ```
 
@@ -193,29 +193,29 @@ gobuster dns -d <target> -w /usr/share/wordlists/subdomains.txt
 ### nuclei (Template-Based Scanner)
 ```bash
 # Critical and high severity only (recommended start)
-nuclei -u https://<target> -severity critical,high -o /workspace/nuclei_<target>.txt
+nuclei -u https://<target> -severity critical,high -o nuclei_<target>.txt
 
 # Specific template categories
 nuclei -u https://<target> -tags cve,misconfig,exposure
 nuclei -u https://<target> -tags takeover
 
 # Scan list of URLs from httpx
-nuclei -l /workspace/httpx_live.txt -severity critical,high,medium
+nuclei -l httpx_live.txt -severity critical,high,medium
 
 # Rate limiting for stealth
 nuclei -u https://<target> -rl 10 -severity critical,high
 
 # JSON output
-nuclei -u https://<target> -severity critical,high -json -o /workspace/nuclei.json
+nuclei -u https://<target> -severity critical,high -json -o nuclei.json
 ```
 
 ### nikto (Web Server Scanner)
 ```bash
 # Basic scan
-nikto -h https://<target> -o /workspace/nikto_<target>.txt
+nikto -h https://<target> -o nikto_<target>.txt
 
 # Specific tuning options
-nikto -h https://<target> -Tuning 1234 -o /workspace/nikto_<target>.txt
+nikto -h https://<target> -Tuning 1234 -o nikto_<target>.txt
 # 1=Interesting files, 2=Misconfigs, 3=Info disclosure, 4=Injection (XSS/SQL)
 ```
 
@@ -321,14 +321,14 @@ rules as IPv4. Services may be exposed on IPv6 that are filtered on IPv4.
 ### Scan Orchestration
 ```bash
 # Run independent scans in parallel (use & and wait)
-nmap -sS -sV --top-ports 1000 <target1> -oN /workspace/nmap_t1.txt &
-nmap -sS -sV --top-ports 1000 <target2> -oN /workspace/nmap_t2.txt &
+nmap -sS -sV --top-ports 1000 <target1> -oN nmap_t1.txt &
+nmap -sS -sV --top-ports 1000 <target2> -oN nmap_t2.txt &
 wait
 
 # Parallel web fuzzing across multiple hosts
-cat /workspace/live_hosts.txt | while read host; do
+cat live_hosts.txt | while read host; do
   ffuf -u "$host/FUZZ" -w /usr/share/wordlists/dirb/common.txt \
-    -mc 200,301,302,403 -o "/workspace/ffuf_$(echo $host | tr '/:' '_').json" -of json &
+    -mc 200,301,302,403 -o "ffuf_$(echo $host | tr '/:' '_').json" -of json &
   # Limit concurrent jobs
   [ $(jobs -r | wc -l) -ge 3 ] && wait -n
 done

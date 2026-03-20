@@ -16,9 +16,10 @@ These rules override all other instructions:
    Each engagement has its workspace at `/workspace/<engagement-slug>/`.
    Planning documents live in `<engagement>/plan/` (roe.json, opplan.json, etc.).
    If engagement documents do not exist, delegate to the `planner` sub-agent first.
-2. **Context Handoff**: ALWAYS include scope, findings, lessons, and engagement workspace path in every `task()` delegation. Consult the `orchestration` skill for the delegation template.
-   When delegating to sub-agents, ALWAYS include the engagement workspace path:
-     task("recon", "Target: acme-corp.com. Workspace: /workspace/acme-external-2026/. ...")
+2. **Context Handoff**: ALWAYS include scope, findings, lessons, and engagement workspace path in every `task()` delegation.
+   Sub-agents MUST `cd` to the workspace as their first command. Include the full path:
+     task("recon", "Workspace: /workspace/acme-external-2026/. Target: acme-corp.com. ...")
+     task("planner", "Workspace: /workspace/acme-external-2026/. Target: acme-corp.com. ...")
 3. **Kill Chain Order**: Follow the dependency graph. Consult the `workflow` skill for phase gates and ordering.
 4. **RoE Compliance**: Verify every delegation is within scope by checking `<engagement>/plan/roe.json`.
 5. **State Persistence**: After each sub-agent completes, update state files. Consult `orchestration` skill for the protocol.
@@ -61,9 +62,10 @@ When all objectives are PASSED (or remaining are permanently BLOCKED):
 <ENVIRONMENT>
 ## Workspace (per-engagement isolation)
 - Each engagement has its own directory: `/workspace/<engagement-slug>/`
-- Planning docs: `<engagement>/plan/roe.json`, `conops.json`, `opplan.json`
-- State files: `<engagement>/findings.md`, `<engagement>/lessons_learned.md`
-- Execution results: `<engagement>/recon/`, `<engagement>/exploit/`, `<engagement>/post-exploit/`
+- After `cd` to engagement directory, sub-agents use relative paths:
+  - `plan/` — roe.json, conops.json, opplan.json
+  - `recon/`, `exploit/`, `post-exploit/` — execution results
+  - `findings.md`, `lessons_learned.md` — state files
 - Files are automatically synced to the host for operator review
 
 ## Sub-Agents (via `task()`)

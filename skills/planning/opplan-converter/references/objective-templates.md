@@ -13,10 +13,10 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "title": "Passive subdomain enumeration for <TARGET>",
   "description": "Enumerate all subdomains of <TARGET> using passive sources (subfinder, amass passive, crt.sh) without directly touching target infrastructure.",
   "acceptance_criteria": [
-    "subfinder -d <TARGET> results saved to /workspace/recon/subfinder.txt",
-    "amass enum -passive -d <TARGET> results saved to /workspace/recon/amass.txt",
-    "crt.sh query results saved to /workspace/recon/crtsh.txt",
-    "All sources merged and deduplicated into /workspace/recon/subdomains.txt",
+    "subfinder -d <TARGET> results saved to <engagement>/recon/subfinder.txt",
+    "amass enum -passive -d <TARGET> results saved to <engagement>/recon/amass.txt",
+    "crt.sh query results saved to <engagement>/recon/crtsh.txt",
+    "All sources merged and deduplicated into <engagement>/recon/subdomains.txt",
     "All discovered targets verified against roe.json in-scope list",
     "OPSEC: No direct DNS queries sent to target nameservers — public resolvers only"
   ],
@@ -38,7 +38,7 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "description": "Query all DNS record types (A, AAAA, MX, NS, TXT, SOA, CAA, CNAME) for <TARGET> and discovered subdomains.",
   "acceptance_criteria": [
     "dig queries for A, AAAA, MX, NS, TXT, SOA, CAA completed",
-    "Results saved to /workspace/recon/dns_records.txt",
+    "Results saved to <engagement>/recon/dns_records.txt",
     "Dangling CNAMEs identified and flagged",
     "All queried domains verified against roe.json in-scope list",
     "OPSEC: Queries routed through public resolvers, not target nameservers"
@@ -60,7 +60,7 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "title": "WHOIS and ASN intelligence for <TARGET>",
   "description": "Gather WHOIS registration data, ASN ownership, and IP range allocation for <TARGET>.",
   "acceptance_criteria": [
-    "WHOIS data for primary domain saved to /workspace/recon/whois.txt",
+    "WHOIS data for primary domain saved to <engagement>/recon/whois.txt",
     "ASN and IP ranges identified",
     "Infrastructure relationships documented",
     "All discovered IP ranges cross-referenced with roe.json scope",
@@ -83,8 +83,8 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "title": "Web fingerprinting and live host probing",
   "description": "Probe all discovered subdomains with httpx for status codes, technology detection, and content analysis.",
   "acceptance_criteria": [
-    "httpx probe results saved to /workspace/recon/httpx_results.txt",
-    "JSON output saved to /workspace/recon/httpx.json for parsing",
+    "httpx probe results saved to <engagement>/recon/httpx_results.txt",
+    "JSON output saved to <engagement>/recon/httpx.json for parsing",
     "Technology stack identified per live host",
     "All probed targets verified against roe.json in-scope list",
     "OPSEC: Request rate ≤ 10 req/sec, custom User-Agent set"
@@ -106,9 +106,9 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "title": "OSINT gathering for <TARGET>",
   "description": "Search Google dorks, GitHub/GitLab repos, and Wayback Machine for leaked credentials, exposed config files, and historical infrastructure data.",
   "acceptance_criteria": [
-    "Google dork results documented in /workspace/recon/osint_dorks.txt",
-    "GitHub search for org/domain completed, results saved to /workspace/recon/osint_github.txt",
-    "Wayback Machine historical URLs saved to /workspace/recon/osint_wayback.txt",
+    "Google dork results documented in <engagement>/recon/osint_dorks.txt",
+    "GitHub search for org/domain completed, results saved to <engagement>/recon/osint_github.txt",
+    "Wayback Machine historical URLs saved to <engagement>/recon/osint_wayback.txt",
     "Any discovered credentials flagged but NOT stored in plaintext",
     "All findings scoped to roe.json authorized targets",
     "OPSEC: No direct interaction with target systems"
@@ -133,7 +133,7 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "description": "Perform TCP SYN scan of top 1000 ports on all in-scope IP addresses identified during passive recon.",
   "acceptance_criteria": [
     "nmap SYN scan completed on all in-scope IPs",
-    "Results saved to /workspace/recon/nmap_syn.txt (text) and nmap_syn.xml (XML)",
+    "Results saved to <engagement>/recon/nmap_syn.txt (text) and nmap_syn.xml (XML)",
     "Open ports summarized in table format",
     "All scanned IPs verified against roe.json in-scope list BEFORE scan",
     "OPSEC: Scan rate ≤ 100 packets/sec (-T3), within authorized testing window"
@@ -156,7 +156,7 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "description": "Perform service version detection (-sV) on all open ports discovered in OBJ-REC-006.",
   "acceptance_criteria": [
     "nmap -sV completed on all open ports",
-    "Results saved to /workspace/recon/nmap_versions.txt and nmap_versions.xml",
+    "Results saved to <engagement>/recon/nmap_versions.txt and nmap_versions.xml",
     "Service versions mapped for CVE research",
     "All targets verified against roe.json",
     "OPSEC: Version probes limited to previously discovered open ports only"
@@ -179,7 +179,7 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "description": "Run ffuf directory fuzzing against live web services identified by httpx, using common wordlist.",
   "acceptance_criteria": [
     "ffuf run against top 5 highest-value web targets",
-    "Results saved to /workspace/recon/ffuf_<host>.json per target",
+    "Results saved to <engagement>/recon/ffuf_<host>.json per target",
     "Interesting paths (admin panels, API docs, config files) flagged",
     "All targets verified against roe.json",
     "OPSEC: Request rate ≤ 10 req/sec (-rate 10), custom User-Agent"
@@ -202,7 +202,7 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
   "description": "Run nuclei with default templates against all live web targets for known vulnerabilities.",
   "acceptance_criteria": [
     "nuclei scan completed on all live web hosts",
-    "Results saved to /workspace/recon/nuclei_results.txt",
+    "Results saved to <engagement>/recon/nuclei_results.txt",
     "Findings categorized by severity (critical, high, medium, low)",
     "All targets verified against roe.json",
     "OPSEC: Rate limited (-rl 5 -c 2), within authorized testing window"
@@ -228,8 +228,8 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
     "Each finding scored with CVSS 3.1",
     "Each finding mapped to MITRE ATT&CK technique",
     "Findings prioritized: critical → high → medium → low",
-    "Final report saved to /workspace/report_<target>_recon.md",
-    "JSON export saved to /workspace/report_<target>_recon.json"
+    "Final report saved to <engagement>/recon/report_<target>_recon.md",
+    "JSON export saved to <engagement>/recon/report_<target>_recon.json"
   ],
   "priority": 10,
   "status": "pending",

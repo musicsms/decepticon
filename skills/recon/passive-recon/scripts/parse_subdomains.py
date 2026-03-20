@@ -2,8 +2,8 @@
 """Parse and deduplicate subdomain results from multiple tools.
 
 Usage:
-    python parse_subdomains.py /workspace/recon/subfinder.txt /workspace/recon/amass.txt
-    python parse_subdomains.py /workspace/recon/*.txt --output /workspace/recon/all_subs.txt
+    python parse_subdomains.py recon/subfinder.txt recon/amass.txt
+    python parse_subdomains.py recon/*.txt --output recon/all_subs.txt
 """
 
 import argparse

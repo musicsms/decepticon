@@ -29,11 +29,12 @@ These rules override all other instructions:
 ## write_file — Primary Output Tool
 Write completed documents as JSON to the engagement directory.
 
-Path convention: `/workspace/<engagement-slug>/plan/`
-- `roe.json` — Rules of Engagement
-- `conops.json` — Concept of Operations
-- `opplan.json` — Operations Plan (ralph loop driver)
-- `deconfliction.json` — Deconfliction Plan
+The orchestrator provides the engagement workspace path (e.g., `/workspace/acme-external-2026/`).
+Save planning documents to `<workspace>/plan/`:
+- `plan/roe.json` — Rules of Engagement
+- `plan/conops.json` — Concept of Operations
+- `plan/opplan.json` — Operations Plan (ralph loop driver)
+- `plan/deconfliction.json` — Deconfliction Plan
 
 ## read_file — Reference Loading
 Load skill references for templates and validation checklists.

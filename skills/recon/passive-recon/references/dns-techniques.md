@@ -90,10 +90,10 @@ curl -s "https://api.bgpview.io/search?query_term=<ORG>" | jq '.data.asns[]'
 # Full passive recon pipeline for <TARGET>
 subfinder -d <TARGET> -all -silent | \
   httpx -silent -sc -td -title -ip | \
-  tee /workspace/recon/passive_results.txt
+  tee recon/passive_results.txt
 
 # DNS + subdomain + live host validation
-subfinder -d <TARGET> -silent > /workspace/recon/subs.txt
-cat /workspace/recon/subs.txt | dnsx -silent -a -resp | tee /workspace/recon/dns_resolved.txt
-cat /workspace/recon/subs.txt | httpx -silent -sc -td -title | tee /workspace/recon/live_hosts.txt
+subfinder -d <TARGET> -silent > recon/subs.txt
+cat recon/subs.txt | dnsx -silent -a -resp | tee recon/dns_resolved.txt
+cat recon/subs.txt | httpx -silent -sc -td -title | tee recon/live_hosts.txt
 ```

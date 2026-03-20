@@ -275,7 +275,7 @@ For machine-readable output or integration with other tools:
 
 ### Naming Convention
 ```
-/workspace/
+./
 ├── recon_<target>_passive.txt      # Passive recon raw output
 ├── recon_<target>_subdomains.txt   # Subdomain list
 ├── httpx_<target>.txt              # Live host probing results
@@ -331,8 +331,8 @@ Before concluding reconnaissance and handing off to the exploitation phase:
 - [ ] Findings scored with CVSS 3.1
 - [ ] Findings mapped to MITRE ATT&CK techniques
 - [ ] Findings prioritized by exploitability
-- [ ] Final report saved to `/workspace/report_<target>_final.md`
+- [ ] Final report saved to `report_<target>_final.md`
 - [ ] JSON output saved for tool integration
-- [ ] Raw scan data preserved in `/workspace/`
+- [ ] Raw scan data preserved in the engagement directory
 - [ ] `opplan.json` updated with completed objectives and new findings
 - [ ] New follow-up objectives created for next phase (if authorized)

@@ -22,7 +22,7 @@ When selecting the next action, evaluate in order:
 
 ### After Recon Phase — Selecting Attack Vectors
 
-Read `/workspace/recon/` outputs and categorize:
+Read `recon/` outputs and categorize:
 
 | Finding Type | Indicates | Next Action |
 |-------------|-----------|-------------|

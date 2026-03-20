@@ -17,10 +17,10 @@ Passive reconnaissance gathers intelligence **without directly interacting with 
 # Full passive workflow for <TARGET>
 whois <TARGET>
 dig <TARGET> ANY +noall +answer
-subfinder -d <TARGET> -o /workspace/subdomains.txt
-amass enum -passive -d <TARGET> -o /workspace/amass_subs.txt
+subfinder -d <TARGET> -o subdomains.txt
+amass enum -passive -d <TARGET> -o amass_subs.txt
 curl -s "https://crt.sh/?q=%25.<TARGET>&output=json" | python3 -c "import sys,json; [print(x['name_value']) for x in json.load(sys.stdin)]" | sort -u
-httpx -l /workspace/subdomains.txt -sc -cl -ct -title -tech-detect -o /workspace/httpx_<TARGET>.txt
+httpx -l subdomains.txt -sc -cl -ct -title -tech-detect -o httpx_<TARGET>.txt
 curl -sI https://<TARGET>
 ```
 
@@ -104,7 +104,7 @@ dig @ns1.example.com example.com AXFR
 subfinder -d example.com -silent
 
 # Save to file for large results
-subfinder -d example.com -o /workspace/subdomains.txt
+subfinder -d example.com -o subdomains.txt
 
 # Multiple sources with verbose
 subfinder -d example.com -all -v
@@ -116,7 +116,7 @@ subfinder -d example.com -recursive
 ### amass (Comprehensive)
 ```bash
 # Passive-only enumeration (no DNS brute force)
-amass enum -passive -d example.com -o /workspace/amass_subs.txt
+amass enum -passive -d example.com -o amass_subs.txt
 
 # With additional intelligence sources
 amass enum -passive -d example.com -src -ip
@@ -171,13 +171,13 @@ curl -sI https://example.com
 ### httpx — Bulk Probing & Tech Detection
 ```bash
 # Probe all subdomains with tech detection
-httpx -l /workspace/subdomains.txt -sc -cl -ct -title -tech-detect -o /workspace/httpx_results.txt
+httpx -l subdomains.txt -sc -cl -ct -title -tech-detect -o httpx_results.txt
 
 # Filter live hosts with specific status codes
-httpx -l /workspace/subdomains.txt -mc 200,301,302,403 -title -tech-detect
+httpx -l subdomains.txt -mc 200,301,302,403 -title -tech-detect
 
 # JSON output for parsing
-httpx -l /workspace/subdomains.txt -sc -title -tech-detect -json -o /workspace/httpx.json
+httpx -l subdomains.txt -sc -title -tech-detect -json -o httpx.json
 ```
 **httpx is critical for:**
 - Validating which subdomains are actually alive (HTTP response)
@@ -194,25 +194,25 @@ curl -s https://example.com | grep -Ei '(wp-content|drupal|joomla|next|react|ang
 ### Piping Between Tools
 ```bash
 # subfinder → httpx → nuclei pipeline
-subfinder -d <TARGET> -silent | httpx -silent -sc -title -tech-detect | tee /workspace/live_<TARGET>.txt
-cat /workspace/live_<TARGET>.txt | awk '{print $1}' | nuclei -severity critical,high -silent
+subfinder -d <TARGET> -silent | httpx -silent -sc -title -tech-detect | tee live_<TARGET>.txt
+cat live_<TARGET>.txt | awk '{print $1}' | nuclei -severity critical,high -silent
 
 # CT logs → dedup → resolve
 curl -s "https://crt.sh/?q=%25.<TARGET>&output=json" | \
   python3 -c "import sys,json; [print(x['name_value']) for x in json.load(sys.stdin)]" | \
-  sort -u | httpx -silent -o /workspace/ct_live_<TARGET>.txt
+  sort -u | httpx -silent -o ct_live_<TARGET>.txt
 
 # amass + subfinder → merge → dedup
-cat /workspace/amass_subs.txt /workspace/subdomains.txt | sort -u > /workspace/all_subs_<TARGET>.txt
+cat amass_subs.txt subdomains.txt | sort -u > all_subs_<TARGET>.txt
 ```
 
 ### Output Normalization
 Normalize all subdomain sources into a single format for downstream tools:
 ```bash
 # Standard format: one subdomain per line, no protocol, no trailing dot
-cat /workspace/all_subs_<TARGET>.txt | \
+cat all_subs_<TARGET>.txt | \
   sed 's|https\?://||; s|/.*||; s|\.$||' | \
-  tr '[:upper:]' '[:lower:]' | sort -u > /workspace/normalized_subs_<TARGET>.txt
+  tr '[:upper:]' '[:lower:]' | sort -u > normalized_subs_<TARGET>.txt
 ```
 
 ## 7. Passive DNS & Historical Analysis
@@ -273,7 +273,7 @@ After completing passive recon, hand off discovered domains and infrastructure d
 WILDCARD_IP=$(dig +short nonexistent-random-string.<TARGET>)
 if [ -n "$WILDCARD_IP" ]; then
   echo "WILDCARD detected: $WILDCARD_IP — filtering results"
-  grep -v "$WILDCARD_IP" /workspace/resolved_subs.txt > /workspace/filtered_subs.txt
+  grep -v "$WILDCARD_IP" resolved_subs.txt > filtered_subs.txt
 fi
 ```
 
@@ -307,4 +307,4 @@ Before moving to active reconnaissance, you must have:
 - `references/dns-techniques.md` — DNS record types, subdomain tool comparison, CT deep dive, ASN/BGP intel, passive DNS databases. Read when you need detailed technique reference beyond this skill's quick-reference commands.
 
 ### Scripts
-- `scripts/parse_subdomains.py` — Parse and deduplicate subdomain results from multiple tools. Usage: `python scripts/parse_subdomains.py /workspace/recon/*.txt -d <TARGET> -o /workspace/recon/all_subs.txt`
+- `scripts/parse_subdomains.py` — Parse and deduplicate subdomain results from multiple tools. Usage: `python scripts/parse_subdomains.py recon/*.txt -d <TARGET> -o recon/all_subs.txt`

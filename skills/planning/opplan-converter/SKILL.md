@@ -54,7 +54,7 @@ Every objective MUST have three mandatory criteria types:
 
 1. **Scope check** — "All targets verified against roe.json in-scope list"
 2. **OPSEC check** — At least one OPSEC-related criterion (rate limit, timing, etc.)
-3. **Output persistence** — "Results saved to /workspace/..." with specific file path
+3. **Output persistence** — "Results saved to <engagement>/recon/..." (or exploit/, post-exploit/) with specific file path
 
 Beyond these, add criteria specific to what the objective accomplishes. Every criterion must be mechanically verifiable — no vague statements like "good coverage."
 

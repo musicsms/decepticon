@@ -210,7 +210,7 @@ done
 
 ## 10. Output Files
 ```
-/workspace/
+./
 ├── ffuf_<target>_dirs.json         # Directory fuzzing results
 ├── ffuf_<target>_vhosts.json       # Virtual host discovery
 ├── ffuf_<target>_api.json          # API endpoint fuzzing

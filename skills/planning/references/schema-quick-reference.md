@@ -100,7 +100,7 @@ OPPLAN
 
 ## EngagementBundle
 
-The complete document set. Use `EngagementBundle.save(directory)` to write all four JSON files at once.
+The complete document set. Use `EngagementBundle.save(engagement_dir)` to write all documents and create the workspace structure.
 
 ```
 EngagementBundle
@@ -109,7 +109,17 @@ EngagementBundle
 ├── opplan: OPPLAN
 └── deconfliction: DeconflictionPlan
 
-.save(directory) → writes roe.json, conops.json, opplan.json, deconfliction.json + findings.txt
+.save(engagement_dir) creates:
+  <engagement_dir>/
+  ├── plan/
+  │   ├── roe.json
+  │   ├── conops.json
+  │   ├── opplan.json
+  │   └── deconfliction.json
+  ├── recon/
+  ├── exploit/
+  ├── post-exploit/
+  └── findings.md
 ```
 
 ## OPPLAN Helper Methods
