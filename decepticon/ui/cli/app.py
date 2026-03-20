@@ -11,7 +11,7 @@ import click
 from rich.prompt import Prompt
 
 from decepticon.core.streaming import StreamingEngine
-from decepticon.ui.cli.commands import ensure_auth, handle_ralph, switch_agent
+from decepticon.ui.cli.commands import ensure_auth, switch_agent
 from decepticon.ui.cli.console import BANNER, HELP_TEXT, console
 from decepticon.ui.cli.context import compact_context
 from decepticon.ui.cli.renderer import CLIRenderer
@@ -34,13 +34,13 @@ def main():
 
     renderer = CLIRenderer()
 
-    # Start with planning agent in chat mode
-    result = run_startup(mode="planning")
+    # Start with Decepticon orchestrator — handles full kill chain autonomously
+    result = run_startup(mode="decepticon")
     if result is None:
         sys.exit(1)
 
     agent, config = result
-    active_agent_name = "planning"
+    active_agent_name = "decepticon"
     renderer.set_active_agent(active_agent_name)
     engine = StreamingEngine(agent=agent, renderer=renderer)
 
@@ -143,9 +143,6 @@ def main():
                 )
             except Exception as e:
                 console.print(f"[red]Failed to switch: {e}[/red]")
-            continue
-        elif cmd.startswith("/ralph"):
-            handle_ralph(cmd, renderer)
             continue
         elif cmd.startswith("/"):
             console.print(f"[yellow]Unknown command: {cmd}[/yellow]  (try /help)")

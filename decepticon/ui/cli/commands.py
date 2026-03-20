@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from decepticon.ui.cli.console import console
 
 if TYPE_CHECKING:
-    from decepticon.core.streaming import StreamingEngine, UIRenderer
+    from decepticon.core.streaming import UIRenderer
 
 
 def ensure_auth() -> bool:
@@ -69,102 +69,3 @@ def switch_agent(name: str, renderer: UIRenderer):
     new_config = {"configurable": {"thread_id": f"cli-{uuid.uuid4().hex[:8]}"}}
     new_engine = StreamingEngine(agent=agent, renderer=renderer)
     return new_engine, new_config
-
-
-def handle_ralph(cmd: str, renderer: UIRenderer) -> None:
-    """Handle /ralph commands: start, status, resume."""
-    from pathlib import Path
-
-    from decepticon.loop import RalphLoop
-
-    parts = cmd.strip().split()
-    subcmd = parts[1] if len(parts) > 1 else "start"
-
-    if subcmd == "help":
-        console.print(
-            "[bold cyan]Ralph Loop Commands:[/bold cyan]\n"
-            "  [yellow]/ralph <path>[/yellow]          Start loop on engagement directory\n"
-            "  [yellow]/ralph status <path>[/yellow]   Show loop progress\n"
-            "  [yellow]/ralph resume <path>[/yellow]   Resume interrupted loop\n"
-            "\n[dim]<path> = engagement directory containing roe.json + opplan.json[/dim]"
-        )
-        return
-
-    if subcmd == "status":
-        eng_dir = Path(parts[2]) if len(parts) > 2 else None
-        if not eng_dir:
-            console.print("[red]Usage: /ralph status <engagement-dir>[/red]")
-            return
-        try:
-            loop = RalphLoop(engagement_dir=eng_dir)
-            console.print(loop.status())
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-        return
-
-    # /ralph <path> or /ralph start <path> or /ralph resume <path>
-    if subcmd in ("start", "resume"):
-        eng_dir = Path(parts[2]) if len(parts) > 2 else None
-    else:
-        # /ralph <path> shorthand
-        eng_dir = Path(subcmd)
-
-    if not eng_dir:
-        console.print("[red]Usage: /ralph <engagement-dir>[/red]")
-        return
-
-    if not eng_dir.exists():
-        console.print(f"[red]Directory not found: {eng_dir}[/red]")
-        return
-
-    # Check required documents
-    for doc in ("roe.json", "opplan.json"):
-        if not (eng_dir / doc).exists():
-            console.print(
-                f"[red]{doc} not found in {eng_dir}.[/red]\n"
-                "[dim]Run /plan first to generate engagement documents.[/dim]"
-            )
-            return
-
-    # Parse max iterations
-    max_iter = 20
-    for p in parts:
-        if p.startswith("--max="):
-            try:
-                max_iter = int(p.split("=")[1])
-            except ValueError:
-                pass
-
-    console.print(f"\n[bold red]Starting Ralph Loop[/bold red] — {eng_dir}")
-    console.print(f"[dim]Max iterations: {max_iter} | Ctrl+C to pause[/dim]\n")
-
-    try:
-        loop = RalphLoop(engagement_dir=eng_dir, max_iterations=max_iter)
-
-        # Show initial status
-        console.print(loop.status())
-        console.print()
-
-        completed = loop.run(renderer=renderer)
-
-        if completed:
-            console.print(
-                "\n[bold green]Ralph Loop COMPLETE[/bold green] — " "all objectives passed!"
-            )
-        else:
-            console.print(
-                f"\n[yellow]Ralph Loop stopped — max iterations reached.[/yellow]\n"
-                f"[dim]Use /ralph resume {eng_dir} to continue.[/dim]"
-            )
-
-        # Final status
-        console.print()
-        console.print(loop.status())
-
-    except KeyboardInterrupt:
-        console.print(
-            f"\n[yellow]Ralph Loop paused at iteration.[/yellow]\n"
-            f"[dim]Use /ralph resume {eng_dir} to continue.[/dim]"
-        )
-    except Exception as e:
-        console.print(f"[bold red]Ralph Loop error:[/bold red] {e}")

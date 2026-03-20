@@ -7,8 +7,7 @@ Architecture:
     DockerSandbox.execute()       → simple docker exec (used by BaseSandbox
                                     file ops: ls, read, write, edit, grep, glob)
     DockerSandbox.execute_tmux()  → tmux session-based (used by bash tool)
-                                    supports: session persistence, stalled
-                                    detection, interactive input
+                                    supports: session persistence, interactive input
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ import subprocess
 import tarfile
 import tempfile
 import time
-from collections.abc import Callable
 
 from deepagents.backends.protocol import (
     ExecuteResponse,
@@ -35,7 +33,6 @@ log = logging.getLogger("decepticon.backends.docker_sandbox")
 
 PS1_PATTERN = re.compile(r"\[DCPTN:(\d+):(.+?)\]")
 POLL_INTERVAL = 0.5  # seconds between capture-pane polls
-NO_CHANGE_TIMEOUT = 10.0  # seconds of silence before declaring STALLED
 MAX_OUTPUT_CHARS = 30_000
 
 
@@ -153,14 +150,11 @@ class TmuxSessionManager:
         command: str,
         is_input: bool,
         timeout: int,
-        progress_callback: Callable[[str, str, str], None] | None = None,
     ) -> str:
         """Send a command/input and poll for PS1 completion marker.
 
-        Instead of returning [STALLED] after NO_CHANGE_TIMEOUT, the loop
-        continues polling internally until PS1 appears or *timeout* is
-        reached. Progress is communicated via *progress_callback* (UI
-        only — never enters the LLM context).
+        Polls until the PS1 marker appears (command complete) or *timeout*
+        is reached.
         """
         if not is_input:
             self.initialize()
@@ -182,9 +176,6 @@ class TmuxSessionManager:
                 self._send(command, enter=True)
 
         start = time.time()
-        last_change = start
-        last_content = baseline
-        stall_notified = False
 
         while time.time() - start < timeout:
             time.sleep(POLL_INTERVAL)
@@ -192,14 +183,6 @@ class TmuxSessionManager:
                 screen = self._capture()
             except RuntimeError:
                 continue
-
-            if screen != last_content:
-                last_change = time.time()
-                last_content = screen
-                if stall_notified:
-                    stall_notified = False
-                    if progress_callback:
-                        progress_callback("resumed", self.session, "")
 
             current_count = len(PS1_PATTERN.findall(screen))
 
@@ -215,18 +198,6 @@ class TmuxSessionManager:
                 if cwd:
                     result += f"\n[cwd: {cwd}]"
                 return result
-
-            # Stall detected — notify UI but keep polling (no return)
-            if not stall_notified and time.time() - last_change >= NO_CHANGE_TIMEOUT:
-                stall_notified = True
-                if progress_callback:
-                    recent = _recent_output(screen)
-                    progress_callback("stalled", self.session, recent)
-                log.debug(
-                    "Stall detected in session %s, continuing to wait (timeout=%ds)",
-                    self.session,
-                    timeout,
-                )
 
         return (
             f"[TIMEOUT] Command exceeded {timeout}s limit.\n"
@@ -271,13 +242,6 @@ def _extract_output(screen: str, command: str, initial_count: int) -> tuple[str,
     return "\n".join(lines).strip(), exit_code, cwd
 
 
-def _recent_output(screen: str) -> str:
-    matches = list(PS1_PATTERN.finditer(screen))
-    if matches:
-        return screen[matches[-1].end() :].strip()
-    return screen[-3000:].strip()
-
-
 def _truncate(text: str) -> str:
     """Truncate large outputs preserving head + tail for context efficiency.
 
@@ -312,7 +276,7 @@ class DockerSandbox(BaseSandbox):
     docker exec calls sufficient for atomic file ops.
 
     The bash tool uses execute_tmux() for persistent tmux sessions that
-    support interactive input and stalled-process detection.
+    support interactive input.
     """
 
     def __init__(
@@ -323,11 +287,6 @@ class DockerSandbox(BaseSandbox):
         self._container_name = container_name
         self._default_timeout = default_timeout
         self._managers: dict[str, TmuxSessionManager] = {}
-        self._progress_callback: Callable[[str, str, str], None] | None = None
-
-    def set_progress_callback(self, cb: Callable[[str, str, str], None]) -> None:
-        """Set a UI callback for long-running command progress notifications."""
-        self._progress_callback = cb
 
     def _get_manager(self, session: str) -> TmuxSessionManager:
         if session not in self._managers:
@@ -432,7 +391,6 @@ class DockerSandbox(BaseSandbox):
         Used exclusively by the bash tool. Supports:
         - Named sessions for parallel command execution
         - Interactive input (y/n, passwords, C-c / C-z / C-d)
-        - Stalled-process detection (10s no-change → callback notification)
         - Output truncation for large outputs
         """
         effective = timeout if timeout is not None else self._default_timeout
@@ -445,7 +403,6 @@ class DockerSandbox(BaseSandbox):
             command,
             is_input=is_input,
             timeout=effective,
-            progress_callback=self._progress_callback,
         )
 
     def start_background(self, command: str, session: str = "main") -> None:

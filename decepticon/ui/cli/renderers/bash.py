@@ -51,14 +51,6 @@ def render_bash_result(tc: dict, msg, last_bash_session_outputs: dict):
     out_style = _OUTPUT
     if clean_result.startswith("[ERROR]") or clean_result.startswith("[TIMEOUT]"):
         out_style = _OUTPUT_ERR
-    elif clean_result.startswith("[STALLED]"):
-        if "Last output:\n" in clean_result:
-            parts = clean_result.split("Last output:\n")
-            if len(parts) > 1:
-                inner = parts[1]
-                if "\n\nOptions:" in inner:
-                    inner = inner.split("\n\nOptions:")[0]
-                clean_result = inner.strip()
     elif clean_result.startswith(("[IDLE]", "[RUNNING]", "[BACKGROUND]")):
         out_style = _OUTPUT_INFO
 
