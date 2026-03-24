@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────
-# Decepticon 2.0 — One-line installer
+# Decepticon — One-line installer
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/PurpleAILAB/Decepticon/main/scripts/install.sh | bash
@@ -123,6 +123,9 @@ create_launcher() {
 set -euo pipefail
 
 DECEPTICON_HOME="${DECEPTICON_HOME:-$HOME/.decepticon}"
+REPO="PurpleAILAB/Decepticon"
+BRANCH="${DECEPTICON_BRANCH:-main}"
+RAW_BASE="https://raw.githubusercontent.com/$REPO/$BRANCH"
 COMPOSE_FILE="$DECEPTICON_HOME/docker-compose.yml"
 COMPOSE="docker compose -f $COMPOSE_FILE --env-file $DECEPTICON_HOME/.env"
 COMPOSE_PROFILES="$COMPOSE --profile cli"
@@ -131,6 +134,7 @@ COMPOSE_PROFILES="$COMPOSE --profile cli"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 DIM='\033[0;2m'
 BOLD='\033[1m'
 NC='\033[0m'
@@ -139,6 +143,23 @@ check_api_key() {
     if grep -q "your-.*-key-here" "$DECEPTICON_HOME/.env" 2>/dev/null; then
         echo -e "${YELLOW}Warning: API keys not configured.${NC}"
         echo -e "${DIM}Run ${NC}${BOLD}decepticon config${NC}${DIM} to set your API keys.${NC}"
+        echo ""
+    fi
+}
+
+check_for_update() {
+    local current
+    current=$(cat "$DECEPTICON_HOME/.version" 2>/dev/null || echo "")
+    [[ -z "$current" ]] && return
+
+    # Background check — don't block startup
+    local latest
+    latest=$(curl -sf --max-time 3 "https://api.github.com/repos/$REPO/releases/latest" \
+        | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p') 2>/dev/null || true
+
+    if [[ -n "$latest" && "$latest" != "$current" ]]; then
+        echo -e "${CYAN}Update available: ${BOLD}v${latest}${NC}${CYAN} (current: v${current})${NC}"
+        echo -e "${DIM}Run ${NC}${BOLD}decepticon update${NC}${DIM} to upgrade.${NC}"
         echo ""
     fi
 }
@@ -165,6 +186,7 @@ wait_for_server() {
 case "${1:-}" in
     ""|start)
         check_api_key
+        check_for_update
 
         # Start background services
         echo -e "${DIM}Starting services...${NC}"
@@ -183,9 +205,30 @@ case "${1:-}" in
         ;;
 
     update)
+        # Resolve latest version
+        local_version=$(cat "$DECEPTICON_HOME/.version" 2>/dev/null || echo "unknown")
+        echo -e "${DIM}Current version: v${local_version}${NC}"
+
+        latest=$(curl -sf --max-time 5 "https://api.github.com/repos/$REPO/releases/latest" \
+            | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p') 2>/dev/null || true
+
+        if [[ -n "$latest" ]]; then
+            echo -e "${DIM}Latest version:  v${latest}${NC}"
+            echo "$latest" > "$DECEPTICON_HOME/.version"
+        fi
+
+        # Update config files
+        echo -e "${DIM}Updating configuration files...${NC}"
+        curl -fsSL "$RAW_BASE/docker-compose.yml" -o "$DECEPTICON_HOME/docker-compose.yml"
+        mkdir -p "$DECEPTICON_HOME/config"
+        curl -fsSL "$RAW_BASE/config/litellm.yaml" -o "$DECEPTICON_HOME/config/litellm.yaml"
+        echo -e "${GREEN}Configuration files updated.${NC}"
+
+        # Pull latest images
         echo -e "${DIM}Pulling latest images...${NC}"
-        $COMPOSE_PROFILES pull
-        echo -e "${GREEN}Updated. Run ${NC}${BOLD}decepticon${NC}${GREEN} to restart.${NC}"
+        $COMPOSE_PROFILES pull || echo -e "${YELLOW}Warning: Some images failed to pull.${NC}"
+
+        echo -e "${GREEN}Updated. Run ${NC}${BOLD}decepticon stop && decepticon${NC}${GREEN} to restart.${NC}"
         ;;
 
     status)
@@ -216,7 +259,7 @@ case "${1:-}" in
         echo -e "${BOLD}Usage:${NC}"
         echo "  decepticon              Start services and open CLI"
         echo "  decepticon stop         Stop all services"
-        echo "  decepticon update       Pull latest Docker images"
+        echo "  decepticon update       Update images and config files"
         echo "  decepticon status       Show service status"
         echo "  decepticon logs [svc]   Follow service logs (default: langgraph)"
         echo "  decepticon config       Edit configuration (.env)"
