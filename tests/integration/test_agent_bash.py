@@ -9,17 +9,16 @@ Requires:
   - Valid LITELLM_MASTER_KEY / ANTHROPIC_API_KEY in .env
 """
 
-import os
-import sys
 import asyncio
 import subprocess
+import sys
 
+from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
 from decepticon.agents.recon import create_recon_agent
 from decepticon.tools.bash.tool import TmuxSessionManager
 
-from dotenv import load_dotenv
 load_dotenv()
 
 # Try importing pytest; allow running without it as a standalone script

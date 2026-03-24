@@ -1,11 +1,9 @@
 """Unit tests for decepticon.auth module"""
 
-import json
 import time
 from pathlib import Path
 
 import pytest
-
 from decepticon.auth.manager import AuthManager
 from decepticon.auth.storage import CredentialStore
 from decepticon.auth.types import ApiKeyCredential, OAuthCredential

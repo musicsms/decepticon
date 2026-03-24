@@ -5,15 +5,16 @@ Requires: docker compose up -d litellm postgres
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 # Load .env
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from decepticon.llm.factory import LLMFactory
-from decepticon.llm.models import LLMModelMapping, ModelAssignment, ProxyConfig
+from decepticon.llm.factory import LLMFactory  # noqa: E402
+from decepticon.llm.models import LLMModelMapping, ModelAssignment, ProxyConfig  # noqa: E402
 
 
 async def test_health():

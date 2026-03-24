@@ -1,6 +1,8 @@
 import pytest
-from decepticon.agents.recon import create_recon_agent
 from decepticon.tools.registry import get_tools
+
+from decepticon.agents.recon import create_recon_agent
+
 
 def test_agent_initialization():
     """Verify that the Recon agent can be built without errors from deepagents."""
@@ -15,7 +17,7 @@ def test_tool_registry():
     assert len(tools) == 3
     tool_names = [t.name for t in tools]
     assert "nmap_scan" in tool_names
-    
+
 def test_missing_tool_registry():
     """Verify tool registry raises error for missing tools."""
     with pytest.raises(ValueError):
