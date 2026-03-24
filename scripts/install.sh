@@ -201,6 +201,8 @@ case "${1:-}" in
     stop)
         echo -e "${DIM}Stopping all services...${NC}"
         $COMPOSE down
+        # Clean up orphaned CLI containers from 'docker compose run'
+        docker rm $(docker ps -aq --filter "name=decepticon-cli-run" --filter "status=exited") 2>/dev/null || true
         echo -e "${GREEN}All services stopped.${NC}"
         ;;
 
