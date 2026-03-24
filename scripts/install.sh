@@ -15,7 +15,7 @@ set -euo pipefail
 
 # ── Constants ─────────────────────────────────────────────────────
 REPO="PurpleAILAB/Decepticon"
-BRANCH="main"
+BRANCH="${BRANCH:-main}"
 RAW_BASE="https://raw.githubusercontent.com/$REPO/$BRANCH"
 
 # ── Colors ────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ pull_images() {
 # ── Main ──────────────────────────────────────────────────────────
 main() {
     echo ""
-    echo -e "${BOLD}Decepticon 2.0${NC} — Installer"
+    echo -e "${BOLD}Decepticon${NC} — Installer"
     echo ""
 
     # Pre-flight
