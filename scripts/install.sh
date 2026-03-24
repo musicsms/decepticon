@@ -245,6 +245,47 @@ case "${1:-}" in
         ${EDITOR:-${VISUAL:-nano}} "$DECEPTICON_HOME/.env"
         ;;
 
+    demo)
+        echo -e "${BOLD}Starting Decepticon Demo${NC}"
+        echo -e "${DIM}Target: Metasploitable 2 (decepticon-msf2)${NC}"
+        echo ""
+
+        # Download demo engagement files (skip if already present or offline)
+        demo_dir="$DECEPTICON_HOME/workspace/demo/plan"
+        mkdir -p "$demo_dir"
+        mkdir -p "$DECEPTICON_HOME/workspace/demo/recon"
+        mkdir -p "$DECEPTICON_HOME/workspace/demo/exploit"
+        mkdir -p "$DECEPTICON_HOME/workspace/demo/post-exploit"
+        touch "$DECEPTICON_HOME/workspace/demo/findings.md"
+        for f in roe.json conops.json opplan.json; do
+            if [[ ! -f "$demo_dir/$f" ]]; then
+                curl -fsSL "$RAW_BASE/demo/plan/$f" -o "$demo_dir/$f" 2>/dev/null || {
+                    echo -e "${RED}Failed to download $f. Run 'decepticon update' first.${NC}"
+                    exit 1
+                }
+            fi
+        done
+        echo -e "${GREEN}Demo engagement loaded.${NC}"
+
+        # Start victim target
+        echo -e "${DIM}Starting Metasploitable 2...${NC}"
+        $COMPOSE --profile victims up -d metasploitable2
+
+        # Start core services
+        echo -e "${DIM}Starting services...${NC}"
+        $COMPOSE up -d litellm postgres sandbox langgraph
+
+        wait_for_server
+
+        echo ""
+        echo -e "${GREEN}Demo ready.${NC} The CLI will open with a pre-configured engagement targeting Metasploitable 2."
+        echo -e "${DIM}Objectives: port scan → service enum → vsftpd exploit → post-exploitation${NC}"
+        echo ""
+
+        # Run CLI with auto-start message
+        $COMPOSE_PROFILES run --rm -e DECEPTICON_INITIAL_MESSAGE="Resume the demo engagement and execute all objectives." cli
+        ;;
+
     victims)
         $COMPOSE --profile victims up -d
         echo -e "${GREEN}Victim targets started.${NC}"
@@ -265,6 +306,7 @@ case "${1:-}" in
         echo "  decepticon status       Show service status"
         echo "  decepticon logs [svc]   Follow service logs (default: langgraph)"
         echo "  decepticon config       Edit configuration (.env)"
+        echo "  decepticon demo         Run guided demo (Metasploitable 2)"
         echo "  decepticon victims      Start vulnerable test targets"
         echo "  decepticon --version    Show version"
         ;;

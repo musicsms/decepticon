@@ -109,6 +109,7 @@ Each agent spawns with a **clean context window** per objective — no accumulat
 | Command | Description |
 |---------|-------------|
 | `decepticon` | Start all services and open the interactive CLI |
+| `decepticon demo` | Run guided demo against Metasploitable 2 |
 | `decepticon stop` | Stop all services |
 | `decepticon update` | Pull latest images and sync configuration |
 | `decepticon status` | Show service status |

@@ -60,7 +60,7 @@ services:
       - NET_ADMIN
       - NET_BIND_SERVICE
     volumes:
-      - ${DECEPTICON_DATA_DIR:-./.decepticon}:/workspace
+      - ${DECEPTICON_DATA_DIR:-./workspace}:/workspace
     restart: unless-stopped
 
   # LangGraph Platform — Agent API Server
@@ -81,7 +81,7 @@ services:
       - DECEPTICON_DOCKER__SANDBOX_CONTAINER_NAME=decepticon-sandbox
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ${DECEPTICON_DATA_DIR:-./.decepticon}:/workspace
+      - ${DECEPTICON_DATA_DIR:-./workspace}:/workspace
     depends_on:
       litellm:
         condition: service_started

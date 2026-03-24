@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Box, Text, Static, useApp, useInput } from "ink";
 import { useAgent } from "./hooks/useAgent.js";
 import { Banner } from "./components/Banner.js";
@@ -15,9 +15,23 @@ const HELP_TEXT = [
   "  /exit   - Exit",
 ].join("\n");
 
-export function App() {
+interface AppProps {
+  initialMessage?: string;
+}
+
+export function App({ initialMessage }: AppProps) {
   const { exit } = useApp();
   const agent = useAgent();
+
+  // Auto-submit initial message (e.g. demo mode)
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!initialMessage || autoStarted.current) return;
+    autoStarted.current = true;
+    // Delay to ensure LangGraph server is fully ready
+    const timer = setTimeout(() => agent.submit(initialMessage), 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Ctrl+C — cancel stream if running, otherwise exit
   useInput((_input, key) => {

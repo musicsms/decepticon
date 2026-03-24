@@ -30,7 +30,7 @@ CLI entry point: `decepticon` starts the LangGraph dev server. The Ink CLI front
 
 **Ralph loop** (`loop.py`): Loads `opplan.json` from disk each iteration → picks next pending objective → builds iteration prompt with RoE guard rails + previous findings → spawns fresh recon agent (clean context) → parses OBJECTIVE PASSED/BLOCKED signal → updates opplan status → appends to `findings.txt`.
 
-**Engagement document hierarchy** stored in `/workspace/engagements/<slug>/`:
+**Engagement document hierarchy** stored in `/workspace/<slug>/`:
 - `roe.json` — Rules of Engagement (scope constraints, checked every iteration)
 - `conops.json` — threat actor profile, kill chain
 - `opplan.json` — discrete objectives with acceptance criteria (drives Ralph)
