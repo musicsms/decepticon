@@ -100,24 +100,44 @@ class StreamingRunnable:
                         return str(m.content)[:200]
         return ""
 
-    def _emit_start(self, renderer: Any, has_renderer: bool, writer: Callable | None, prompt: str) -> None:
+    def _emit_start(
+        self, renderer: Any, has_renderer: bool, writer: Callable | None, prompt: str
+    ) -> None:
         if has_renderer:
             renderer.on_subagent_start(self._name, prompt)
         if writer:
             writer({"type": "subagent_start", "agent": self._name, "prompt": prompt})
 
     def _emit_end(
-        self, renderer: Any, has_renderer: bool, writer: Callable | None,
-        elapsed: float, *, cancelled: bool = False, error: bool = False,
+        self,
+        renderer: Any,
+        has_renderer: bool,
+        writer: Callable | None,
+        elapsed: float,
+        *,
+        cancelled: bool = False,
+        error: bool = False,
     ) -> None:
         if has_renderer:
             renderer.on_subagent_end(self._name, elapsed, cancelled=cancelled, error=error)
         if writer:
-            writer({"type": "subagent_end", "agent": self._name, "elapsed": elapsed, "cancelled": cancelled, "error": error})
+            writer(
+                {
+                    "type": "subagent_end",
+                    "agent": self._name,
+                    "elapsed": elapsed,
+                    "cancelled": cancelled,
+                    "error": error,
+                }
+            )
 
     def _process_messages(
-        self, new_messages: list, active_tool_calls: dict[str, dict],
-        renderer: Any, has_renderer: bool, writer: Callable | None,
+        self,
+        new_messages: list,
+        active_tool_calls: dict[str, dict],
+        renderer: Any,
+        has_renderer: bool,
+        writer: Callable | None,
     ) -> None:
         """Process new messages and emit events to channels."""
         from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -151,7 +171,14 @@ class StreamingRunnable:
                         if has_renderer:
                             renderer.on_subagent_tool_call(self._name, tc["name"], tc["args"])
                         if writer:
-                            writer({"type": "subagent_tool_call", "agent": self._name, "tool": tc["name"], "args": tc_args})
+                            writer(
+                                {
+                                    "type": "subagent_tool_call",
+                                    "agent": self._name,
+                                    "tool": tc["name"],
+                                    "args": tc_args,
+                                }
+                            )
 
             elif isinstance(msg, ToolMessage):
                 tc = active_tool_calls.get(msg.tool_call_id)
@@ -166,14 +193,16 @@ class StreamingRunnable:
                 if has_renderer:
                     renderer.on_subagent_tool_result(self._name, tool_name, tool_args, content)
                 if writer:
-                    writer({
-                        "type": "subagent_tool_result",
-                        "agent": self._name,
-                        "tool": tool_name,
-                        "args": tc_args,
-                        "content": content,
-                        "status": status,
-                    })
+                    writer(
+                        {
+                            "type": "subagent_tool_result",
+                            "agent": self._name,
+                            "tool": tool_name,
+                            "args": tc_args,
+                            "content": content,
+                            "status": status,
+                        }
+                    )
 
     def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
         """Stream sub-agent execution (sync), emitting events to available channels."""
@@ -181,7 +210,9 @@ class StreamingRunnable:
         renderer, has_renderer, writer = self._get_channels()
         log.info(
             "[%s] channels: has_renderer=%s, writer=%s",
-            self._name, has_renderer, writer is not None,
+            self._name,
+            has_renderer,
+            writer is not None,
         )
 
         if not has_renderer and writer is None:
@@ -204,7 +235,9 @@ class StreamingRunnable:
                 messages = state.get("messages", [])
                 new_messages = messages[last_count:]
                 last_count = len(messages)
-                self._process_messages(new_messages, active_tool_calls, renderer, has_renderer, writer)
+                self._process_messages(
+                    new_messages, active_tool_calls, renderer, has_renderer, writer
+                )
 
         except KeyboardInterrupt:
             self._emit_end(renderer, has_renderer, writer, time.monotonic() - start, cancelled=True)
@@ -231,7 +264,9 @@ class StreamingRunnable:
         renderer, has_renderer, writer = self._get_channels()
         log.info(
             "[%s] channels: has_renderer=%s, writer=%s",
-            self._name, has_renderer, writer is not None,
+            self._name,
+            has_renderer,
+            writer is not None,
         )
 
         if not has_renderer and writer is None:
@@ -257,9 +292,13 @@ class StreamingRunnable:
                 if new_messages:
                     log.debug(
                         "[%s] astream: %d new messages (total %d)",
-                        self._name, len(new_messages), len(messages),
+                        self._name,
+                        len(new_messages),
+                        len(messages),
                     )
-                self._process_messages(new_messages, active_tool_calls, renderer, has_renderer, writer)
+                self._process_messages(
+                    new_messages, active_tool_calls, renderer, has_renderer, writer
+                )
 
         except KeyboardInterrupt:
             self._emit_end(renderer, has_renderer, writer, time.monotonic() - start, cancelled=True)

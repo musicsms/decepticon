@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 # ── Enums ─────────────────────────────────────────────────────────────
 
+
 class EngagementType(StrEnum):
     EXTERNAL = "external"
     INTERNAL = "internal"
@@ -56,6 +57,7 @@ class ObjectiveStatus(StrEnum):
 
 
 # ── RoE (Rules of Engagement) ────────────────────────────────────────
+
 
 class ScopeEntry(BaseModel):
     """A single in-scope or out-of-scope target."""
@@ -123,6 +125,7 @@ class RoE(BaseModel):
 
 # ── CONOPS (Concept of Operations) ───────────────────────────────────
 
+
 class ThreatActor(BaseModel):
     """Threat actor profile to emulate."""
 
@@ -130,12 +133,10 @@ class ThreatActor(BaseModel):
     sophistication: str = Field(description="low, medium, high, nation-state")
     motivation: str = Field(description="financial, espionage, disruption, hacktivism")
     initial_access: list[str] = Field(
-        default_factory=list,
-        description="Expected initial access techniques (MITRE IDs)"
+        default_factory=list, description="Expected initial access techniques (MITRE IDs)"
     )
     ttps: list[str] = Field(
-        default_factory=list,
-        description="Key MITRE ATT&CK technique IDs this actor uses"
+        default_factory=list, description="Key MITRE ATT&CK technique IDs this actor uses"
     )
 
 
@@ -155,15 +156,12 @@ class CONOPS(BaseModel):
     """
 
     engagement_name: str
-    executive_summary: str = Field(
-        description="2-3 sentence overview a CEO could understand"
-    )
+    executive_summary: str = Field(description="2-3 sentence overview a CEO could understand")
 
     # Threat model
     threat_actors: list[ThreatActor] = Field(default_factory=list)
     attack_narrative: str = Field(
-        default="",
-        description="Story-form description of the simulated attack scenario"
+        default="", description="Story-form description of the simulated attack scenario"
     )
 
     # Kill chain
@@ -172,18 +170,15 @@ class CONOPS(BaseModel):
     # Operational
     methodology: str = Field(default="PTES + MITRE ATT&CK framework")
     communication_plan: str = Field(
-        default="",
-        description="How red cell communicates with client and internally"
+        default="", description="How red cell communicates with client and internally"
     )
     deconfliction_method: str = Field(
-        default="",
-        description="How to distinguish red team activity from real attacks"
+        default="", description="How to distinguish red team activity from real attacks"
     )
 
     # Timeline
     phases_timeline: dict[str, str] = Field(
-        default_factory=dict,
-        description="Phase name → date range mapping"
+        default_factory=dict, description="Phase name → date range mapping"
     )
 
     # Success criteria
@@ -191,6 +186,7 @@ class CONOPS(BaseModel):
 
 
 # ── Deconfliction Plan ───────────────────────────────────────────────
+
 
 class DeconflictionEntry(BaseModel):
     """A deconfliction identifier for red team activity."""
@@ -210,12 +206,12 @@ class DeconflictionPlan(BaseModel):
     )
     soc_contact: str = ""
     deconfliction_code: str = Field(
-        default="",
-        description="Shared secret code for real-time deconfliction calls"
+        default="", description="Shared secret code for real-time deconfliction calls"
     )
 
 
 # ── OPPLAN (Operations Plan) — the ralph loop driver ─────────────────
+
 
 class Objective(BaseModel):
     """A single engagement objective — analogous to ralph's user story.
@@ -260,14 +256,15 @@ class OPPLAN(BaseModel):
     )
     kill_chain: list[str] = Field(
         default_factory=lambda: [p.value for p in ObjectivePhase],
-        description="Kill chain phase ordering"
+        description="Kill chain phase ordering",
     )
     objectives: list[Objective] = Field(default_factory=list)
 
     def next_objective(self) -> Objective | None:
         """Return the highest-priority objective that hasn't passed yet."""
         pending = [
-            o for o in self.objectives
+            o
+            for o in self.objectives
             if o.status in (ObjectiveStatus.PENDING, ObjectiveStatus.IN_PROGRESS)
         ]
         if not pending:
@@ -289,6 +286,7 @@ class OPPLAN(BaseModel):
 
 
 # ── Engagement Bundle ─────────────────────────────────────────────────
+
 
 class EngagementBundle(BaseModel):
     """Complete engagement document set.

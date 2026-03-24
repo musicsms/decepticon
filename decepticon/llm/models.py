@@ -93,13 +93,17 @@ class LLMModelMapping(BaseModel):
 
     decepticon: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary=OPUS, fallback=GPT_5, temperature=0.4,
+            primary=OPUS,
+            fallback=GPT_5,
+            temperature=0.4,
         )
     )
 
     planning: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary=OPUS, fallback=GPT_5, temperature=0.4,
+            primary=OPUS,
+            fallback=GPT_5,
+            temperature=0.4,
         )
     )
 
@@ -108,7 +112,9 @@ class LLMModelMapping(BaseModel):
 
     exploit: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary=SONNET, fallback=GPT_4, temperature=0.3,
+            primary=SONNET,
+            fallback=GPT_4,
+            temperature=0.3,
         )
     )
 
@@ -117,13 +123,17 @@ class LLMModelMapping(BaseModel):
 
     recon: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary=HAIKU, fallback=GEMINI_FLASH, temperature=0.3,
+            primary=HAIKU,
+            fallback=GEMINI_FLASH,
+            temperature=0.3,
         )
     )
 
     postexploit: ModelAssignment = Field(
         default_factory=lambda: ModelAssignment(
-            primary=SONNET, fallback=GPT_4, temperature=0.3,
+            primary=SONNET,
+            fallback=GPT_4,
+            temperature=0.3,
         )
     )
 
@@ -153,38 +163,53 @@ class LLMModelMapping(BaseModel):
         if profile == ModelProfile.HIGH:
             return cls(
                 decepticon=ModelAssignment(
-                    primary=OPUS, fallback=GPT_5, temperature=0.4,
+                    primary=OPUS,
+                    fallback=GPT_5,
+                    temperature=0.4,
                 ),
                 planning=ModelAssignment(
-                    primary=OPUS, fallback=SONNET, temperature=0.4,
+                    primary=OPUS,
+                    fallback=SONNET,
+                    temperature=0.4,
                 ),
                 exploit=ModelAssignment(
-                    primary=OPUS, fallback=SONNET, temperature=0.3,
+                    primary=OPUS,
+                    fallback=SONNET,
+                    temperature=0.3,
                 ),
                 recon=ModelAssignment(
-                    primary=SONNET, fallback=OPUS, temperature=0.3,
+                    primary=SONNET,
+                    fallback=OPUS,
+                    temperature=0.3,
                 ),
                 postexploit=ModelAssignment(
-                    primary=OPUS, fallback=SONNET, temperature=0.3,
+                    primary=OPUS,
+                    fallback=SONNET,
+                    temperature=0.3,
                 ),
             )
 
         if profile == ModelProfile.TEST:
             return cls(
                 decepticon=ModelAssignment(
-                    primary=HAIKU, temperature=0.4,
+                    primary=HAIKU,
+                    temperature=0.4,
                 ),
                 planning=ModelAssignment(
-                    primary=HAIKU, temperature=0.4,
+                    primary=HAIKU,
+                    temperature=0.4,
                 ),
                 exploit=ModelAssignment(
-                    primary=HAIKU, temperature=0.3,
+                    primary=HAIKU,
+                    temperature=0.3,
                 ),
                 recon=ModelAssignment(
-                    primary=HAIKU, temperature=0.3,
+                    primary=HAIKU,
+                    temperature=0.3,
                 ),
                 postexploit=ModelAssignment(
-                    primary=HAIKU, temperature=0.3,
+                    primary=HAIKU,
+                    temperature=0.3,
                 ),
             )
 

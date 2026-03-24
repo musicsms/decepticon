@@ -11,12 +11,14 @@ def test_agent_initialization():
     assert agent is not None
     assert hasattr(agent, "stream")
 
+
 def test_tool_registry():
     """Verify tool loading from registry."""
     tools = get_tools(["nmap_scan", "dns_lookup", "whois_lookup"])
     assert len(tools) == 3
     tool_names = [t.name for t in tools]
     assert "nmap_scan" in tool_names
+
 
 def test_missing_tool_registry():
     """Verify tool registry raises error for missing tools."""

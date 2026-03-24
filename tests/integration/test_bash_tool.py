@@ -22,19 +22,17 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 
 # ─── Setup: Ensure sandbox is running ────────────────────────────────────
 
+
 def ensure_sandbox_running():
     """Check if sandbox container is running, start it if not."""
     result = subprocess.run(
         ["docker", "inspect", "-f", "{{.State.Running}}", "decepticon-sandbox"],
-        capture_output=True, text=True
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0 or "true" not in result.stdout:
         print("🔧 Starting sandbox container...")
-        subprocess.run(
-            ["docker", "compose", "up", "-d", "--build", "sandbox"],
-            cwd=".",
-            check=True
-        )
+        subprocess.run(["docker", "compose", "up", "-d", "--build", "sandbox"], cwd=".", check=True)
         # Wait for container to be ready
         time.sleep(3)
         print("✅ Sandbox started")
@@ -43,6 +41,7 @@ def ensure_sandbox_running():
 
 
 # ─── Tests ───────────────────────────────────────────────────────────────
+
 
 def test_basic_command():
     """Test: simple 'ls /' command should complete with exit_code=0."""
@@ -109,8 +108,9 @@ def test_empty_command_reads_screen():
     print(f"\n📋 test_empty_command_reads_screen:\n{result[:500]}")
 
     # Should return IDLE or RUNNING status
-    assert "[IDLE]" in result or "[RUNNING]" in result or "[UNKNOWN]" in result, \
+    assert "[IDLE]" in result or "[RUNNING]" in result or "[UNKNOWN]" in result, (
         f"Expected status marker, got: {result[:200]}"
+    )
     print("✅ PASSED")
 
 
@@ -133,17 +133,11 @@ def test_parallel_sessions():
     from decepticon.tools.bash.tool import bash
 
     # Run in session "test-a"
-    result_a = bash.invoke({
-        "command": "echo 'session-a-output'",
-        "session": "test-a"
-    })
+    result_a = bash.invoke({"command": "echo 'session-a-output'", "session": "test-a"})
     print(f"\n📋 test_parallel_sessions (A):\n{result_a[:300]}")
 
     # Run in session "test-b"
-    result_b = bash.invoke({
-        "command": "echo 'session-b-output'",
-        "session": "test-b"
-    })
+    result_b = bash.invoke({"command": "echo 'session-b-output'", "session": "test-b"})
     print(f"\n📋 test_parallel_sessions (B):\n{result_b[:300]}")
 
     assert "session-a-output" in result_a
@@ -155,6 +149,7 @@ def test_parallel_sessions():
 
 
 # ─── Runner ──────────────────────────────────────────────────────────────
+
 
 def main():
     """Run all tests sequentially."""

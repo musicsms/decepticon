@@ -24,6 +24,7 @@ load_dotenv()
 # Try importing pytest; allow running without it as a standalone script
 try:
     import pytest
+
     HAS_PYTEST = True
 except ImportError:
     HAS_PYTEST = False
@@ -35,9 +36,10 @@ def _reset_tmux_state():
     # Kill tmux server in the sandbox to ensure clean state
     try:
         subprocess.run(
-            ["docker", "exec", "decepticon-sandbox",
-             "tmux", "kill-server"],
-            capture_output=True, text=True, timeout=5
+            ["docker", "exec", "decepticon-sandbox", "tmux", "kill-server"],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
     except Exception:
         pass  # tmux server might not be running — that's fine
@@ -47,7 +49,9 @@ def _ensure_sandbox():
     """Check that the sandbox container is running."""
     result = subprocess.run(
         ["docker", "ps", "--filter", "name=decepticon-sandbox", "--format", "{{.Names}}"],
-        capture_output=True, text=True, timeout=10
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     if "decepticon-sandbox" not in result.stdout:
         msg = "decepticon-sandbox container is not running. Run: docker compose up -d sandbox"
@@ -62,6 +66,7 @@ async def _check_litellm():
     """Check if the LiteLLM Proxy is reachable."""
     from decepticon.llm.factory import LLMFactory
     from decepticon.llm.models import ProxyConfig
+
     factory = LLMFactory(ProxyConfig())
     healthy = await factory.health_check()
     if not healthy:
@@ -75,18 +80,21 @@ async def _check_litellm():
 
 # ─── Test 1: Simple ls command ───────────────────────────────────────────
 
+
 async def test_agent_ls():
     """Test: Agent runs 'ls' via the bash tool and returns its output."""
     _ensure_sandbox()
     await _check_litellm()
     _reset_tmux_state()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST: Agent LS Command")
-    print("="*60)
+    print("=" * 60)
 
     agent = create_recon_agent()
-    prompt = "Run 'ls /home/decepticon_agent' and tell me exactly what files and directories are listed."
+    prompt = (
+        "Run 'ls /home/decepticon_agent' and tell me exactly what files and directories are listed."
+    )
     config = {"configurable": {"thread_id": "test_agent_ls"}}
 
     print(f"[+] Prompt: {prompt}")
@@ -99,12 +107,15 @@ async def test_agent_ls():
     print(f"\n[+] Agent response:\n{final_output}")
 
     # The agent should have used bash and returned some ls output
-    assert any(keyword in final_output.lower() for keyword in ["workspace", "directory", "total", "ls", "home"]), \
-        f"Agent response doesn't look like ls output: {final_output[:200]}"
+    assert any(
+        keyword in final_output.lower()
+        for keyword in ["workspace", "directory", "total", "ls", "home"]
+    ), f"Agent response doesn't look like ls output: {final_output[:200]}"
     print("[✅] test_agent_ls PASSED")
 
 
 # ─── Test 2: Interactive apt-get install ─────────────────────────────────
+
 
 async def test_agent_apt_install():
     """Test: Agent installs 'tree' via apt-get with interactive Y/n prompt."""
@@ -112,9 +123,9 @@ async def test_agent_apt_install():
     await _check_litellm()
     _reset_tmux_state()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST: Agent Interactive apt-get install")
-    print("="*60)
+    print("=" * 60)
 
     agent = create_recon_agent()
     prompt = (
@@ -134,17 +145,19 @@ async def test_agent_apt_install():
     print(f"\n[+] Agent response:\n{final_output}")
 
     # Verify the agent mentions tree was installed or shows the ls output
-    assert any(keyword in final_output.lower() for keyword in ["/usr/bin/tree", "tree", "installed"]), \
-        f"Agent response doesn't mention tree installation: {final_output[:200]}"
+    assert any(
+        keyword in final_output.lower() for keyword in ["/usr/bin/tree", "tree", "installed"]
+    ), f"Agent response doesn't mention tree installation: {final_output[:200]}"
     print("[✅] test_agent_apt_install PASSED")
 
 
 # ─── Standalone runner ───────────────────────────────────────────────────
 
+
 async def main():
     """Run all tests as a standalone script."""
     print("\n🔴 Decepticon — Agent Bash Integration Tests")
-    print("="*60)
+    print("=" * 60)
 
     passed = 0
     failed = 0
@@ -157,9 +170,9 @@ async def main():
             print(f"\n[❌] {test_func.__name__} FAILED: {e}")
             failed += 1
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(f"Results: {passed} passed, {failed} failed")
-    print("="*60)
+    print("=" * 60)
     sys.exit(1 if failed else 0)
 
 

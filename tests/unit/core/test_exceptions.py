@@ -30,8 +30,13 @@ class TestExceptionHierarchy:
 
     def test_all_errors_are_decepticon_errors(self):
         error_classes = [
-            ConfigError, LLMError, LLMConnectionError,
-            LLMRateLimitError, AgentError, ToolError, SandboxError,
+            ConfigError,
+            LLMError,
+            LLMConnectionError,
+            LLMRateLimitError,
+            AgentError,
+            ToolError,
+            SandboxError,
         ]
         for cls in error_classes:
             assert issubclass(cls, DecepticonError)
