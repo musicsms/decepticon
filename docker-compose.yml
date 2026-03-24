@@ -46,7 +46,7 @@ services:
   # Evasive Red Team Sandbox
   # Rootless container for executing tools (nmap, whois, etc.) securely
   sandbox:
-    image: ghcr.io/catower/decepticon-sandbox:${DECEPTICON_VERSION:-latest}
+    image: ghcr.io/purpleailab/decepticon-sandbox:${DECEPTICON_VERSION:-latest}
     build:
       context: .
       dockerfile: containers/sandbox.Dockerfile
@@ -67,7 +67,7 @@ services:
   # Exposes all agents (decepticon, recon, planner, exploit, postexploit)
   # as a streaming API on port 2024. Ink CLI connects here.
   langgraph:
-    image: ghcr.io/catower/decepticon-langgraph:${DECEPTICON_VERSION:-latest}
+    image: ghcr.io/purpleailab/decepticon-langgraph:${DECEPTICON_VERSION:-latest}
     build:
       context: .
       dockerfile: containers/langgraph.Dockerfile
@@ -94,7 +94,7 @@ services:
   # Ink CLI — Interactive terminal UI
   # Runs via: docker compose run --rm cli
   cli:
-    image: ghcr.io/catower/decepticon-cli:${DECEPTICON_VERSION:-latest}
+    image: ghcr.io/purpleailab/decepticon-cli:${DECEPTICON_VERSION:-latest}
     build:
       context: .
       dockerfile: containers/cli.Dockerfile

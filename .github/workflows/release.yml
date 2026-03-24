@@ -48,7 +48,7 @@ jobs:
           platforms: ${{ matrix.platforms }}
           push: true
           tags: |
-            ghcr.io/catower/${{ matrix.image }}:${{ steps.version.outputs.version }}
-            ghcr.io/catower/${{ matrix.image }}:latest
+            ghcr.io/purpleailab/${{ matrix.image }}:${{ steps.version.outputs.version }}
+            ghcr.io/purpleailab/${{ matrix.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -3,7 +3,7 @@
 # Decepticon 2.0 — One-line installer
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/catower/decepticon/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/PurpleAILAB/Decepticon/main/scripts/install.sh | bash
 #
 # Environment variables:
 #   VERSION              — Install a specific version (default: latest)
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 # ── Constants ─────────────────────────────────────────────────────
-REPO="catower/decepticon"
+REPO="PurpleAILAB/Decepticon"
 BRANCH="main"
 RAW_BASE="https://raw.githubusercontent.com/$REPO/$BRANCH"
 
