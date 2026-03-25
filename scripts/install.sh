@@ -166,13 +166,28 @@ check_for_update() {
 
 wait_for_server() {
     local port="${LANGGRAPH_PORT:-2024}"
-    local max_wait=60
+    local max_wait=90
     local waited=0
     echo -ne "${DIM}Waiting for LangGraph server"
+    # Phase 1: Wait for HTTP server to respond
     while ! curl -sf "http://localhost:$port/ok" >/dev/null 2>&1; do
         if [[ $waited -ge $max_wait ]]; then
             echo -e "${NC}"
             echo -e "${RED}Server failed to start within ${max_wait}s.${NC}"
+            echo -e "${DIM}Check logs: ${NC}${BOLD}decepticon logs${NC}"
+            exit 1
+        fi
+        echo -n "."
+        sleep 2
+        waited=$((waited + 2))
+    done
+    # Phase 2: Wait for agent graph to be loaded and ready
+    while ! curl -sf "http://localhost:$port/assistants/search" \
+        -H "Content-Type: application/json" -d '{"graph_id":"decepticon","limit":1}' \
+        | grep -q "decepticon" 2>/dev/null; do
+        if [[ $waited -ge $max_wait ]]; then
+            echo -e "${NC}"
+            echo -e "${RED}Agent graph failed to load within ${max_wait}s.${NC}"
             echo -e "${DIM}Check logs: ${NC}${BOLD}decepticon logs${NC}"
             exit 1
         fi
@@ -200,7 +215,7 @@ case "${1:-}" in
 
     stop)
         echo -e "${DIM}Stopping all services...${NC}"
-        $COMPOSE down
+        $COMPOSE --profile cli --profile victims down
         # Clean up orphaned CLI containers from 'docker compose run'
         docker rm $(docker ps -aq --filter "name=decepticon-cli-run" --filter "status=exited") 2>/dev/null || true
         echo -e "${GREEN}All services stopped.${NC}"
@@ -292,6 +307,106 @@ case "${1:-}" in
         echo -e "${DIM}Use ${NC}${BOLD}decepticon status${NC}${DIM} to verify.${NC}"
         ;;
 
+    remove|uninstall)
+        echo -e "${BOLD}Decepticon — Uninstaller${NC}"
+        echo ""
+        echo -e "This will remove:"
+        echo -e "  ${DIM}•${NC} All Decepticon Docker containers, images, volumes, and networks"
+        echo -e "  ${DIM}•${NC} Configuration directory: ${BOLD}$DECEPTICON_HOME${NC}"
+        echo -e "  ${DIM}•${NC} Launcher script: ${BOLD}$(which decepticon 2>/dev/null || echo "$HOME/.local/bin/decepticon")${NC}"
+        echo -e "  ${DIM}•${NC} PATH entries from shell config"
+
+        if [[ "${2:-}" != "--yes" ]]; then
+            echo ""
+            echo -ne "${YELLOW}Are you sure? [y/N] ${NC}"
+            read -r confirm
+            if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+                echo -e "${DIM}Aborted.${NC}"
+                exit 0
+            fi
+        fi
+
+        echo ""
+
+        # 1. Stop and remove containers + networks + volumes
+        echo -e "${DIM}Stopping and removing containers...${NC}"
+        if [[ -f "$COMPOSE_FILE" ]]; then
+            $COMPOSE --profile cli --profile victims down --volumes --remove-orphans 2>/dev/null || true
+        fi
+        # Clean up any remaining containers by name
+        for c in decepticon-sandbox decepticon-langgraph decepticon-litellm decepticon-postgres decepticon-cli decepticon-dvwa decepticon-msf2; do
+            docker rm -f "$c" 2>/dev/null || true
+        done
+        # Clean up 'docker compose run' orphans
+        docker rm $(docker ps -aq --filter "name=decepticon" --filter "status=exited") 2>/dev/null || true
+        echo -e "${GREEN}Containers removed.${NC}"
+
+        # 2. Remove Docker images
+        echo -e "${DIM}Removing Docker images...${NC}"
+        docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "decepticon-(sandbox|langgraph|cli)" | xargs -r docker rmi -f 2>/dev/null || true
+        echo -e "${GREEN}Images removed.${NC}"
+
+        # 3. Remove install directory
+        if [[ -d "$DECEPTICON_HOME" ]]; then
+            # Preserve workspace if user wants it
+            if [[ -d "$DECEPTICON_HOME/workspace" ]]; then
+                echo -ne "${YELLOW}Keep workspace data ($DECEPTICON_HOME/workspace)? [Y/n] ${NC}"
+                if [[ "${2:-}" == "--yes" ]]; then
+                    keep_ws="n"
+                else
+                    read -r keep_ws
+                fi
+                if [[ "$keep_ws" =~ ^[Nn]$ ]]; then
+                    echo -e "${DIM}Removing workspace...${NC}"
+                else
+                    echo -e "${DIM}Preserving workspace...${NC}"
+                    mv "$DECEPTICON_HOME/workspace" "/tmp/decepticon-workspace-backup-$$" 2>/dev/null || true
+                fi
+            fi
+            # Docker containers create root-owned files in workspace/;
+            # try normal rm first, fall back to sudo if needed.
+            if ! rm -rf "$DECEPTICON_HOME" 2>/dev/null; then
+                echo -e "${DIM}Root-owned files detected (created by Docker). Using sudo...${NC}"
+                sudo rm -rf "$DECEPTICON_HOME"
+            fi
+            # Restore workspace if preserved
+            if [[ -d "/tmp/decepticon-workspace-backup-$$" ]]; then
+                mkdir -p "$(dirname "$DECEPTICON_HOME")"
+                mv "/tmp/decepticon-workspace-backup-$$" "$DECEPTICON_HOME/workspace"
+                echo -e "${DIM}Workspace saved at $DECEPTICON_HOME/workspace${NC}"
+            fi
+            echo -e "${GREEN}Configuration removed.${NC}"
+        fi
+
+        # 4. Remove launcher script
+        local launcher_path
+        launcher_path="$(which decepticon 2>/dev/null || echo "$HOME/.local/bin/decepticon")"
+        if [[ -f "$launcher_path" ]]; then
+            rm -f "$launcher_path"
+            echo -e "${GREEN}Launcher removed.${NC}"
+        fi
+
+        # 5. Clean PATH from shell configs
+        echo -e "${DIM}Cleaning shell configuration...${NC}"
+        local bin_dir="$HOME/.local/bin"
+        for rc in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.zshrc" "${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish"; do
+            if [[ -f "$rc" ]]; then
+                # Remove the '# decepticon' comment and the line after it
+                sed -i '/^# decepticon$/,+1d' "$rc" 2>/dev/null || true
+            fi
+        done
+        echo -e "${GREEN}Shell config cleaned.${NC}"
+
+        echo ""
+        echo -e "${GREEN}────────────────────────────────────────────${NC}"
+        echo -e "${GREEN}  Decepticon has been removed.${NC}"
+        echo -e "${GREEN}────────────────────────────────────────────${NC}"
+        echo ""
+        echo -e "  ${DIM}To reinstall:${NC}"
+        echo -e "  ${BOLD}curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | bash${NC}"
+        echo ""
+        ;;
+
     --version|-v)
         echo "decepticon $(cat "$DECEPTICON_HOME/.version" 2>/dev/null || echo 'dev')"
         ;;
@@ -308,6 +423,7 @@ case "${1:-}" in
         echo "  decepticon config       Edit configuration (.env)"
         echo "  decepticon demo         Run guided demo (Metasploitable 2)"
         echo "  decepticon victims      Start vulnerable test targets"
+        echo "  decepticon remove       Uninstall Decepticon completely"
         echo "  decepticon --version    Show version"
         ;;
 

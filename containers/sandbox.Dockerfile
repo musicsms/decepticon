@@ -1,4 +1,6 @@
-FROM kalilinux/kali-rolling:latest
+# Pin digest for reproducible builds and stable GHA cache layers.
+# To update: docker pull kalilinux/kali-rolling:latest && docker inspect --format='{{index .RepoDigests 0}}' kalilinux/kali-rolling:latest
+FROM kalilinux/kali-rolling@sha256:287cd5cfa409e258e9ec3661db4dff0bfbb45fc95734e82d3b270a0f749629ca
 
 # Fix SSL certificate issues with Kali mirrors, then install packages
 # Disable apt sandbox so it doesn't fail to drop privileges/chown to _apt user

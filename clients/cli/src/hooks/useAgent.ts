@@ -173,16 +173,24 @@ export function useAgent({
         const client = clientRef.current;
         setError(null);
 
-        // Create thread if needed
+        // Create thread if needed (retry for server startup race condition)
         if (!threadIdRef.current) {
-          try {
-            const thread = await client.threads.create();
-            threadIdRef.current = thread.thread_id;
-          } catch (err) {
-            const msg =
-              err instanceof Error ? err.message : "Failed to create thread";
-            setError(`Connection failed: ${msg}`);
-            return;
+          const maxRetries = 5;
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              const thread = await client.threads.create();
+              threadIdRef.current = thread.thread_id;
+              break;
+            } catch (err) {
+              if (attempt === maxRetries) {
+                const msg =
+                  err instanceof Error ? err.message : "Failed to create thread";
+                setError(`Connection failed: ${msg}`);
+                return;
+              }
+              // Server may still be loading graphs — wait and retry
+              await new Promise((r) => setTimeout(r, 2000));
+            }
           }
         }
 
