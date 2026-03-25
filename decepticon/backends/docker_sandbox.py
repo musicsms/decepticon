@@ -65,7 +65,12 @@ class TmuxSessionManager:
             errors="replace",
         )
         if result.returncode != 0:
-            raise RuntimeError(result.stderr or result.stdout)
+            error_msg = result.stderr or result.stdout
+            # Detect tmux server death and invalidate session cache
+            if "no server running" in error_msg or "server exited" in error_msg:
+                log.warning("tmux server died — invalidating all session caches")
+                TmuxSessionManager._initialized.clear()
+            raise RuntimeError(error_msg)
         return result.stdout
 
     def _send(self, text: str, enter: bool = True) -> None:
@@ -154,7 +159,8 @@ class TmuxSessionManager:
         """Send a command/input and poll for PS1 completion marker.
 
         Polls until the PS1 marker appears (command complete) or *timeout*
-        is reached.
+        is reached.  If the tmux session is dead, attempts one automatic
+        recovery before returning an error.
         """
         if not is_input:
             self.initialize()
@@ -162,7 +168,21 @@ class TmuxSessionManager:
         try:
             baseline = self._capture()
         except RuntimeError as e:
-            return f"[ERROR] Sandbox error: {e}"
+            error_msg = str(e)
+            if "no server running" in error_msg or "session not found" in error_msg:
+                log.warning("Session '%s' is dead — attempting recovery", self.session)
+                TmuxSessionManager._initialized.discard(self.session)
+                try:
+                    self.initialize()
+                    baseline = self._capture()
+                except RuntimeError as retry_err:
+                    return (
+                        f"[ERROR] Session recovery failed: {retry_err}\n"
+                        f"The tmux session was destroyed (likely by pkill/killall). "
+                        f"Try using a different session name."
+                    )
+            else:
+                return f"[ERROR] Sandbox error: {e}"
 
         initial_count = len(PS1_PATTERN.findall(baseline))
 
@@ -181,7 +201,14 @@ class TmuxSessionManager:
             time.sleep(POLL_INTERVAL)
             try:
                 screen = self._capture()
-            except RuntimeError:
+            except RuntimeError as poll_err:
+                if "no server running" in str(poll_err):
+                    TmuxSessionManager._initialized.discard(self.session)
+                    return (
+                        f"[ERROR] tmux session '{self.session}' was destroyed mid-command.\n"
+                        f"The command likely killed the shell process (e.g. pkill bash).\n"
+                        f"Session will auto-recover on next bash() call."
+                    )
                 continue
 
             current_count = len(PS1_PATTERN.findall(screen))

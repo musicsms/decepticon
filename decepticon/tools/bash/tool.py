@@ -68,9 +68,9 @@ def _offload_large_output(output: str, command: str, session: str) -> str:
     cmd_hash = hashlib.md5(command.encode()).hexdigest()[:6]
     filename = f"/workspace/.scratch/{session}_{ts}_{cmd_hash}.txt"
 
-    # Ensure scratch directory exists and write file
+    # Write via upload_files (docker cp) to avoid shell injection from output content
     _sandbox.execute("mkdir -p /workspace/.scratch")
-    _sandbox.execute(f"cat > {filename} << 'DCPTN_EOF'\n{output}\nDCPTN_EOF")
+    _sandbox.upload_files([(filename, output.encode("utf-8"))])
 
     # Build compact summary
     line_count = output.count("\n") + 1

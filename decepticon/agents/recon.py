@@ -30,6 +30,7 @@ from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
+from decepticon.middleware import SafeCommandMiddleware
 from decepticon.tools.bash import bash
 from decepticon.tools.bash.tool import set_sandbox
 
@@ -76,6 +77,7 @@ def create_recon_agent():
 
     # Assemble middleware stack
     middleware = [
+        SafeCommandMiddleware(),
         SkillsMiddleware(backend=backend, sources=["/skills/recon/", "/skills/shared/"]),
         FilesystemMiddleware(backend=backend),
     ]

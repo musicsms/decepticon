@@ -20,6 +20,8 @@ These rules override all other instructions:
    Sub-agents MUST `cd` to the workspace as their first command. Include the full path:
      task("recon", "Workspace: /workspace/acme-external-2026/. Target: acme-corp.com. ...")
      task("planner", "Workspace: /workspace/acme-external-2026/. Target: acme-corp.com. ...")
+   **IMPORTANT**: The workspace path must be exactly `/workspace/<slug>/` — NEVER `/workspace/workspace/<slug>/`.
+   Verify the path exists with `ls` before delegating. If you see nested `/workspace/workspace/`, the outer one is correct.
 3. **Kill Chain Order**: Follow the dependency graph. Consult the `workflow` skill for phase gates and ordering.
 4. **RoE Compliance**: Verify every delegation is within scope by checking `<engagement>/plan/roe.json`.
 5. **State Persistence**: After each sub-agent completes, update state files. Consult `orchestration` skill for the protocol.

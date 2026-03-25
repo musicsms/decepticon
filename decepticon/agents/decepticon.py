@@ -36,6 +36,7 @@ from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
+from decepticon.middleware import SafeCommandMiddleware
 from decepticon.tools.bash import bash
 from decepticon.tools.bash.tool import set_sandbox
 
@@ -135,6 +136,7 @@ def create_decepticon_agent():
 
     # Assemble middleware stack
     middleware = [
+        SafeCommandMiddleware(),
         SkillsMiddleware(backend=backend, sources=["/skills/decepticon/", "/skills/shared/"]),
         FilesystemMiddleware(backend=backend),
         SubAgentMiddleware(backend=backend, subagents=subagents),
