@@ -210,7 +210,7 @@ case "${1:-}" in
         wait_for_server
 
         # Run CLI in foreground (interactive)
-        $COMPOSE_PROFILES run --no-build --rm cli
+        $COMPOSE_PROFILES run --rm cli
         ;;
 
     stop)
@@ -335,7 +335,7 @@ case "${1:-}" in
         echo ""
 
         # Run CLI with auto-start message
-        $COMPOSE_PROFILES run --no-build --rm -e DECEPTICON_INITIAL_MESSAGE="Resume the demo engagement and execute all objectives." cli
+        $COMPOSE_PROFILES run --rm -e DECEPTICON_INITIAL_MESSAGE="Resume the demo engagement and execute all objectives." cli
         ;;
 
     victims)
