@@ -37,7 +37,7 @@
 <br/>
 
 <div align="center">
-  <img src="assets/cli.png" alt="Decepticon CLI" width="800">
+  <img src="assets/demo.gif" alt="Decepticon CLI Demo" width="800">
 </div>
 
 ## Install
