@@ -55,6 +55,16 @@ decepticon config    # Set your Anthropic or OpenAI API key
 decepticon           # Launch
 ```
 
+## Try the Demo
+
+No configuration needed — just Docker and an API key.
+
+```bash
+decepticon demo
+```
+
+Launches Metasploitable 2 as a target, loads a pre-built engagement, and runs the full kill chain automatically: port scan, service enumeration, vsftpd exploit, and post-exploitation.
+
 ---
 
 > **Disclaimer** — Do not use this project on any system or network without explicit written authorization from the system owner. Unauthorized access to computer systems is illegal. You are solely responsible for your actions. The authors and contributors of this project assume no liability for misuse.
