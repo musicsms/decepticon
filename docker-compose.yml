@@ -17,6 +17,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     networks:
       - decepticon-net
     restart: unless-stopped
@@ -89,7 +95,7 @@ services:
       - ${DECEPTICON_DATA_DIR:-./workspace}:/workspace
     depends_on:
       litellm:
-        condition: service_started
+        condition: service_healthy
       sandbox:
         condition: service_started
     networks:
