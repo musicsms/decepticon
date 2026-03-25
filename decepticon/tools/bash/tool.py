@@ -87,7 +87,7 @@ def _offload_large_output(output: str, command: str, session: str) -> str:
 
 
 @tool
-def bash(
+async def bash(
     command: str = "",
     is_input: bool = False,
     session: str = "main",
@@ -150,7 +150,7 @@ def bash(
             f'Check later: bash(command="", session="{session}")'
         )
 
-    result = _sandbox.execute_tmux(
+    result = await _sandbox.execute_tmux_async(
         command=command,
         session=session,
         timeout=timeout,

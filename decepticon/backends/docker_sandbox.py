@@ -12,6 +12,7 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import re
@@ -199,6 +200,89 @@ class TmuxSessionManager:
 
         while time.time() - start < timeout:
             time.sleep(POLL_INTERVAL)
+            try:
+                screen = self._capture()
+            except RuntimeError as poll_err:
+                if "no server running" in str(poll_err):
+                    TmuxSessionManager._initialized.discard(self.session)
+                    return (
+                        f"[ERROR] tmux session '{self.session}' was destroyed mid-command.\n"
+                        f"The command likely killed the shell process (e.g. pkill bash).\n"
+                        f"Session will auto-recover on next bash() call."
+                    )
+                continue
+
+            current_count = len(PS1_PATTERN.findall(screen))
+
+            if current_count > initial_count:
+                output, exit_code, cwd = _extract_output(screen, command, initial_count)
+                log.info("Command completed: exit=%s cwd=%s [%s]", exit_code, cwd, command[:50])
+                self._clear_screen()
+                result = _truncate(output).strip()
+                if not result:
+                    result = f"[Command completed with no output. Exit code: {exit_code}]"
+                elif exit_code != 0:
+                    result += f"\n[Command failed with exit code: {exit_code}]"
+                if cwd:
+                    result += f"\n[cwd: {cwd}]"
+                return result
+
+        return (
+            f"[TIMEOUT] Command exceeded {timeout}s limit.\n"
+            f"Session '{self.session}' is now OCCUPIED — do NOT send new commands to it.\n"
+            f"Continue other work using a DIFFERENT session name.\n"
+            f'Check this session later: bash(command="", session="{self.session}")'
+        )
+
+    async def execute_async(
+        self,
+        command: str,
+        is_input: bool,
+        timeout: int,
+    ) -> str:
+        """Async version of execute() — uses asyncio.sleep for cancellation support.
+
+        When LangGraph cancels a run (Ctrl+C → cancelMany), asyncio.CancelledError
+        is raised at the await asyncio.sleep() point, allowing prompt interruption
+        instead of blocking for up to *timeout* seconds.
+        """
+        if not is_input:
+            self.initialize()
+
+        try:
+            baseline = self._capture()
+        except RuntimeError as e:
+            error_msg = str(e)
+            if "no server running" in error_msg or "session not found" in error_msg:
+                log.warning("Session '%s' is dead — attempting recovery", self.session)
+                TmuxSessionManager._initialized.discard(self.session)
+                try:
+                    self.initialize()
+                    baseline = self._capture()
+                except RuntimeError as retry_err:
+                    return (
+                        f"[ERROR] Session recovery failed: {retry_err}\n"
+                        f"The tmux session was destroyed (likely by pkill/killall). "
+                        f"Try using a different session name."
+                    )
+            else:
+                return f"[ERROR] Sandbox error: {e}"
+
+        initial_count = len(PS1_PATTERN.findall(baseline))
+
+        if command:
+            if is_input:
+                if command in ("C-c", "C-z", "C-d"):
+                    self._docker_tmux(["send-keys", "-t", self.session, command])
+                else:
+                    self._send(command, enter=True)
+            else:
+                self._send(command, enter=True)
+
+        start = time.time()
+
+        while time.time() - start < timeout:
+            await asyncio.sleep(POLL_INTERVAL)  # CancelledError delivered here
             try:
                 screen = self._capture()
             except RuntimeError as poll_err:
@@ -427,6 +511,30 @@ class DockerSandbox(BaseSandbox):
             return mgr.read_screen()
 
         return mgr.execute(
+            command,
+            is_input=is_input,
+            timeout=effective,
+        )
+
+    async def execute_tmux_async(
+        self,
+        command: str = "",
+        session: str = "main",
+        timeout: int | None = None,
+        is_input: bool = False,
+    ) -> str:
+        """Async tmux execution — cancellable via asyncio.CancelledError.
+
+        Used by the async bash tool so that LangGraph run cancellation
+        (Ctrl+C → cancelMany) interrupts the polling loop promptly.
+        """
+        effective = timeout if timeout is not None else self._default_timeout
+        mgr = self._get_manager(session)
+
+        if not command and not is_input:
+            return mgr.read_screen()
+
+        return await mgr.execute_async(
             command,
             is_input=is_input,
             timeout=effective,
