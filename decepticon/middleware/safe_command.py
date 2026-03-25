@@ -29,8 +29,7 @@ _DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
     (
         re.compile(r"\bkillall\s+(-\d+\s+)?bash\b"),
-        "killall bash kills the tmux session itself. "
-        "Use `kill <specific-pid>` instead.",
+        "killall bash kills the tmux session itself. Use `kill <specific-pid>` instead.",
     ),
     (
         re.compile(r"\bpkill\s+(-\d+\s+)?(-f\s+)?tmux\b"),
