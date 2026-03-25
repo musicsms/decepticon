@@ -245,7 +245,7 @@ case "${1:-}" in
         echo "$latest" > "$DECEPTICON_HOME/.version"
 
         # Download config files from the release tag (not main branch)
-        local tag_base="https://raw.githubusercontent.com/$REPO/v${latest}"
+        tag_base="https://raw.githubusercontent.com/$REPO/v${latest}"
         echo -e "${DIM}Updating configuration files...${NC}"
         curl -fsSL "$tag_base/docker-compose.yml" -o "$DECEPTICON_HOME/docker-compose.yml"
         mkdir -p "$DECEPTICON_HOME/config"
@@ -406,7 +406,6 @@ case "${1:-}" in
         fi
 
         # 4. Remove launcher script
-        local launcher_path
         launcher_path="$(which decepticon 2>/dev/null || echo "$HOME/.local/bin/decepticon")"
         if [[ -f "$launcher_path" ]]; then
             rm -f "$launcher_path"
@@ -415,7 +414,7 @@ case "${1:-}" in
 
         # 5. Clean PATH from shell configs
         echo -e "${DIM}Cleaning shell configuration...${NC}"
-        local bin_dir="$HOME/.local/bin"
+        bin_dir="$HOME/.local/bin"
         for rc in "$HOME/.bashrc" "$HOME/.profile" "$HOME/.zshrc" "${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish"; do
             if [[ -f "$rc" ]]; then
                 # Remove the '# decepticon' comment and the line after it
