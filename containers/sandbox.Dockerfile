@@ -41,7 +41,7 @@ RUN apt-get update && \
 # - Workspace files owned by UID 1000 (matches most host users → no permission issues)
 # - sudo apt install / sudo nmap still work when needed
 RUN apt-get update && apt-get install -y --no-install-recommends sudo && apt-get clean && \
-    useradd -m -s /bin/bash -u 1000 operator && \
+    useradd -m -s /bin/bash -u 1000 -g operator operator && \
     echo "operator ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/operator && \
     chmod 0440 /etc/sudoers.d/operator
 
