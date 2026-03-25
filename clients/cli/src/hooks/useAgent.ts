@@ -142,17 +142,17 @@ export function useAgent({
   }, []);
 
   const cancel = useCallback(() => {
-    // Abort the local stream
-    abortRef.current?.abort();
-    abortRef.current = null;
-
-    // Cancel all running runs on the server
+    // Cancel running runs on the server FIRST (before aborting local stream)
     const threadId = threadIdRef.current;
     if (threadId) {
       clientRef.current.runs
         .cancelMany({ threadId, status: "running" })
         .catch(() => {});
     }
+
+    // Then abort the local stream
+    abortRef.current?.abort();
+    abortRef.current = null;
 
     resetStreamState();
     addEvent({ type: "system", content: "Cancelled." });
