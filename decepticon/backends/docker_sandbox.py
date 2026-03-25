@@ -240,25 +240,25 @@ class TmuxSessionManager:
         is_input: bool,
         timeout: int,
     ) -> str:
-        """Async version of execute() — uses asyncio.sleep for cancellation support.
+        """Async version of execute() — non-blocking subprocess + cancellable polling.
 
-        When LangGraph cancels a run (Ctrl+C → cancelMany), asyncio.CancelledError
-        is raised at the await asyncio.sleep() point, allowing prompt interruption
-        instead of blocking for up to *timeout* seconds.
+        All subprocess calls are offloaded via asyncio.to_thread() to avoid blocking
+        the ASGI event loop. asyncio.sleep() between polls allows CancelledError
+        delivery when LangGraph cancels a run (Ctrl+C → cancelMany).
         """
         if not is_input:
-            self.initialize()
+            await asyncio.to_thread(self.initialize)
 
         try:
-            baseline = self._capture()
+            baseline = await asyncio.to_thread(self._capture)
         except RuntimeError as e:
             error_msg = str(e)
             if "no server running" in error_msg or "session not found" in error_msg:
                 log.warning("Session '%s' is dead — attempting recovery", self.session)
                 TmuxSessionManager._initialized.discard(self.session)
                 try:
-                    self.initialize()
-                    baseline = self._capture()
+                    await asyncio.to_thread(self.initialize)
+                    baseline = await asyncio.to_thread(self._capture)
                 except RuntimeError as retry_err:
                     return (
                         f"[ERROR] Session recovery failed: {retry_err}\n"
@@ -273,18 +273,20 @@ class TmuxSessionManager:
         if command:
             if is_input:
                 if command in ("C-c", "C-z", "C-d"):
-                    self._docker_tmux(["send-keys", "-t", self.session, command])
+                    await asyncio.to_thread(
+                        self._docker_tmux, ["send-keys", "-t", self.session, command]
+                    )
                 else:
-                    self._send(command, enter=True)
+                    await asyncio.to_thread(self._send, command, True)
             else:
-                self._send(command, enter=True)
+                await asyncio.to_thread(self._send, command, True)
 
         start = time.time()
 
         while time.time() - start < timeout:
             await asyncio.sleep(POLL_INTERVAL)  # CancelledError delivered here
             try:
-                screen = self._capture()
+                screen = await asyncio.to_thread(self._capture)
             except RuntimeError as poll_err:
                 if "no server running" in str(poll_err):
                     TmuxSessionManager._initialized.discard(self.session)
@@ -300,7 +302,7 @@ class TmuxSessionManager:
             if current_count > initial_count:
                 output, exit_code, cwd = _extract_output(screen, command, initial_count)
                 log.info("Command completed: exit=%s cwd=%s [%s]", exit_code, cwd, command[:50])
-                self._clear_screen()
+                await asyncio.to_thread(self._clear_screen)
                 result = _truncate(output).strip()
                 if not result:
                     result = f"[Command completed with no output. Exit code: {exit_code}]"

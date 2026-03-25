@@ -19,7 +19,6 @@ RUN echo "APT::Sandbox::User \"root\";" > /etc/apt/apt.conf.d/10sandbox && \
     python3 \
     python3-pip \
     tmux \
-    libcap2-bin \
     && apt-get clean
 
 # Install subfinder (often not in default kali repos or needs specific setup, but lets try to get it via apt if possible, otherwise we skip or use go)
@@ -38,14 +37,22 @@ RUN apt-get update && \
     gobuster \
     && apt-get clean
 
-# OPSEC: Give nmap raw packet capabilities so it can perform SYN scans (-sS) without being root
-RUN setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip /usr/bin/nmap
+# Non-root operator user with passwordless sudo
+# - Workspace files owned by UID 1000 (matches most host users → no permission issues)
+# - sudo apt install / sudo nmap still work when needed
+RUN apt-get update && apt-get install -y --no-install-recommends sudo && apt-get clean && \
+    useradd -m -s /bin/bash -u 1000 operator && \
+    echo "operator ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/operator && \
+    chmod 0440 /etc/sudoers.d/operator
 
 # Configure tmux: 50K line scrollback buffer to prevent output truncation
-RUN echo "set-option -g history-limit 50000" > /root/.tmux.conf
+RUN echo "set-option -g history-limit 50000" > /home/operator/.tmux.conf && \
+    chown operator:operator /home/operator/.tmux.conf
 
 # Working directory for the agent's virtual filesystem
 WORKDIR /workspace
+
+USER operator
 
 # Keep the container alive so the backend can 'docker exec' into it
 CMD ["tail", "-f", "/dev/null"]

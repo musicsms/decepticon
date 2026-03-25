@@ -292,6 +292,11 @@ case "${1:-}" in
         echo -e "${DIM}Target: Metasploitable 2 (decepticon-msf2)${NC}"
         echo ""
 
+        # Fix workspace ownership if Docker created it as root
+        if [[ -d "$DECEPTICON_HOME/workspace" && ! -w "$DECEPTICON_HOME/workspace" ]]; then
+            sudo chown -R "$(id -u):$(id -g)" "$DECEPTICON_HOME/workspace" 2>/dev/null || true
+        fi
+
         # Download demo engagement files (skip if already present or offline)
         demo_dir="$DECEPTICON_HOME/workspace/demo/plan"
         mkdir -p "$demo_dir"
