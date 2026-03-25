@@ -229,23 +229,50 @@ case "${1:-}" in
         latest=$(curl -sf --max-time 5 "https://api.github.com/repos/$REPO/releases/latest" \
             | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p') 2>/dev/null || true
 
-        if [[ -n "$latest" ]]; then
-            echo -e "${DIM}Latest version:  v${latest}${NC}"
-            echo "$latest" > "$DECEPTICON_HOME/.version"
+        if [[ -z "$latest" ]]; then
+            echo -e "${YELLOW}Could not fetch latest version from GitHub.${NC}"
+            echo -e "${DIM}Check your network connection and try again.${NC}"
+            exit 1
         fi
 
-        # Update config files
+        echo -e "${DIM}Latest version:  v${latest}${NC}"
+
+        if [[ "$latest" == "$local_version" ]]; then
+            echo -e "${GREEN}Already up to date.${NC}"
+            exit 0
+        fi
+
+        echo "$latest" > "$DECEPTICON_HOME/.version"
+
+        # Download config files from the release tag (not main branch)
+        local tag_base="https://raw.githubusercontent.com/$REPO/v${latest}"
         echo -e "${DIM}Updating configuration files...${NC}"
-        curl -fsSL "$RAW_BASE/docker-compose.yml" -o "$DECEPTICON_HOME/docker-compose.yml"
+        curl -fsSL "$tag_base/docker-compose.yml" -o "$DECEPTICON_HOME/docker-compose.yml"
         mkdir -p "$DECEPTICON_HOME/config"
-        curl -fsSL "$RAW_BASE/config/litellm.yaml" -o "$DECEPTICON_HOME/config/litellm.yaml"
+        curl -fsSL "$tag_base/config/litellm.yaml" -o "$DECEPTICON_HOME/config/litellm.yaml"
         echo -e "${GREEN}Configuration files updated.${NC}"
 
-        # Pull latest images
-        echo -e "${DIM}Pulling latest images...${NC}"
-        $COMPOSE_PROFILES pull || echo -e "${YELLOW}Warning: Some images failed to pull.${NC}"
+        # Update launcher script itself
+        echo -e "${DIM}Updating launcher...${NC}"
+        curl -fsSL "$tag_base/scripts/install.sh" -o /tmp/decepticon-installer-$$.sh
+        bash /tmp/decepticon-installer-$$.sh --launcher-only 2>/dev/null && \
+            echo -e "${GREEN}Launcher updated.${NC}" || true
+        rm -f /tmp/decepticon-installer-$$.sh
 
-        echo -e "${GREEN}Updated. Run ${NC}${BOLD}decepticon stop && decepticon${NC}${GREEN} to restart.${NC}"
+        # Pull versioned images
+        echo -e "${DIM}Pulling images (v${latest})...${NC}"
+        DECEPTICON_VERSION="$latest" $COMPOSE_PROFILES pull \
+            || echo -e "${YELLOW}Warning: Some images failed to pull.${NC}"
+
+        # Stop running services and restart with new images
+        if docker ps --filter "name=decepticon-langgraph" --format '{{.Names}}' | grep -q .; then
+            echo -e "${DIM}Restarting services with new version...${NC}"
+            $COMPOSE --profile cli --profile victims down
+            $COMPOSE up -d litellm postgres sandbox langgraph
+            echo -e "${GREEN}Updated and restarted (v${latest}).${NC}"
+        else
+            echo -e "${GREEN}Updated to v${latest}. Run ${NC}${BOLD}decepticon${NC}${GREEN} to start.${NC}"
+        fi
         ;;
 
     status)
@@ -517,6 +544,15 @@ pull_images() {
 
 # ── Main ──────────────────────────────────────────────────────────
 main() {
+    local install_dir="${DECEPTICON_HOME:-$HOME/.decepticon}"
+    local bin_dir="$HOME/.local/bin"
+
+    # Quick path: only regenerate the launcher script (used by `decepticon update`)
+    if [[ "${1:-}" == "--launcher-only" ]]; then
+        create_launcher "$bin_dir" "$install_dir"
+        return
+    fi
+
     echo ""
     echo -e "${BOLD}Decepticon${NC} — Installer"
     echo ""
@@ -527,9 +563,6 @@ main() {
     # Version
     resolve_version
 
-    # Install directory
-    local install_dir="${DECEPTICON_HOME:-$HOME/.decepticon}"
-    local bin_dir="$HOME/.local/bin"
     mkdir -p "$install_dir"
 
     info "Installing Decepticon $DECEPTICON_VERSION"
