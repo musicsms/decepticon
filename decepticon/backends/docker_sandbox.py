@@ -236,10 +236,7 @@ class TmuxSessionManager:
             if screen != prev_screen:
                 last_change_time = time.time()
                 prev_screen = screen
-            elif (
-                screen != baseline
-                and time.time() - last_change_time >= STALL_SECONDS
-            ):
+            elif screen != baseline and time.time() - last_change_time >= STALL_SECONDS:
                 log.info(
                     "Stall detected after %.1fs — interactive program [%s]",
                     time.time() - start,
@@ -263,8 +260,8 @@ class TmuxSessionManager:
         return (
             f"[TIMEOUT] Command exceeded {timeout}s limit.\n"
             f"Session '{self.session}' is still running. "
-            f"To interact with it, use: bash(command=\"<input>\", is_input=True, session=\"{self.session}\")\n"
-            f"To read its current output: bash(command=\"\", session=\"{self.session}\")\n"
+            f'To interact with it, use: bash(command="<input>", is_input=True, session="{self.session}")\n'
+            f'To read its current output: bash(command="", session="{self.session}")\n'
             f"--- screen preview ---\n{screen_preview}"
         )
 
@@ -352,10 +349,7 @@ class TmuxSessionManager:
             if screen != prev_screen:
                 last_change_time = time.time()
                 prev_screen = screen
-            elif (
-                screen != baseline
-                and time.time() - last_change_time >= STALL_SECONDS
-            ):
+            elif screen != baseline and time.time() - last_change_time >= STALL_SECONDS:
                 log.info(
                     "Stall detected after %.1fs — interactive program [%s]",
                     time.time() - start,
@@ -379,8 +373,8 @@ class TmuxSessionManager:
         return (
             f"[TIMEOUT] Command exceeded {timeout}s limit.\n"
             f"Session '{self.session}' is still running. "
-            f"To interact with it, use: bash(command=\"<input>\", is_input=True, session=\"{self.session}\")\n"
-            f"To read its current output: bash(command=\"\", session=\"{self.session}\")\n"
+            f'To interact with it, use: bash(command="<input>", is_input=True, session="{self.session}")\n'
+            f'To read its current output: bash(command="", session="{self.session}")\n'
             f"--- screen preview ---\n{screen_preview}"
         )
 
