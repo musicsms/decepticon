@@ -16,6 +16,7 @@ dramatically reducing context consumption from verbose scan outputs.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import time
 
@@ -53,7 +54,7 @@ def get_sandbox() -> DockerSandbox | None:
     return _sandbox
 
 
-def _offload_large_output(output: str, command: str, session: str) -> str:
+async def _offload_large_output(output: str, command: str, session: str) -> str:
     """Save large output to scratch file in sandbox, return compact reference.
 
     Implements the filesystem-context "scratch pad" pattern:
@@ -69,8 +70,8 @@ def _offload_large_output(output: str, command: str, session: str) -> str:
     filename = f"/workspace/.scratch/{session}_{ts}_{cmd_hash}.txt"
 
     # Write via upload_files (docker cp) to avoid shell injection from output content
-    _sandbox.execute("mkdir -p /workspace/.scratch")
-    _sandbox.upload_files([(filename, output.encode("utf-8"))])
+    await asyncio.to_thread(_sandbox.execute, "mkdir -p /workspace/.scratch")
+    await asyncio.to_thread(_sandbox.upload_files, [(filename, output.encode("utf-8"))])
 
     # Build compact summary
     line_count = output.count("\n") + 1
@@ -140,7 +141,7 @@ async def bash(
 
     # Background mode: send command and return immediately
     if background and command:
-        _sandbox.start_background(command=command, session=session)
+        await asyncio.to_thread(_sandbox.start_background, command=command, session=session)
         return (
             f"[BACKGROUND] Command started in session '{session}'.\n"
             f"Do NOT check this session or sleep-wait. Instead, do productive work NOW:\n"
@@ -162,6 +163,6 @@ async def bash(
 
     # Auto-offload large outputs to scratch files (filesystem-context pattern)
     if len(result) > OFFLOAD_THRESHOLD and not result.startswith("["):
-        return _offload_large_output(result, command, session)
+        return await _offload_large_output(result, command, session)
 
     return result

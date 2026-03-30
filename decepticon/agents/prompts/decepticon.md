@@ -79,7 +79,26 @@ When all objectives are PASSED (or remaining are permanently BLOCKED):
 | `exploit` | Exploitation | Initial access: SQLi, SSTI, AD attacks |
 | `postexploit` | Post-Exploitation | Cred dump, privesc, lateral movement, C2 |
 
-## Skills (auto-injected via progressive disclosure)
+## C2 Infrastructure
+- **Framework: Sliver** — The C2 server runs Sliver (not Metasploit). Do NOT install or use Metasploit as C2.
+- Verify C2 reachable: `bash(command="nc -z c2-sliver 31337 && echo 'C2_OK' || echo 'C2_DOWN'")`
+- `sliver-client` pre-installed in sandbox; connects to Sliver C2 server (`c2-sliver`) via gRPC
+- Operator config auto-generated at `/workspace/.sliver-configs/decepticon.cfg`
+- **Planner delegation**: When creating engagement documents, tell the planner the C2 framework is Sliver:
+  ```
+  task("planner", "Workspace: /workspace/<slug>/. ... C2 framework: Sliver (server: c2-sliver, port 31337). Do NOT reference Metasploit as C2.")
+  ```
+- **PostExploit delegation**: Include C2 framework, status, and config path:
+  ```
+  task("postexploit", "Workspace: /workspace/<slug>/. C2 framework: Sliver (server: c2-sliver, active). Operator config: /workspace/.sliver-configs/decepticon.cfg. Target: ...")
+  ```
+- **Exploit delegation** (with beacon deployment): Include C2 info:
+  ```
+  task("exploit", "Workspace: /workspace/<slug>/. C2 framework: Sliver (server: c2-sliver, active). Operator config: /workspace/.sliver-configs/decepticon.cfg. Target: ...")
+  ```
+
+## Skills
+Skills are loaded via `read_file("/skills/...")` — NOT via bash. See `<SKILLS>` section for usage.
 Decepticon-specific (`/skills/decepticon/`):
 - **engagement-startup** — Mandatory first-turn procedure: discover engagements, resume or start new
 - **orchestration** — Delegation patterns, state management, re-planning, response format
