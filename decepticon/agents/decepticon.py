@@ -32,6 +32,7 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelFallbackMiddleware, TodoListMiddleware
 from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 
+from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
@@ -42,12 +43,6 @@ from decepticon.tools.bash.tool import set_sandbox
 
 # Resolve paths relative to repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-PROMPT_FILE = Path(__file__).parent / "prompts" / "decepticon.md"
-
-
-def _load_system_prompt() -> str:
-    """Load the Decepticon orchestrator system prompt."""
-    return PROMPT_FILE.read_text(encoding="utf-8")
 
 
 def create_decepticon_agent():
@@ -74,7 +69,7 @@ def create_decepticon_agent():
     )
     set_sandbox(sandbox)
 
-    system_prompt = _load_system_prompt()
+    system_prompt = load_prompt("decepticon", shared=["bash", "skills"])
 
     # Route /skills/ to host filesystem; everything else goes into the container
     backend = CompositeBackend(

@@ -4,7 +4,7 @@ description: "Mandatory first-turn startup procedure. Checks for existing engage
 metadata:
   subdomain: orchestration
   tags: startup, engagement-selection, workspace-init, resume
-  mitre_attack:
+  mitre_attack: []
 ---
 
 # Engagement Startup Procedure
@@ -73,4 +73,11 @@ What is the target or scope for this engagement?
    task("planner", "New engagement. Workspace: /workspace/<slug>/. Target: <target>. Interview the operator and generate RoE, CONOPS, and OPPLAN.")
    ```
 5. Once planner completes → verify documents exist in `<slug>/plan/`
-6. Begin the Ralph execution loop
+6. **Check C2 Infrastructure** — If `opplan.json` contains post-exploitation objectives:
+   ```
+   bash(command="nc -z c2-sliver 31337 2>/dev/null && echo 'C2_REACHABLE' || echo 'C2_UNREACHABLE'")
+   ```
+   - If `C2_REACHABLE` → C2 framework is **Sliver** (server: `c2-sliver`, gRPC port 31337). Include this in ALL sub-agent delegations.
+   - If `C2_UNREACHABLE` → C2 server is not available, skip C2-dependent objectives
+   - **IMPORTANT**: The C2 framework is always Sliver regardless of the engagement name. Do NOT assume Metasploit from engagement names containing "msf".
+7. Begin the Ralph execution loop

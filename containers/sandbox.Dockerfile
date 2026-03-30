@@ -37,6 +37,13 @@ RUN apt-get update && \
     gobuster \
     && apt-get clean
 
+# C2 client — Sliver client connects to the separate C2 server container.
+# The full `sliver` package includes both server and client binaries;
+# only the client (`sliver-client`) is used from the sandbox.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends sliver && \
+    apt-get clean
+
 # Non-root operator user with passwordless sudo
 # - Workspace files owned by UID 1000 (matches most host users → no permission issues)
 # - sudo apt install / sudo nmap still work when needed

@@ -4,7 +4,7 @@ description: "Top-level orchestration skill that defines execution order and dep
 metadata:
   subdomain: orchestration
   tags: workflow, orchestrator, dependency-graph, engagement-state
-  mitre_attack:
+  mitre_attack: []
 ---
 
 # Engagement Workflow Orchestrator
@@ -160,7 +160,8 @@ Post-exploitation is a **loop** — after each new host compromise, the cycle re
 
 | Skill | Does | Does NOT |
 |-------|------|----------|
-| `c2` | Teamserver setup, listeners, implant gen, redirectors, post-implant ops | Credential dumping, privilege escalation |
+| `c2` | Framework-agnostic C2 orchestration: channel types, implant modes, redirectors, decision gates | Framework-specific setup (use `c2-sliver`) |
+| `c2-sliver` | Sliver-specific: server connection, listeners, implant gen, BOF/Armory, post-implant ops | Credential dumping, privilege escalation |
 | `credential-access` | LSASS dump, SAM hive, DPAPI, NTLM relay, password spray, hash crack | Privilege escalation, lateral movement |
 | `privilege-escalation` | Token impersonation, UAC bypass, service abuse, Linux privesc | Credential dumping, lateral movement |
 | `lateral-movement` | PTH, PTT, WMI/WinRM/PsExec/RDP, SMB ops, tunneling | Credential extraction, privilege escalation |
@@ -251,9 +252,9 @@ To determine "what's next", check for these artifacts:
 │   ├── privesc_*.txt          → Escalation results
 │   ├── lateral_*.txt          → Movement log
 │   └── loot/                  → Extracted data
-├── c2/                    → C2 infrastructure active
-│   ├── teamserver.conf        → C2 server config
-│   └── implants.json          → Active implant inventory
+├── post-exploit/c2/       → C2 operations active (server runs in c2-sliver container)
+│   ├── implants/              → Generated implant binaries
+│   └── c2_operations_log.md   → Timestamped C2 operator actions
 └── report_*.md            → Reporting complete
 ```
 
@@ -264,7 +265,7 @@ To determine "what's next", check for these artifacts:
 | **Planner** | `/plan` | `/skills/planning/` | `roe-template`, `threat-profile`, `conops-template`, `opplan-converter` |
 | **Recon** | `/recon` | `/skills/recon/`, `/skills/shared/` | `passive-recon`, `osint`, `cloud-recon`, `active-recon`, `web-recon`, `reporting` + shared |
 | **Exploit** | `/exploit` | `/skills/exploit/`, `/skills/shared/` | `web`, `ad` + shared (`defense-evasion`, `opsec`, `workflow`) |
-| **PostExploit** | `/postexploit` | `/skills/post-exploit/`, `/skills/shared/` | `credential-access`, `privilege-escalation`, `lateral-movement`, `c2` + shared |
+| **PostExploit** | `/postexploit` | `/skills/post-exploit/`, `/skills/shared/` | `credential-access`, `privilege-escalation`, `lateral-movement`, `c2`, `c2-sliver` + shared |
 | **Decepticon** | `/decepticon` | `/skills/decepticon/`, `/skills/shared/` | `orchestration`, `engagement-lifecycle`, `kill-chain-analysis` + shared |
 
 Cross-cutting (via `/skills/shared/`): `opsec` (Recon + Exploit + PostExploit), `defense-evasion` (Exploit + PostExploit), `workflow` (all)
@@ -276,6 +277,6 @@ Cross-cutting (via `/skills/shared/`): `opsec` (Recon + Exploit + PostExploit), 
 | Planning | Planner | `/skills/planning/` | `roe-template`, `threat-profile`, `conops-template`, `opplan-converter` | — |
 | Reconnaissance | Recon | `/skills/recon/` | `passive-recon`, `osint`, `cloud-recon`, `active-recon`, `web-recon`, `reporting` | TA0043 |
 | Exploitation | Exploit | `/skills/exploit/` | `web`, `ad` | TA0001, TA0002 |
-| Post-Exploitation | PostExploit | `/skills/post-exploit/` | `credential-access`, `privilege-escalation`, `lateral-movement`, `c2` | TA0006, TA0004, TA0008, TA0011 |
+| Post-Exploitation | PostExploit | `/skills/post-exploit/` | `credential-access`, `privilege-escalation`, `lateral-movement`, `c2`, `c2-sliver` | TA0006, TA0004, TA0008, TA0011 |
 | Orchestration | Decepticon | `/skills/decepticon/` | `orchestration`, `engagement-lifecycle`, `kill-chain-analysis` | — |
 | Cross-cutting | Recon/Exploit/PostExploit/Decepticon | `/skills/shared/` | `opsec`, `defense-evasion`, `workflow` | TA0005 |

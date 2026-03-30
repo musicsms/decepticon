@@ -34,6 +34,7 @@ log = logging.getLogger("decepticon.backends.docker_sandbox")
 
 PS1_PATTERN = re.compile(r"\[DCPTN:(\d+):(.+?)\]")
 POLL_INTERVAL = 0.5  # seconds between capture-pane polls
+STALL_SECONDS = 3.0  # seconds of no screen change → treat as interactive prompt
 MAX_OUTPUT_CHARS = 30_000
 
 
@@ -197,6 +198,8 @@ class TmuxSessionManager:
                 self._send(command, enter=True)
 
         start = time.time()
+        prev_screen = baseline
+        last_change_time = start
 
         while time.time() - start < timeout:
             time.sleep(POLL_INTERVAL)
@@ -227,11 +230,42 @@ class TmuxSessionManager:
                     result += f"\n[cwd: {cwd}]"
                 return result
 
+            # Stall detection: if screen changed from baseline (program produced
+            # output) but hasn't changed for STALL_SECONDS, the program is likely
+            # waiting for input (interactive prompt like msf6>, sliver>).
+            if screen != prev_screen:
+                last_change_time = time.time()
+                prev_screen = screen
+            elif (
+                screen != baseline
+                and time.time() - last_change_time >= STALL_SECONDS
+            ):
+                log.info(
+                    "Stall detected after %.1fs — interactive program [%s]",
+                    time.time() - start,
+                    command[:50],
+                )
+                output = _extract_interactive_output(screen, baseline)
+                return (
+                    f"{_truncate(output).strip()}\n"
+                    f"[session: {self.session} — interactive, "
+                    f"send next command with is_input=True]"
+                )
+
+        # Full timeout — include screen capture
+        try:
+            final_screen = self._capture()
+        except RuntimeError:
+            final_screen = ""
+        screen_tail = final_screen.strip().split("\n")[-20:]
+        screen_preview = "\n".join(screen_tail)
+
         return (
             f"[TIMEOUT] Command exceeded {timeout}s limit.\n"
-            f"Session '{self.session}' is now OCCUPIED — do NOT send new commands to it.\n"
-            f"Continue other work using a DIFFERENT session name.\n"
-            f'Check this session later: bash(command="", session="{self.session}")'
+            f"Session '{self.session}' is still running. "
+            f"To interact with it, use: bash(command=\"<input>\", is_input=True, session=\"{self.session}\")\n"
+            f"To read its current output: bash(command=\"\", session=\"{self.session}\")\n"
+            f"--- screen preview ---\n{screen_preview}"
         )
 
     async def execute_async(
@@ -282,6 +316,8 @@ class TmuxSessionManager:
                 await asyncio.to_thread(self._send, command, True)
 
         start = time.time()
+        prev_screen = baseline
+        last_change_time = start
 
         while time.time() - start < timeout:
             await asyncio.sleep(POLL_INTERVAL)  # CancelledError delivered here
@@ -312,11 +348,40 @@ class TmuxSessionManager:
                     result += f"\n[cwd: {cwd}]"
                 return result
 
+            # Stall detection (see sync execute() for rationale)
+            if screen != prev_screen:
+                last_change_time = time.time()
+                prev_screen = screen
+            elif (
+                screen != baseline
+                and time.time() - last_change_time >= STALL_SECONDS
+            ):
+                log.info(
+                    "Stall detected after %.1fs — interactive program [%s]",
+                    time.time() - start,
+                    command[:50],
+                )
+                output = _extract_interactive_output(screen, baseline)
+                return (
+                    f"{_truncate(output).strip()}\n"
+                    f"[session: {self.session} — interactive, "
+                    f"send next command with is_input=True]"
+                )
+
+        # Full timeout — include screen capture
+        try:
+            final_screen = await asyncio.to_thread(self._capture)
+        except RuntimeError:
+            final_screen = ""
+        screen_tail = final_screen.strip().split("\n")[-20:]
+        screen_preview = "\n".join(screen_tail)
+
         return (
             f"[TIMEOUT] Command exceeded {timeout}s limit.\n"
-            f"Session '{self.session}' is now OCCUPIED — do NOT send new commands to it.\n"
-            f"Continue other work using a DIFFERENT session name.\n"
-            f'Check this session later: bash(command="", session="{self.session}")'
+            f"Session '{self.session}' is still running. "
+            f"To interact with it, use: bash(command=\"<input>\", is_input=True, session=\"{self.session}\")\n"
+            f"To read its current output: bash(command=\"\", session=\"{self.session}\")\n"
+            f"--- screen preview ---\n{screen_preview}"
         )
 
     def read_screen(self) -> str:
@@ -336,6 +401,25 @@ class TmuxSessionManager:
 
 
 # ─── Output helpers (transplanted from tools/bash/tool.py) ───────────────
+
+
+def _extract_interactive_output(screen: str, baseline: str) -> str:
+    """Extract new output from an interactive program (no PS1 marker).
+
+    Compares the current screen against the baseline to find new content
+    produced by the interactive program since the command was sent.
+    """
+    # Find the PS1 marker in the baseline — everything after it is new
+    matches = list(PS1_PATTERN.finditer(baseline))
+    if matches:
+        last = matches[-1]
+        new_content = screen[last.end() :].strip()
+        return new_content if new_content else screen.strip()
+    # No PS1 in baseline either — return the diff
+    baseline_lines = set(baseline.strip().split("\n"))
+    screen_lines = screen.strip().split("\n")
+    new_lines = [ln for ln in screen_lines if ln not in baseline_lines]
+    return "\n".join(new_lines) if new_lines else screen.strip()
 
 
 def _extract_output(screen: str, command: str, initial_count: int) -> tuple[str, int, str]:
@@ -534,7 +618,7 @@ class DockerSandbox(BaseSandbox):
         mgr = self._get_manager(session)
 
         if not command and not is_input:
-            return mgr.read_screen()
+            return await asyncio.to_thread(mgr.read_screen)
 
         return await mgr.execute_async(
             command,

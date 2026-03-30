@@ -203,9 +203,9 @@ case "${1:-}" in
         check_api_key
         check_for_update
 
-        # Start background services
+        # Start background services (COMPOSE_PROFILES in .env controls which C2 framework starts)
         echo -e "${DIM}Starting services...${NC}"
-        $COMPOSE up -d --no-build litellm postgres sandbox langgraph > /dev/null 2>&1
+        $COMPOSE up -d --no-build > /dev/null 2>&1
 
         wait_for_server
 
@@ -273,7 +273,7 @@ case "${1:-}" in
         if docker ps --filter "name=decepticon-langgraph" --format '{{.Names}}' | grep -q .; then
             echo -e "${DIM}Restarting services with new version...${NC}"
             $COMPOSE --profile cli --profile victims down > /dev/null 2>&1
-            $COMPOSE up -d --no-build litellm postgres sandbox langgraph > /dev/null 2>&1
+            $COMPOSE up -d --no-build > /dev/null 2>&1
             echo -e "${GREEN}Updated and restarted (v${latest}).${NC}"
         else
             echo -e "${GREEN}Updated to v${latest}. Run ${NC}${BOLD}decepticon${NC}${GREEN} to start.${NC}"
@@ -323,9 +323,9 @@ case "${1:-}" in
         echo -e "${DIM}Starting Metasploitable 2...${NC}"
         $COMPOSE --profile victims up -d --no-build > /dev/null 2>&1 metasploitable2 > /dev/null 2>&1
 
-        # Start core services
+        # Start core services (COMPOSE_PROFILES in .env controls which C2 framework starts)
         echo -e "${DIM}Starting services...${NC}"
-        $COMPOSE up -d --no-build litellm postgres sandbox langgraph > /dev/null 2>&1
+        $COMPOSE up -d --no-build > /dev/null 2>&1
 
         wait_for_server
 
