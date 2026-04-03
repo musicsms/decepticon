@@ -6,7 +6,9 @@
   <img src="assets/logo_banner.png" alt="Decepticon Logo">
 </div>
 
-<h1 align="center">Decepticon — Vibe Hacking Agent</h1>
+<h1 align="center">Decepticon — Autonomous Hacking Agent</h1>
+
+<p align="center"><i>"Tired of AI hackers that are either illegal or completely useless? Yeah, us too."</i></p>
 
 <div align="center">
 
@@ -28,8 +30,8 @@
 <a href="https://purplelab.framer.ai">
   <img src="https://img.shields.io/badge/Website-purplelab.framer.ai-brightgreen?logo=vercel&logoColor=white&style=for-the-badge" alt="Website">
 </a>
-<a href="https://purpleailab.mintlify.app">
-  <img src="https://img.shields.io/badge/Docs-purpleailab.mintlify.app-8B5CF6?logo=bookstack&logoColor=white&style=for-the-badge" alt="Documentation">
+<a href="https://docs.decepticon.red">
+  <img src="https://img.shields.io/badge/Docs-docs.decepticon.red-8B5CF6?logo=bookstack&logoColor=white&style=for-the-badge" alt="Documentation">
 </a>
 
 </div>
@@ -71,17 +73,41 @@ Launches Metasploitable 2 as a target, loads a pre-built engagement, and runs th
 
 ---
 
-## What is Vibe Hacking?
+## What is Autonomous Hacking?
 
-**Vibe Hacking** is a new paradigm in offensive security, defined by PurpleAILAB.
+Let's be honest. The "AI + hacking" space is exhausting.
 
-Traditional red teaming demands hundreds of hours of manual work — scanning, enumerating, pivoting, documenting — most of it repetitive, all of it exhausting. Meanwhile, the attack surface grows faster than any team can cover.
+Every other week, someone drops a demo: *"Look, GPT can run nmap!"* Cool. Then what? It either ends up as a party trick that no one actually uses in production — or worse, it crosses a line nobody should cross.
 
-Vibe Hacking changes the equation. Instead of replacing the operator, AI agents handle the grind: running scans, analyzing output, chaining techniques, and adapting in real time. The human sets the mission, defines the rules, and focuses on what machines still can't do — intuition, judgment, and creative thinking.
+> *"So these AI hacking agents... if they're not illegal, what are they even for?"*
+
+Fair question. Here's our answer.
+
+**Autonomous Hacking** is the next evolution in offensive security. It's not about making hacking easier or more accessible. It's about making **real Red Team operations** executable at machine speed — with the rigor, documentation, and legal framework that separates professionals from script kiddies.
+
+Traditional red teaming demands hundreds of hours of manual work — scanning, enumerating, pivoting, documenting — most of it repetitive, all of it exhausting. Meanwhile, the attack surface grows faster than any human team can cover.
+
+Autonomous Hacking changes the equation. AI agents handle the grind: running scans, analyzing output, chaining techniques, and adapting in real time. The human sets the mission, defines the rules, and focuses on what machines still can't do — intuition, judgment, and creative thinking.
 
 > *"Delegate the repetitive. Focus on the decisive."*
 
-This isn't about making hacking easier. It's about making red teams **fast enough to matter** — before the next breach proves they weren't.
+## "But wait — aren't you guys just the same?"
+
+Great question. Short answer: **No.**
+
+Here's the thing most people miss about offensive security — there's a massive difference between *hacking* and *Red Team Testing*.
+
+Red Team Testing is a **regulated, authorized, professional discipline**. Before a single packet leaves the wire, there are documents. Agreements. Rules.
+
+- **RoE (Rules of Engagement)** — Defines what you can and can't touch. Scope, timing, boundaries. Violate this and you're not a red teamer, you're a criminal.
+- **OPPLAN (Operations Plan)** — The full mission plan. Objectives, kill chain phases, acceptance criteria. Every action maps to a purpose.
+- **ConOps (Concept of Operations)** — Threat actor profile, attack methodology, the "who are we pretending to be" document.
+
+**Decepticon supports all of this. Obviously.**
+
+Every engagement starts with proper documentation. Every objective is tracked. Every action operates within defined boundaries. The agent doesn't just hack — it operates under a formal operations plan, respects the Rules of Engagement, and produces auditable findings.
+
+This isn't a toy. It's a professional Red Team platform that happens to be autonomous.
 
 ## Why Decepticon?
 
@@ -99,6 +125,24 @@ Every command runs inside a hardened Kali Linux sandbox. No tools touch the host
 
 **CLI-First**
 Security work belongs in the terminal. Decepticon's interface is a real-time streaming CLI built with Ink — no browser tabs, no dashboards, no context switching. You see what the agent sees, as it happens.
+
+## The Bigger Picture: Offense Serves Defense
+
+Here's what most "offensive AI" projects get wrong: they treat the attack as the destination.
+
+**Decepticon is not the destination. It's Step 1.**
+
+> There are already plenty of offensive AI agents out there. The world doesn't need another "look, AI can hack things" demo.
+
+What the world actually needs is a system that turns offensive capabilities into **defensive evolution**. That's the real vision:
+
+1. **Step 1 — Autonomous Offensive Agent**: Build a world-class hacking agent that executes realistic Red Team operations. *We are here.*
+2. **Step 2 — Infinite Offensive Feedback**: Deploy the agent to generate continuous, diverse attack scenarios — an endless stream of real-world threat simulation.
+3. **Step 3 — Defensive Evolution**: Channel that feedback into Blue Team capabilities — detection rules, response playbooks, hardening strategies. The defense evolves because the offense never stops.
+
+Think of it as an **Offensive Vaccine**. Just as a biological vaccine exposes the body to weakened pathogens to build immunity, Decepticon exposes your infrastructure to relentless AI-driven attacks to build resilience.
+
+The true value isn't in the attack. It's in the defense system that emerges from surviving it.
 
 ## Agents
 
@@ -129,6 +173,19 @@ Each agent spawns with a **clean context window** per objective — no accumulat
 | `decepticon remove` | Uninstall Decepticon completely |
 | `decepticon --version` | Show installed version |
 
+## Vision & Philosophy
+
+This README covers the essentials — but there's a deeper story behind why Decepticon exists, where it's headed, and the philosophy that drives every design decision.
+
+**[Read the full vision and philosophy at docs.decepticon.red](https://docs.decepticon.red)**
+
+Topics covered in the documentation:
+- **Core Philosophy** — Reasoning over signatures, hybrid intelligence, stealth as foundation
+- **Pentesting vs. Red Teaming** — Why the distinction matters and where Decepticon sits
+- **History & Evolution** — From Purple Team AI (2021) through RL and GANs to today's autonomous agents
+- **Target Architecture** — Multi-agent hybrid architecture, C2-based stealth execution
+- **Why Open Source** — Collective intelligence and the Red/Blue Team feedback loop
+
 ## Contributing
 
 We welcome contributions. Whether you're a security researcher, an AI engineer, or someone who cares about making defense better — there's a place for you here.
@@ -155,7 +212,7 @@ cd clients/cli && npm run dev
 3. Commit with clear messages
 4. Open a Pull Request
 
-For architecture details and contribution guidelines, visit the [documentation](https://purpleailab.mintlify.app).
+For architecture details and contribution guidelines, visit the [documentation](https://docs.decepticon.red).
 
 ## Community
 
