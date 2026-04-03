@@ -39,7 +39,7 @@
 <br/>
 
 <div align="center">
-  <video src="https://github.com/PurpleAILAB/Decepticon/raw/main/assets/demo.mp4" width="800" controls></video>
+  <video src="https://github.com/user-attachments/assets/470f200c-9f0a-4fb3-9cea-3b16c21f12d2" width="800" controls></video>
 </div>
 
 ## Install
