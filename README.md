@@ -117,10 +117,13 @@ Penetration testing finds vulnerabilities. Red teaming answers a harder question
 
 Most security tools stop at the scan report. Decepticon doesn't. It thinks in kill chains — reconnaissance, exploitation, privilege escalation, lateral movement, persistence — executing multi-stage operations the way a real adversary would, not the way a scanner does.
 
-Three principles guide everything we build:
+Four principles guide everything we build:
 
 **Real Red Teaming, Not Checkbox Security**
 Decepticon emulates actual adversary behavior — not just running CVE checks against a list of ports. It reads an operations plan, adapts to what it finds, and pursues objectives through whatever path opens up. The goal is to test your defenses the way they'll actually be tested.
+
+**Interactive Shell Sessions**
+Real offensive security tools are interactive — `sliver-client`, `msfconsole`, `evil-winrm`, `sqlmap`, `impacket-psexec`. They don't just take a command and exit. They drop you into a prompt, wait for input, and expect a conversation. Most AI agents can't handle this — they fire one-shot commands via `subprocess.run()` and call it a day. Decepticon runs every command inside persistent tmux sessions with automatic prompt detection. When a tool presents an interactive prompt (`sliver >`, `msf6 >`, `PS C:\>`), the agent detects it and sends follow-up commands — the same way a human operator would. Parallel named sessions, control signals (`C-c`, `C-z`), and stall detection are built in. No workarounds, no hacks. The agent actually *operates* the tools.
 
 **Complete Isolation — Real Red Team Infrastructure**
 Every command runs inside a hardened Kali Linux sandbox on a dedicated operational network (`sandbox-net`), fully isolated from the management infrastructure (`decepticon-net`). The C2 team server, victim targets, and the operator sandbox live on one network; the LLM gateway, agent API server, and database live on another. No cross-network access. LangGraph reaches the sandbox exclusively via Docker socket — not the network. You get the full offensive toolkit — nmap, Sliver C2, sqlmap, Impacket — without any risk of leaking credentials or touching the host.
@@ -145,6 +148,84 @@ What the world actually needs is a system that turns offensive capabilities into
 Think of it as an **Offensive Vaccine**. Just as a biological vaccine exposes the body to weakened pathogens to build immunity, Decepticon exposes your infrastructure to relentless AI-driven attacks to build resilience.
 
 The true value isn't in the attack. It's in the defense system that emerges from surviving it.
+
+## Features
+
+### Engagement Planning
+
+Every operation begins with documents, not commands. The **Soundwave** agent interviews the operator and generates a complete engagement package:
+
+- **RoE (Rules of Engagement)** — Scope boundaries, authorized targets, timing constraints
+- **ConOps (Concept of Operations)** — Threat actor profile, attack methodology, kill chain mapping
+- **Deconfliction Plan** — Source IPs, user-agents, time windows, deconfliction codes for SOC coordination
+- **OPPLAN (Operations Plan)** — Discrete objectives with acceptance criteria, organized by kill chain phase
+
+These documents aren't just paperwork — they drive execution. The OPPLAN feeds directly into the autonomous loop, and the RoE is checked every iteration to enforce scope.
+
+### Autonomous Kill Chain Execution
+
+The orchestrator reads the OPPLAN and executes objectives through a **Ralph loop** — an autonomous iteration cycle that works like a real operator:
+
+1. Load the OPPLAN from disk → pick the next pending objective
+2. Build an iteration prompt with RoE guard rails + previous findings
+3. Spawn a **fresh specialist agent** with a clean context window
+4. Execute → parse objective PASSED/BLOCKED signal
+5. Update OPPLAN status → append findings to disk → next objective
+
+Each agent starts with zero accumulated context — no noise from previous iterations degrading reasoning. Findings persist to files, not to agent memory, so every iteration starts sharp. The orchestrator tracks objective dependencies and state transitions (`pending` → `in_progress` → `passed`/`blocked`), adapting the attack path based on what worked and what didn't.
+
+### C2 Integration
+
+Decepticon doesn't just exploit targets — it establishes persistent access through real C2 infrastructure. The **Sliver C2 team server** runs in its own container on the operational network:
+
+- Implant generation, deployment, and session management via `sliver-client`
+- mTLS, HTTPS, and DNS-based C2 channels
+- Post-exploitation through C2 sessions: credential harvesting, lateral movement, internal recon
+- Auto-configuration at first boot — operator config generated and mounted into the sandbox
+
+C2 frameworks are profile-based (`COMPOSE_PROFILES=c2-sliver`). Swap the profile to change the C2 stack without touching anything else.
+
+### Context Engineering
+
+Long-running operations generate massive amounts of output. Without active context management, LLM performance degrades fast. Decepticon applies multi-tier output management inspired by Claude Code:
+
+- **Inline** (≤15K chars) — returned directly in the tool result
+- **Offload** (15K–100K) — saved to `/workspace/.scratch/`, summary + preview returned
+- **Kill** (>5M) — size watchdog terminates the command before it floods context
+
+On top of that: ANSI escape stripping, repetitive line compression (nmap/nuclei patterns), observation masking (old outputs replaced with summaries), and prompt caching with cache boundary markers. The result: agents stay sharp even after dozens of scans and exploits.
+
+### Skill System
+
+Domain knowledge is injected on-demand through a **progressive skill disclosure** system. Skills are Markdown files organized by kill chain phase with MITRE ATT&CK tags:
+
+- Only skill descriptions (frontmatter) are loaded initially — not the full content
+- When the agent needs a technique, the relevant skill is loaded just-in-time
+- Skills cover: OSINT, active recon, web exploitation, AD attacks, privilege escalation, lateral movement, credential access, defense evasion, and OPSEC
+
+This keeps context lean while giving agents access to deep domain knowledge when they need it.
+
+### MITRE ATT&CK Integration
+
+MITRE ATT&CK isn't a checkbox — it's woven into every layer of execution:
+
+- **Objective-level tagging** — Every OPPLAN objective carries a `mitre` field with technique IDs (e.g., `T1190`, `T1003.001`). When the orchestrator tracks objective status, ATT&CK coverage tracks with it.
+- **Skill-level mapping** — Each skill in the knowledge base declares its ATT&CK techniques in frontmatter. The middleware displays them inline in the agent's skill catalog, so the agent selects techniques with ATT&CK context before execution.
+- **Threat actor profiling** — ConOps threat actors define `initial_access` vectors and `ttps` as ATT&CK technique IDs. The engagement methodology defaults to `PTES + MITRE ATT&CK framework`.
+
+The result: every finding, every objective, and every technique maps back to the ATT&CK matrix. Reports don't need post-hoc tagging — the mapping is built into the operation from planning through execution.
+
+### Multi-Model Routing
+
+All LLM calls route through a **LiteLLM proxy** for provider abstraction. Three profiles control the cost/performance tradeoff:
+
+| Profile | Orchestrator | Exploit | Recon | Use Case |
+|---------|-------------|---------|-------|----------|
+| **eco** | Opus 4.6 | Sonnet 4.6 | Haiku 4.5 | Production engagements |
+| **max** | Opus 4.6 | Opus 4.6 | Sonnet 4.6 | High-value targets |
+| **test** | Haiku 4.5 | Haiku 4.5 | Haiku 4.5 | Development/CI |
+
+Each role has a primary model and automatic fallback (e.g., Opus → GPT-5.4, Sonnet → GPT-4.1). If the primary provider has an outage or rate limit, the agent seamlessly switches to the fallback — no manual intervention, no failed operations.
 
 ## Architecture
 
@@ -226,6 +307,24 @@ Every agent is built with an explicit **middleware stack** tailored to its role 
 | `decepticon victims` | Start vulnerable test targets (DVWA, Metasploitable) |
 | `decepticon remove` | Uninstall Decepticon completely |
 | `decepticon --version` | Show installed version |
+
+## Interactive CLI
+
+Once inside the CLI, you have two **screen modes** and a set of slash commands.
+
+**Prompt mode** (default) shows a compact view — sub-agent sessions are collapsed, consecutive tool calls are grouped, and only the latest bash output is expanded. **Transcript mode** (`ctrl+o`) expands everything: full event history, sub-agent details, and complete tool outputs.
+
+| Shortcut | Action |
+|----------|--------|
+| `ctrl+o` | Toggle between prompt and transcript mode |
+| `ctrl+c` | Cancel running stream / exit transcript / exit app |
+| `Esc` | Exit transcript mode |
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show available commands and shortcuts |
+| `/clear` | Clear conversation history |
+| `/quit` | Exit Decepticon CLI |
 
 ## Vision & Philosophy
 
