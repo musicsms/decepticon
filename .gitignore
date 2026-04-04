@@ -73,7 +73,6 @@ node_modules/
 
 # etc
 sliver-py/
-docs/
 /src/
 config/*.local.*
 reference/

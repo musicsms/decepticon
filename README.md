@@ -153,178 +153,76 @@ The true value isn't in the attack. It's in the defense system that emerges from
 
 ### Engagement Planning
 
-Every operation begins with documents, not commands. The **Soundwave** agent interviews the operator and generates a complete engagement package:
-
-- **RoE (Rules of Engagement)** — Scope boundaries, authorized targets, timing constraints
-- **ConOps (Concept of Operations)** — Threat actor profile, attack methodology, kill chain mapping
-- **Deconfliction Plan** — Source IPs, user-agents, time windows, deconfliction codes for SOC coordination
-- **OPPLAN (Operations Plan)** — Discrete objectives with acceptance criteria, organized by kill chain phase
-
-These documents aren't just paperwork — they drive execution. The OPPLAN feeds directly into the autonomous loop, and the RoE is checked every iteration to enforce scope.
+The **Soundwave** agent interviews the operator and generates a complete engagement package — RoE, ConOps, Deconfliction Plan, and OPPLAN. The OPPLAN feeds directly into the autonomous loop; the RoE is enforced every iteration.
 
 ### Autonomous Kill Chain Execution
 
-The orchestrator reads the OPPLAN and executes objectives through a **Ralph loop** — an autonomous iteration cycle that works like a real operator:
+The orchestrator iterates through OPPLAN objectives autonomously:
 
-1. Load the OPPLAN from disk → pick the next pending objective
-2. Build an iteration prompt with RoE guard rails + previous findings
-3. Spawn a **fresh specialist agent** with a clean context window
-4. Execute → parse objective PASSED/BLOCKED signal
-5. Update OPPLAN status → append findings to disk → next objective
+1. Pick next pending objective → build prompt with RoE guard rails + previous findings
+2. Spawn a **fresh agent** with a clean context window → execute
+3. Parse PASSED/BLOCKED signal → update status → append findings to disk → next
 
-Each agent starts with zero accumulated context — no noise from previous iterations degrading reasoning. Findings persist to files, not to agent memory, so every iteration starts sharp. The orchestrator tracks objective dependencies and state transitions (`pending` → `in_progress` → `passed`/`blocked`), adapting the attack path based on what worked and what didn't.
+Fresh context per objective — no accumulated noise. Findings persist to files, not agent memory. The orchestrator tracks dependencies and state transitions, adapting the attack path in real time.
 
 ### C2 Integration
 
-Decepticon doesn't just exploit targets — it establishes persistent access through real C2 infrastructure. The **Sliver C2 team server** runs in its own container on the operational network:
+**Sliver C2 team server** runs on the operational network. The sandbox has `sliver-client` pre-installed with auto-generated operator config.
 
-- Implant generation, deployment, and session management via `sliver-client`
+- Implant generation, deployment, and session management
 - mTLS, HTTPS, and DNS-based C2 channels
-- Post-exploitation through C2 sessions: credential harvesting, lateral movement, internal recon
-- Auto-configuration at first boot — operator config generated and mounted into the sandbox
+- Post-exploitation via C2 sessions: credential harvesting, lateral movement, internal recon
 
-C2 frameworks are profile-based (`COMPOSE_PROFILES=c2-sliver`). Swap the profile to change the C2 stack without touching anything else.
-
-### Context Engineering
-
-Long-running operations generate massive amounts of output. Without active context management, LLM performance degrades fast. Decepticon applies multi-tier output management inspired by Claude Code:
-
-- **Inline** (≤15K chars) — returned directly in the tool result
-- **Offload** (15K–100K) — saved to `/workspace/.scratch/`, summary + preview returned
-- **Kill** (>5M) — size watchdog terminates the command before it floods context
-
-On top of that: ANSI escape stripping, repetitive line compression (nmap/nuclei patterns), observation masking (old outputs replaced with summaries), and prompt caching with cache boundary markers. The result: agents stay sharp even after dozens of scans and exploits.
+C2 is profile-based — `COMPOSE_PROFILES=c2-sliver`. Swap the profile to change frameworks.
 
 ### Skill System
 
-Domain knowledge is injected on-demand through a **progressive skill disclosure** system. Skills are Markdown files organized by kill chain phase with MITRE ATT&CK tags:
-
-- Only skill descriptions (frontmatter) are loaded initially — not the full content
-- When the agent needs a technique, the relevant skill is loaded just-in-time
-- Skills cover: OSINT, active recon, web exploitation, AD attacks, privilege escalation, lateral movement, credential access, defense evasion, and OPSEC
-
-This keeps context lean while giving agents access to deep domain knowledge when they need it.
+Progressive skill disclosure — only frontmatter loaded initially, full content on-demand via `read_file()`. Skills organized by kill chain phase with MITRE ATT&CK tags. Covers OSINT, web exploitation, AD attacks, privilege escalation, lateral movement, credential access, defense evasion, and OPSEC.
 
 ### MITRE ATT&CK Integration
 
-MITRE ATT&CK isn't a checkbox — it's woven into every layer of execution:
+ATT&CK mapping at every layer — not added after the fact:
 
-- **Objective-level tagging** — Every OPPLAN objective carries a `mitre` field with technique IDs (e.g., `T1190`, `T1003.001`). When the orchestrator tracks objective status, ATT&CK coverage tracks with it.
-- **Skill-level mapping** — Each skill in the knowledge base declares its ATT&CK techniques in frontmatter. The middleware displays them inline in the agent's skill catalog, so the agent selects techniques with ATT&CK context before execution.
-- **Threat actor profiling** — ConOps threat actors define `initial_access` vectors and `ttps` as ATT&CK technique IDs. The engagement methodology defaults to `PTES + MITRE ATT&CK framework`.
-
-The result: every finding, every objective, and every technique maps back to the ATT&CK matrix. Reports don't need post-hoc tagging — the mapping is built into the operation from planning through execution.
+- **Objectives** — each OPPLAN objective carries `mitre` technique IDs (e.g., `T1190`, `T1003.001`)
+- **Skills** — ATT&CK techniques declared in frontmatter, displayed inline in agent's skill catalog
+- **Threat actors** — ConOps defines `initial_access` and `ttps` as ATT&CK IDs
 
 ### Multi-Model Routing
 
-All LLM calls route through a **LiteLLM proxy** for provider abstraction. Three profiles control the cost/performance tradeoff:
+LiteLLM proxy routes to any backend (Anthropic, OpenAI, Google). Three profiles:
 
 | Profile | Orchestrator | Exploit | Recon | Use Case |
 |---------|-------------|---------|-------|----------|
-| **eco** | Opus 4.6 | Sonnet 4.6 | Haiku 4.5 | Production engagements |
+| **eco** | Opus 4.6 | Sonnet 4.6 | Haiku 4.5 | Production |
 | **max** | Opus 4.6 | Opus 4.6 | Sonnet 4.6 | High-value targets |
 | **test** | Haiku 4.5 | Haiku 4.5 | Haiku 4.5 | Development/CI |
 
-Each role has a primary model and automatic fallback (e.g., Opus → GPT-5.4, Sonnet → GPT-4.1). If the primary provider has an outage or rate limit, the agent seamlessly switches to the fallback — no manual intervention, no failed operations.
+Each role has automatic fallback (e.g., Opus → GPT-5.4). Provider outage or rate limit → seamless switch.
 
 ## Architecture
 
-Decepticon separates **management infrastructure** from **operational infrastructure** — the same way a real red team separates its planning systems from its attack infrastructure.
+Two isolated networks. Management (`decepticon-net`) and operations (`sandbox-net`) share zero network access. LangGraph controls the sandbox exclusively via Docker socket.
 
-```mermaid
-graph TB
-    subgraph HOST["Host Machine"]
-        direction TB
-
-        subgraph MGMT["decepticon-net — Management Infrastructure"]
-            direction LR
-            LITELLM["LiteLLM Gateway<br/>:4000"]
-            POSTGRES["PostgreSQL<br/>:5432"]
-            LANGGRAPH["LangGraph API<br/>:2024"]
-            LITELLM --- POSTGRES
-            LITELLM ---|LLM routing| LANGGRAPH
-        end
-
-        subgraph OPS["sandbox-net — Operational Infrastructure"]
-            direction LR
-            SANDBOX["Kali Sandbox<br/>nmap · sqlmap · Impacket<br/>sliver-client"]
-            C2["Sliver C2 Team Server<br/>gRPC :31337 · mTLS :8888<br/>HTTPS :443"]
-            VICTIMS["Victim Targets<br/>DVWA · Metasploitable 2"]
-            SANDBOX ---|sliver-client| C2
-            SANDBOX ---|attack traffic| VICTIMS
-        end
-
-        CLI["Ink CLI — Interactive Terminal UI"]
-    end
-
-    LANGGRAPH -.->|"Docker Socket<br/>(no network access)"| SANDBOX
-    CLI -->|stream_mode=custom| LANGGRAPH
-
-    style MGMT fill:#1a1a2e,stroke:#4a90d9,color:#fff
-    style OPS fill:#1a1a2e,stroke:#e74c3c,color:#fff
-    style LANGGRAPH fill:#4a90d9,stroke:#4a90d9,color:#fff
-    style SANDBOX fill:#2ecc71,stroke:#2ecc71,color:#fff
-    style C2 fill:#e74c3c,stroke:#e74c3c,color:#fff
-    style VICTIMS fill:#95a5a6,stroke:#95a5a6,color:#fff
-    style CLI fill:#9b59b6,stroke:#9b59b6,color:#fff
-    style LITELLM fill:#f39c12,stroke:#f39c12,color:#fff
-    style POSTGRES fill:#3498db,stroke:#3498db,color:#fff
-```
-
-**Why two networks?** The sandbox has zero access to the LLM gateway, database, or agent API. If a target compromises the sandbox, it reaches nothing of value — just like a real red team isolates its C2 infrastructure from its internal systems. LangGraph controls the sandbox exclusively through Docker socket (`docker exec`), not through the network.
-
-**C2 Infrastructure**: The Sliver team server runs in its own container on the operational network. The sandbox has `sliver-client` pre-installed and auto-connects using a config generated at first boot (`/workspace/.sliver-configs/decepticon.cfg`). C2 is profile-based — swap `COMPOSE_PROFILES=c2-sliver` for a different framework without touching the rest of the stack.
-
-**LLM Routing**: LiteLLM acts as a unified API gateway, routing to any LLM backend (Anthropic, OpenAI, local models) with usage tracking, rate limiting, and key management via PostgreSQL.
+<div align="center">
+  <img src="assets/decepticon_infra.svg" alt="Decepticon Infrastructure" width="680">
+</div>
 
 ## Agents
 
-Decepticon runs a **multi-agent system** where a central orchestrator delegates to specialist agents, each with its own tools, skills, and context window.
+Five specialist agents, each with its own tools, skills, and clean context window: **Decepticon** (orchestrator), **Soundwave** (engagement planning), **Recon**, **Exploit**, and **Post-Exploit**. Each agent spawns fresh per objective — no accumulated noise, no degraded reasoning.
 
-| Agent | Role |
-|-------|------|
-| **Decepticon** | Orchestrator. Reads the OPPLAN, coordinates the kill chain, delegates tasks to specialists. Owns objective tracking via OPPLAN tools. |
-| **Soundwave** | Intelligence officer. Interviews the operator and generates engagement documents — RoE, ConOps, and Deconfliction Plan. Does not execute commands. |
-| **Recon** | Reconnaissance and enumeration. Runs scans, discovers services, maps attack surface inside the sandbox. |
-| **Exploit** | Exploitation. Attempts initial access through discovered vulnerabilities, credentials, or misconfigurations. |
-| **Post-Exploit** | Post-exploitation. Credential access, privilege escalation, lateral movement, C2 management, and data collection. |
+**[Agent details and middleware stack →](docs/agents.md)**
 
-Each agent spawns with a **clean context window** per objective — no accumulated noise, no degraded reasoning. Findings persist to disk, not to memory, so every iteration starts sharp.
+## CLI
 
-Every agent is built with an explicit **middleware stack** tailored to its role — skills for domain knowledge, filesystem access for the sandbox, model fallback for resilience, and prompt caching for efficiency. The orchestrator additionally has OPPLAN tools (add/get/list/update objectives) and sub-agent delegation via `task()`.
+```bash
+decepticon           # Start all services and open the interactive CLI
+decepticon demo      # Run guided demo (full kill chain + Sliver C2)
+decepticon config    # Edit API keys and settings
+decepticon stop      # Stop all services
+```
 
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `decepticon` | Start all services and open the interactive CLI |
-| `decepticon demo` | Run guided demo against Metasploitable 2 (full kill chain + Sliver C2) |
-| `decepticon stop` | Stop all services |
-| `decepticon update [-f]` | Pull latest images and sync configuration (`--force` to re-pull same version) |
-| `decepticon status` | Show service status |
-| `decepticon logs [service]` | Follow service logs (default: langgraph) |
-| `decepticon config` | Edit API keys and settings |
-| `decepticon victims` | Start vulnerable test targets (DVWA, Metasploitable) |
-| `decepticon remove` | Uninstall Decepticon completely |
-| `decepticon --version` | Show installed version |
-
-## Interactive CLI
-
-Once inside the CLI, you have two **screen modes** and a set of slash commands.
-
-**Prompt mode** (default) shows a compact view — sub-agent sessions are collapsed, consecutive tool calls are grouped, and only the latest bash output is expanded. **Transcript mode** (`ctrl+o`) expands everything: full event history, sub-agent details, and complete tool outputs.
-
-| Shortcut | Action |
-|----------|--------|
-| `ctrl+o` | Toggle between prompt and transcript mode |
-| `ctrl+c` | Cancel running stream / exit transcript / exit app |
-| `Esc` | Exit transcript mode |
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show available commands and shortcuts |
-| `/clear` | Clear conversation history |
-| `/quit` | Exit Decepticon CLI |
+**[Full CLI reference →](docs/cli.md)**
 
 ## Vision & Philosophy
 
