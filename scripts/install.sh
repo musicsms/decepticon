@@ -144,9 +144,24 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 check_api_key() {
-    if grep -q "your-.*-key-here" "$DECEPTICON_HOME/.env" 2>/dev/null; then
-        echo -e "${YELLOW}Warning: API keys not configured.${NC}"
-        echo -e "${DIM}Run ${NC}${BOLD}decepticon config${NC}${DIM} to set your API keys.${NC}"
+    # Warn only if ALL API keys are still placeholders (any one real key is enough)
+    local env_file="$DECEPTICON_HOME/.env"
+    [[ ! -f "$env_file" ]] && return
+    local has_real_key=false
+    while IFS='=' read -r key value; do
+        case "$key" in
+            ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_API_KEY)
+                value="${value#"${value%%[![:space:]]*}"}"
+                if [[ -n "$value" && ! "$value" =~ ^your-.*-key-here$ && ! "$value" =~ ^# ]]; then
+                    has_real_key=true
+                    break
+                fi
+                ;;
+        esac
+    done < "$env_file"
+    if [[ "$has_real_key" == false ]]; then
+        echo -e "${YELLOW}Warning: No API keys configured.${NC}"
+        echo -e "${DIM}Run ${NC}${BOLD}decepticon config${NC}${DIM} to set at least one API key.${NC}"
         echo ""
     fi
 }
@@ -207,9 +222,9 @@ case "${1:-}" in
         check_api_key
         check_for_update
 
-        # Start background services (COMPOSE_PROFILES in .env controls which C2 framework starts)
+        # Start background services including victim targets
         echo -e "${DIM}Starting services...${NC}"
-        $COMPOSE up -d --no-build > /dev/null 2>&1
+        $COMPOSE --profile victims up -d --no-build > /dev/null 2>&1
 
         wait_for_server
 
