@@ -22,6 +22,7 @@ from langgraph.types import Command
 # ─── Patterns that would kill the sandbox tmux session ────────────────────
 
 _DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    # ── Session destruction ────────────────────────────────────────────────
     (
         re.compile(r"\bpkill\s+(-\d+\s+)?(-f\s+)?bash\b"),
         "pkill bash kills the tmux session itself. "
@@ -45,6 +46,35 @@ _DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         re.compile(r"\bkill\s+-9\s+(-1|0)\b"),
         "kill -9 -1/0 sends SIGKILL to all processes, destroying the session. "
         "Use `kill <specific-pid>` instead.",
+    ),
+    # ── Sandbox escape prevention (Claude Code best practice) ─────────────
+    (
+        re.compile(r"\bdocker\s+(exec|run|cp|build|compose)\b"),
+        "Docker CLI commands are blocked — you are INSIDE the sandbox container. "
+        "All commands execute directly in the Kali Linux environment.",
+    ),
+    (
+        re.compile(r"\bcat\s+/proc/1/(environ|cmdline|maps)\b"),
+        "Reading /proc/1/ exposes host process information. "
+        "Use /proc/self/ for current process info instead.",
+    ),
+    (
+        re.compile(r"\bnsenter\b"),
+        "nsenter can escape container namespaces. This is blocked for sandbox safety.",
+    ),
+    (
+        re.compile(r"\bmount\s.*\bproc\b|\bmount\s.*\bsys\b|\bmount\s+-t\s+(proc|sys)"),
+        "Mounting /proc or /sys filesystems is blocked for sandbox safety.",
+    ),
+    (
+        re.compile(r"\biptables\b|\bip6tables\b|\bnftables\b"),
+        "Firewall rule modification is blocked — may violate Rules of Engagement. "
+        "Document the finding and request RoE amendment if needed.",
+    ),
+    (
+        re.compile(r"\bip\s+(route|rule)\s+(add|del|flush)\b"),
+        "Routing table modification is blocked — may violate Rules of Engagement. "
+        "Use the network as-is or document the limitation.",
     ),
 ]
 

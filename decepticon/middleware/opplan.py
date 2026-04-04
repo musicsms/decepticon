@@ -1,0 +1,799 @@
+"""OPPLANMiddleware — domain-specific task tracking for red team engagements.
+
+Follows the TodoListMiddleware pattern: OPPLAN CRUD tools execute their logic
+directly via InjectedState, appearing as proper `tool` type runs in LangSmith.
+No middleware tool-call interception needed.
+
+4 tools (Claude Code mapping):
+  add_objective    — add single objective           (TaskCreate)
+  get_objective    — read single objective detail   (TaskGet)
+  list_objectives  — list all + progress summary    (TaskList)
+  update_objective — update status/notes/owner      (TaskUpdate)
+
+Key differences from Claude Code:
+  - Domain: Task → Objective, project → engagement, coding → kill chain
+  - Enum-typed parameters (ObjectivePhase, OpsecLevel, C2Tier)
+  - Kill chain dependencies (blocked_by) with execution-time validation
+  - Dynamic OPPLAN status injection every LLM call (battle tracker)
+  - Parallel mutation prevention (sequential counter-based IDs)
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Any, NotRequired, cast, override
+
+from langchain.agents import AgentState
+from langchain.agents.middleware import AgentMiddleware
+from langchain.agents.middleware.types import OmitFromInput
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.tools import InjectedToolCallId, tool
+from langgraph.prebuilt import InjectedState
+from langgraph.types import Command
+
+from decepticon.core.schemas import (
+    C2Tier,
+    Objective,
+    ObjectivePhase,
+    ObjectiveStatus,
+    OpsecLevel,
+)
+
+# ── State Schema ──────────────────────────────────────────────────────
+
+
+class OPPLANState(AgentState):
+    """Extended agent state with OPPLAN objectives.
+
+    Merged automatically by create_agent() when OPPLANMiddleware
+    is in the middleware stack. All fields are excluded from input schema
+    (OmitFromInput) — only the middleware tools can write to them.
+    """
+
+    objectives: Annotated[NotRequired[list[dict]], OmitFromInput]
+    """List of OPPLAN objectives in dict form (serialized Objective models)."""
+
+    engagement_name: Annotated[NotRequired[str], OmitFromInput]
+    """Current engagement name for context."""
+
+    threat_profile: Annotated[NotRequired[str], OmitFromInput]
+    """Threat actor profile for context injection."""
+
+    objective_counter: Annotated[NotRequired[int], OmitFromInput]
+    """Auto-increment counter for objective IDs (like Claude Code high water mark)."""
+
+
+# ── System Prompt ─────────────────────────────────────────────────────
+
+OPPLAN_SYSTEM_PROMPT = """\
+## OPPLAN — Operational Plan Tracking
+
+You have OPPLAN tools to manage red team engagement objectives.
+These are always available — no mode switching needed.
+
+### Objective CRUD Tools
+
+- **`add_objective`** — Add a single objective (auto-ID: OBJ-001, OBJ-002, ...).
+  Each objective MUST be completable in ONE sub-agent context window.
+  Set `engagement_name` and `threat_profile` on the first call to initialize context.
+
+- **`get_objective`** — Read a single objective's full details.
+  ALWAYS call this before update_objective (read-before-write, staleness prevention).
+
+- **`list_objectives`** — List all objectives with progress summary.
+  Use when: Selecting the next objective, reviewing progress, situational awareness.
+
+- **`update_objective`** — Update status, notes, or owner.
+  ALWAYS call get_objective first. NEVER call multiple times in parallel.
+
+### Workflow
+```
+add_objective(×N, engagement_name=...) → [user approval] → Ralph Loop
+```
+
+### Status Transitions
+```
+pending → in-progress → completed    (evidence documented)
+                       → blocked      (failure reason documented)
+blocked → in-progress                 (retry with different approach)
+        → completed                   (abandon with explanation)
+```
+
+### Rules — NEVER Violate
+- NEVER execute objectives without user-approved OPPLAN
+- NEVER call update_objective without calling get_objective first
+- NEVER call update_objective multiple times in parallel
+- ALWAYS include evidence when marking COMPLETED
+- ALWAYS include failure reason and attempts when marking BLOCKED
+- ALWAYS set owner to the sub-agent name before delegating (recon/exploit/postexploit)
+- ALWAYS respect blocked_by dependencies and kill chain phase order
+"""
+
+
+# ── State Transition Rules ────────────────────────────────────────────
+
+_VALID_TRANSITIONS: dict[str, set[str]] = {
+    "pending": {"in-progress"},
+    "in-progress": {"completed", "blocked"},
+    "blocked": {"in-progress", "completed"},  # retry or abandon
+    # completed is terminal
+}
+
+
+# ── Formatting Helpers ────────────────────────────────────────────────
+
+
+def _format_opplan_status(
+    objectives: list[dict],
+    engagement_name: str,
+    threat_profile: str,
+) -> str:
+    """Format OPPLAN for system prompt injection (concise battle tracker).
+
+    Injected every LLM call via wrap_model_call, providing dynamic
+    situational awareness — the red team equivalent of a battle tracker.
+    """
+    total = len(objectives)
+    completed = sum(1 for o in objectives if o.get("status") == "completed")
+    blocked = sum(1 for o in objectives if o.get("status") == "blocked")
+    in_progress = sum(
+        1 for o in objectives if o.get("status") == "in-progress"
+    )
+    pending = sum(1 for o in objectives if o.get("status") == "pending")
+
+    actionable = [
+        o
+        for o in objectives
+        if o.get("status") in ("pending", "in-progress")
+    ]
+    actionable.sort(key=lambda o: o.get("priority", 999))
+    next_obj = actionable[0] if actionable else None
+
+    lines = [
+        "<OPPLAN_STATUS>",
+        f"Engagement: {engagement_name}",
+        f"Threat Profile: {threat_profile}",
+        f"Progress: {completed}/{total} completed, {blocked} blocked, "
+        f"{in_progress} in-progress, {pending} pending",
+        "",
+        "| ID | Phase | Title | Status | Priority | Owner |",
+        "|---|---|---|---|---|---|",
+    ]
+
+    for o in sorted(objectives, key=lambda x: x.get("priority", 999)):
+        status_marker = {
+            "completed": "COMPLETED",
+            "blocked": "BLOCKED",
+            "in-progress": ">>IN-PROGRESS<<",
+            "pending": "pending",
+        }.get(o.get("status", ""), o.get("status", ""))
+
+        lines.append(
+            f"| {o.get('id', '?')} | {o.get('phase', '?')} | "
+            f"{o.get('title', '?')} | {status_marker} | "
+            f"{o.get('priority', '?')} | {o.get('owner') or '-'} |"
+        )
+
+    if next_obj:
+        lines.extend(
+            [
+                "",
+                f"**Next**: {next_obj.get('id')} — {next_obj.get('title')}",
+                f"  Phase: {next_obj.get('phase')} | "
+                f"MITRE: {', '.join(next_obj.get('mitre') or []) or 'n/a'} | "
+                f"OPSEC: {next_obj.get('opsec', 'standard')} | "
+                f"C2: {next_obj.get('c2_tier', 'interactive')}",
+            ]
+        )
+        criteria = next_obj.get("acceptance_criteria", [])
+        if criteria:
+            lines.append("  Acceptance Criteria:")
+            for c in criteria:
+                lines.append(f"    - [ ] {c}")
+    else:
+        lines.append("")
+        all_done = all(
+            o.get("status") == "completed"
+            for o in objectives
+        )
+        if all_done:
+            lines.append(
+                "**ALL OBJECTIVES COMPLETE** — Generate final engagement report."
+            )
+        else:
+            lines.append(
+                "**No actionable objectives** — Review blocked items for retry."
+            )
+
+    lines.append("</OPPLAN_STATUS>")
+    return "\n".join(lines)
+
+
+def _format_opplan_for_agent(
+    objectives: list[dict],
+    engagement_name: str,
+    threat_profile: str,
+) -> str:
+    """Format OPPLAN for list_objectives response (detailed overview)."""
+    total = len(objectives)
+    completed = sum(1 for o in objectives if o.get("status") == "completed")
+    blocked = sum(1 for o in objectives if o.get("status") == "blocked")
+
+    lines = [
+        f"# OPPLAN: {engagement_name}",
+        f"Threat Profile: {threat_profile}",
+        f"Progress: {completed}/{total} completed, {blocked} blocked",
+        "",
+        "| ID | Phase | Title | Status | Priority | Owner | Blocked By |",
+        "|---|---|---|---|---|---|---|",
+    ]
+
+    for o in sorted(objectives, key=lambda x: x.get("priority", 999)):
+        status = o.get("status", "pending")
+        blocked_by = ", ".join(o.get("blocked_by", [])) or "-"
+        lines.append(
+            f"| {o.get('id', '?')} | {o.get('phase', '?')} | "
+            f"{o.get('title', '?')} | {status} | "
+            f"{o.get('priority', '?')} | {o.get('owner') or '-'} | "
+            f"{blocked_by} |"
+        )
+
+    lines.append("")
+
+    # Next objective recommendation
+    actionable = [
+        o
+        for o in objectives
+        if o.get("status") in ("pending", "in-progress")
+    ]
+    actionable.sort(key=lambda o: o.get("priority", 999))
+    if actionable:
+        nxt = actionable[0]
+        lines.append(
+            f"Next: {nxt.get('id')} — {nxt.get('title')} "
+            f"(phase: {nxt.get('phase')}, priority: {nxt.get('priority')})"
+        )
+    else:
+        all_done = all(
+            o.get("status") == "completed"
+            for o in objectives
+        )
+        if all_done:
+            lines.append(
+                "ALL OBJECTIVES COMPLETE — Generate final engagement report."
+            )
+        else:
+            lines.append(
+                "No actionable objectives — review blocked items for retry."
+            )
+
+    return "\n".join(lines)
+
+
+# ── Tool Definitions ──────────────────────────────────────────────────
+
+
+def _make_tools() -> list:
+    """Create OPPLAN tools with InjectedState for direct state access.
+
+    Follows TodoListMiddleware pattern: tool bodies execute CRUD logic directly,
+    returning Command for state mutations. No middleware interception needed —
+    tools appear as proper `tool` type runs in LangSmith.
+    """
+
+    @tool(
+        description=(
+            "Add a single objective to the OPPLAN. Auto-generates an ID "
+            "(OBJ-001, OBJ-002, ...). Each objective must be completable in "
+            "ONE sub-agent context window. Use blocked_by to set kill chain dependencies. "
+            "Set engagement_name and threat_profile on the first call to initialize context."
+        )
+    )
+    def add_objective(
+        title: str,
+        phase: ObjectivePhase,
+        description: str,
+        acceptance_criteria: list[str],
+        priority: int,
+        state: Annotated[dict, InjectedState],
+        engagement_name: str | None = None,
+        threat_profile: str | None = None,
+        mitre: list[str] | None = None,
+        opsec: OpsecLevel = OpsecLevel.STANDARD,
+        opsec_notes: str = "",
+        c2_tier: C2Tier = C2Tier.INTERACTIVE,
+        concessions: list[str] | None = None,
+        blocked_by: list[str] | None = None,
+        tool_call_id: Annotated[str, InjectedToolCallId] = "",
+    ) -> Command[Any]:
+        """Add one objective with auto-ID generation."""
+        counter = state.get("objective_counter", 0) + 1
+        obj_id = f"OBJ-{counter:03d}"
+
+        obj_dict = {
+            "id": obj_id,
+            "title": title,
+            "phase": phase,
+            "description": description,
+            "acceptance_criteria": acceptance_criteria,
+            "priority": priority,
+            "status": "pending",
+            "mitre": mitre or [],
+            "opsec": opsec,
+            "opsec_notes": opsec_notes,
+            "c2_tier": c2_tier,
+            "concessions": concessions or [],
+            "blocked_by": blocked_by or [],
+            "owner": "",
+            "notes": "",
+        }
+
+        # Pydantic validation
+        try:
+            Objective(**obj_dict)
+        except Exception as e:
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"Validation failed for objective: {e}",
+                            tool_call_id=tool_call_id,
+                            status="error",
+                        )
+                    ],
+                }
+            )
+
+        objectives = list(state.get("objectives", []))
+        objectives.append(obj_dict)
+
+        # Build state update — always include objectives + counter
+        update: dict[str, Any] = {
+            "objectives": objectives,
+            "objective_counter": counter,
+            "messages": [
+                ToolMessage(
+                    content=(
+                        f"Added {obj_id}: {obj_dict['title']} "
+                        f"(phase: {obj_dict['phase']}, priority: {obj_dict['priority']})"
+                    ),
+                    tool_call_id=tool_call_id,
+                )
+            ],
+        }
+
+        # Set engagement metadata if provided (typically on first call)
+        if engagement_name:
+            update["engagement_name"] = engagement_name
+        if threat_profile:
+            update["threat_profile"] = threat_profile
+
+        return Command(update=update)
+
+    @tool(
+        description=(
+            "Read a single objective's full details by ID. "
+            "ALWAYS call this before update_objective to prevent staleness. "
+            "Returns: status, description, acceptance criteria, dependencies, notes."
+        )
+    )
+    def get_objective(
+        objective_id: str,
+        state: Annotated[dict, InjectedState],
+        tool_call_id: Annotated[str, InjectedToolCallId] = "",
+    ) -> Command[Any]:
+        """Read one objective detail from state."""
+        objectives = state.get("objectives", [])
+        target = next(
+            (o for o in objectives if o.get("id") == objective_id), None
+        )
+
+        if not target:
+            available = ", ".join(o.get("id", "?") for o in objectives)
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=(
+                                f"Objective '{objective_id}' not found. "
+                                f"Available: {available or 'none (use add_objective first)'}"
+                            ),
+                            tool_call_id=tool_call_id,
+                            status="error",
+                        )
+                    ],
+                }
+            )
+
+        obj_status = target.get("status", "pending")
+        mitre_ids = target.get("mitre") or []
+        mitre_str = ", ".join(mitre_ids) if mitre_ids else "n/a"
+        lines = [
+            f"## {target['id']} [{obj_status.upper()}]",
+            f"Title: {target.get('title', '')}",
+            f"Phase: {target.get('phase', '')} | Priority: {target.get('priority', '')}",
+            f"MITRE: {mitre_str}",
+            f"OPSEC: {target.get('opsec', 'standard')} | C2: {target.get('c2_tier', 'interactive')}",
+            f"Description: {target.get('description', '')}",
+        ]
+
+        criteria = target.get("acceptance_criteria", [])
+        if criteria:
+            check = "x" if obj_status == "completed" else " "
+            lines.append("Acceptance Criteria:")
+            for c in criteria:
+                lines.append(f"  - [{check}] {c}")
+
+        blocked_by_ids = target.get("blocked_by", [])
+        if blocked_by_ids:
+            lines.append(f"Blocked By: {', '.join(blocked_by_ids)}")
+
+        owner = target.get("owner", "")
+        if owner:
+            lines.append(f"Owner: {owner}")
+
+        obj_opsec_notes = target.get("opsec_notes", "")
+        if obj_opsec_notes:
+            lines.append(f"OPSEC Notes: {obj_opsec_notes}")
+
+        obj_concessions = target.get("concessions") or []
+        if obj_concessions:
+            lines.append("Concessions:")
+            for c in obj_concessions:
+                lines.append(f"  - {c}")
+
+        notes = target.get("notes", "")
+        if notes:
+            lines.append(f"Notes: {notes}")
+
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content="\n".join(lines),
+                        tool_call_id=tool_call_id,
+                    )
+                ],
+            }
+        )
+
+    @tool(
+        description=(
+            "List all OPPLAN objectives with progress summary. "
+            "Returns: engagement overview, objective table with status, "
+            "and next recommended objective."
+        )
+    )
+    def list_objectives(
+        state: Annotated[dict, InjectedState],
+        tool_call_id: Annotated[str, InjectedToolCallId] = "",
+    ) -> Command[Any]:
+        """List all objectives with progress summary."""
+        objectives = state.get("objectives", [])
+        engagement = state.get("engagement_name", "")
+        threat = state.get("threat_profile", "")
+
+        if not objectives:
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content="No objectives defined yet. Use `add_objective` to create objectives.",
+                            tool_call_id=tool_call_id,
+                        )
+                    ],
+                }
+            )
+
+        content = _format_opplan_for_agent(objectives, engagement, threat)
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(content=content, tool_call_id=tool_call_id)
+                ],
+            }
+        )
+
+    @tool(
+        description=(
+            "Update a single objective. MUST call get_objective first. "
+            "Can change: status, notes, owner, add_blocked_by. "
+            "Valid transitions: pending→in-progress, in-progress→completed/blocked, "
+            "blocked→in-progress (retry) or completed (abandon). "
+            "Include evidence when marking completed, failure reason when marking blocked."
+        )
+    )
+    def update_objective(
+        objective_id: str,
+        state: Annotated[dict, InjectedState],
+        status: str | None = None,
+        notes: str | None = None,
+        owner: str | None = None,
+        add_blocked_by: list[str] | None = None,
+        tool_call_id: Annotated[str, InjectedToolCallId] = "",
+    ) -> Command[Any]:
+        """Update one objective with state transition validation."""
+        # Deep copy objectives to avoid mutating state
+        objectives = [dict(o) for o in state.get("objectives", [])]
+        target = next(
+            (o for o in objectives if o.get("id") == objective_id), None
+        )
+
+        if not target:
+            available = ", ".join(o.get("id", "?") for o in objectives)
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"Objective '{objective_id}' not found. Available: {available}",
+                            tool_call_id=tool_call_id,
+                            status="error",
+                        )
+                    ],
+                }
+            )
+
+        updated_fields: list[str] = []
+
+        # ── Status change with transition + dependency validation ─────
+        if status is not None:
+            # Validate status value
+            try:
+                ObjectiveStatus(status)
+            except ValueError:
+                valid = ", ".join(s.value for s in ObjectiveStatus)
+                return Command(
+                    update={
+                        "messages": [
+                            ToolMessage(
+                                content=f"Invalid status '{status}'. Valid: {valid}",
+                                tool_call_id=tool_call_id,
+                                status="error",
+                            )
+                        ],
+                    }
+                )
+
+            current = target.get("status", "pending")
+            if not _is_valid_transition(current, status):
+                return Command(
+                    update={
+                        "messages": [
+                            ToolMessage(
+                                content=(
+                                    f"Invalid transition: {current} → {status}. "
+                                    f"Valid from '{current}': {_valid_next(current)}"
+                                ),
+                                tool_call_id=tool_call_id,
+                                status="error",
+                            )
+                        ],
+                    }
+                )
+
+            # Check blocked_by dependencies when starting execution
+            if status == "in-progress":
+                blocked_by_ids = target.get("blocked_by", [])
+                unresolved = [
+                    bid
+                    for bid in blocked_by_ids
+                    if any(
+                        o.get("id") == bid
+                        and o.get("status") != "completed"
+                        for o in objectives
+                    )
+                ]
+                if unresolved:
+                    return Command(
+                        update={
+                            "messages": [
+                                ToolMessage(
+                                    content=(
+                                        f"Cannot start {objective_id}: "
+                                        f"blocked by unresolved objectives: {', '.join(unresolved)}"
+                                    ),
+                                    tool_call_id=tool_call_id,
+                                    status="error",
+                                )
+                            ],
+                        }
+                    )
+
+            target["status"] = status
+            updated_fields.append(f"status → {status}")
+
+        # ── Notes ─────────────────────────────────────────────────────
+        if notes is not None:
+            target["notes"] = notes
+            updated_fields.append("notes")
+
+        # ── Owner (which sub-agent is executing) ─────────────────────
+        if owner is not None:
+            target["owner"] = owner
+            updated_fields.append("owner")
+
+        # ── Add blocked_by dependencies ──────────────────────────────
+        if add_blocked_by:
+            existing_blocked = set(target.get("blocked_by", []))
+            all_ids = {o.get("id") for o in objectives}
+            invalid = [
+                bid for bid in add_blocked_by if bid not in all_ids
+            ]
+            if invalid:
+                return Command(
+                    update={
+                        "messages": [
+                            ToolMessage(
+                                content=f"Invalid blocked_by references: {', '.join(invalid)}",
+                                tool_call_id=tool_call_id,
+                                status="error",
+                            )
+                        ],
+                    }
+                )
+            for bid in add_blocked_by:
+                existing_blocked.add(bid)
+            target["blocked_by"] = sorted(existing_blocked)
+            updated_fields.append("blocked_by")
+
+        if not updated_fields:
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=f"No changes specified for {objective_id}.",
+                            tool_call_id=tool_call_id,
+                        )
+                    ],
+                }
+            )
+
+        total = len(objectives)
+        completed_count = sum(1 for o in objectives if o.get("status") == "completed")
+
+        return Command(
+            update={
+                "objectives": objectives,
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            f"Updated {objective_id}: {', '.join(updated_fields)}. "
+                            f"Progress: {completed_count}/{total} completed."
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ],
+            }
+        )
+
+    return [add_objective, get_objective, list_objectives, update_objective]
+
+
+# ── Middleware Class ──────────────────────────────────────────────────
+
+
+class OPPLANMiddleware(AgentMiddleware):
+    """Domain-specific OPPLAN tracking for red team engagements.
+
+    Follows TodoListMiddleware pattern: tools execute CRUD logic directly
+    via InjectedState, appearing as proper `tool` type runs in LangSmith.
+
+    - __init__: creates 4 CRUD tools
+    - wrap_model_call: injects dynamic OPPLAN progress into system message
+    - after_model: validates no parallel state-mutating calls
+
+    State schema (OPPLANState) is auto-merged by create_agent().
+    """
+
+    state_schema = OPPLANState
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tools = _make_tools()
+
+    # ── wrap_model_call: inject OPPLAN context ────────────────────────
+
+    @override
+    def wrap_model_call(self, request, handler):
+        """Inject OPPLAN system prompt + dynamic progress into system message."""
+        return handler(self._inject_opplan_context(request))
+
+    @override
+    async def awrap_model_call(self, request, handler):
+        """Async variant — identical logic."""
+        return await handler(self._inject_opplan_context(request))
+
+    def _inject_opplan_context(self, request):
+        """Build request with OPPLAN context injected into system message.
+
+        Injects dynamic state — the red team equivalent of a battle tracker —
+        every call, providing real-time situational awareness to the LLM.
+        """
+        objectives = request.state.get("objectives", [])
+        engagement = request.state.get("engagement_name", "")
+        threat = request.state.get("threat_profile", "")
+
+        dynamic_parts = [OPPLAN_SYSTEM_PROMPT]
+
+        if objectives:
+            dynamic_parts.append(
+                _format_opplan_status(objectives, engagement, threat)
+            )
+
+        injection = "\n\n".join(dynamic_parts)
+
+        if request.system_message is not None:
+            new_content = [
+                *request.system_message.content_blocks,
+                {"type": "text", "text": f"\n\n{injection}"},
+            ]
+        else:
+            new_content = [{"type": "text", "text": injection}]
+
+        new_system = SystemMessage(
+            content=cast("list[str | dict[str, str]]", new_content)
+        )
+        return request.override(system_message=new_system)
+
+    # ── after_model: validate constraints ─────────────────────────────
+
+    @override
+    def after_model(self, state, runtime):
+        """Validate: no parallel state-mutating OPPLAN calls.
+
+        add_objective and update_objective both write to the objectives list.
+        Parallel calls read the same stale state, causing concurrent update
+        errors. Force sequential execution like Claude Code's Task tools.
+        """
+        messages = state.get("messages", [])
+        if not messages:
+            return None
+
+        last_ai = next(
+            (m for m in reversed(messages) if isinstance(m, AIMessage)),
+            None,
+        )
+        if not last_ai or not last_ai.tool_calls:
+            return None
+
+        # Block parallel state-mutating calls (add + update both write objectives)
+        mutating_calls = [
+            tc
+            for tc in last_ai.tool_calls
+            if tc["name"] in ("add_objective", "update_objective")
+        ]
+        if len(mutating_calls) > 1:
+            return {
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            "Error: OPPLAN state-mutating tools (add_objective, update_objective) "
+                            "must be called one at a time, not in parallel. Each call needs "
+                            "the updated objectives list. Call one, wait for the result, "
+                            "then call the next."
+                        ),
+                        tool_call_id=tc["id"],
+                        status="error",
+                    )
+                    for tc in mutating_calls
+                ]
+            }
+
+        return None
+
+    @override
+    async def aafter_model(self, state, runtime):
+        """Async variant delegates to sync."""
+        return self.after_model(state, runtime)
+
+
+# ── Module-level helpers ──────────────────────────────────────────────
+
+
+def _is_valid_transition(current: str, new: str) -> bool:
+    """Check if a status transition is allowed."""
+    return new in _VALID_TRANSITIONS.get(current, set())
+
+
+def _valid_next(current: str) -> str:
+    """Return comma-separated valid next statuses."""
+    return ", ".join(sorted(_VALID_TRANSITIONS.get(current, set())))

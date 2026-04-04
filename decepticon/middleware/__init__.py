@@ -1,5 +1,7 @@
 """Decepticon middleware — custom AgentMiddleware implementations."""
 
+from decepticon.middleware.opplan import OPPLANMiddleware
 from decepticon.middleware.safe_command import SafeCommandMiddleware
+from decepticon.middleware.skills import DecepticonSkillsMiddleware
 
-__all__ = ["SafeCommandMiddleware"]
+__all__ = ["DecepticonSkillsMiddleware", "OPPLANMiddleware", "SafeCommandMiddleware"]
