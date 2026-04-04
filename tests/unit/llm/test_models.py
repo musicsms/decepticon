@@ -45,6 +45,7 @@ class TestLLMModelMapping:
         assert mapping.recon is not None
         assert mapping.exploit is not None
         assert mapping.planning is not None
+        assert mapping.soundwave is not None
         assert mapping.postexploit is not None
 
     def test_get_assignment_valid(self):
@@ -81,52 +82,49 @@ class TestLLMModelMapping:
         assert "openai" in post.fallback
 
     def test_all_roles_have_fallback(self):
-        """Every role has a fallback for resilience (default profile)."""
+        """Every role has a fallback for resilience (eco profile)."""
         mapping = LLMModelMapping()
-        for role in ("decepticon", "planning", "exploit", "recon", "postexploit"):
+        for role in ("decepticon", "planning", "soundwave", "exploit", "recon", "postexploit"):
             assert mapping.get_assignment(role).fallback is not None
 
 
 class TestModelProfile:
     """Profile-based model preset tests."""
 
-    def test_default_profile_matches_bare_constructor(self):
-        default = LLMModelMapping.from_profile("default")
+    def test_eco_profile_matches_bare_constructor(self):
+        eco = LLMModelMapping.from_profile("eco")
         bare = LLMModelMapping()
-        for role in ("decepticon", "planning", "exploit", "recon", "postexploit"):
-            assert default.get_assignment(role).primary == bare.get_assignment(role).primary
-            assert default.get_assignment(role).fallback == bare.get_assignment(role).fallback
+        for role in ("decepticon", "planning", "soundwave", "exploit", "recon", "postexploit"):
+            assert eco.get_assignment(role).primary == bare.get_assignment(role).primary
+            assert eco.get_assignment(role).fallback == bare.get_assignment(role).fallback
 
-    def test_high_profile_uses_opus_everywhere(self):
-        """High profile puts Opus on all roles except recon (Sonnet)."""
-        high = LLMModelMapping.from_profile(ModelProfile.HIGH)
+    def test_max_profile_uses_opus_everywhere(self):
+        """Max profile puts Opus on all roles except recon (Sonnet) and soundwave (Sonnet)."""
+        maxp = LLMModelMapping.from_profile(ModelProfile.MAX)
         for role in ("decepticon", "planning", "exploit", "postexploit"):
-            assert high.get_assignment(role).primary == OPUS
-        # Recon uses Sonnet for tool-calling speed at high quality
-        assert high.get_assignment("recon").primary == SONNET
+            assert maxp.get_assignment(role).primary == OPUS
+        assert maxp.get_assignment("recon").primary == SONNET
+        assert maxp.get_assignment("soundwave").primary == SONNET
 
-    def test_high_profile_anthropic_only_fallbacks(self):
-        """High profile fallbacks stay within Anthropic where possible."""
-        high = LLMModelMapping.from_profile("high")
-        # Planning, exploit, postexploit fall back to Sonnet (Anthropic)
+    def test_max_profile_anthropic_only_fallbacks(self):
+        """Max profile fallbacks stay within Anthropic where possible."""
+        maxp = LLMModelMapping.from_profile("max")
         for role in ("planning", "exploit", "postexploit"):
-            assert high.get_assignment(role).fallback == SONNET
-        # Recon falls back to Opus
-        assert high.get_assignment("recon").fallback == OPUS
-        # Orchestrator falls back to GPT-5.4 (cross-provider resilience)
-        assert high.get_assignment("decepticon").fallback == GPT_5
+            assert maxp.get_assignment(role).fallback == SONNET
+        assert maxp.get_assignment("recon").fallback == OPUS
+        assert maxp.get_assignment("decepticon").fallback == GPT_5
 
     def test_test_profile_all_haiku(self):
         """Test profile uses Haiku everywhere for minimum cost."""
         test = LLMModelMapping.from_profile("test")
-        for role in ("decepticon", "planning", "exploit", "recon", "postexploit"):
+        for role in ("decepticon", "planning", "soundwave", "exploit", "recon", "postexploit"):
             assignment = test.get_assignment(role)
             assert assignment.primary == HAIKU
             assert assignment.fallback is None
 
     def test_profile_from_string(self):
         """Profile can be created from string value."""
-        for name in ("default", "high", "test"):
+        for name in ("eco", "max", "test"):
             mapping = LLMModelMapping.from_profile(name)
             assert mapping is not None
 
@@ -135,8 +133,8 @@ class TestModelProfile:
             LLMModelMapping.from_profile("nonexistent")
 
     def test_profile_enum_values(self):
-        assert ModelProfile.DEFAULT == "default"
-        assert ModelProfile.HIGH == "high"
+        assert ModelProfile.ECO == "eco"
+        assert ModelProfile.MAX == "max"
         assert ModelProfile.TEST == "test"
 
 
