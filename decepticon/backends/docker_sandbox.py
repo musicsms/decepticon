@@ -37,6 +37,38 @@ POLL_INTERVAL = 0.5  # seconds between capture-pane polls
 STALL_SECONDS = 3.0  # seconds of no screen change → treat as interactive prompt
 MAX_OUTPUT_CHARS = 30_000
 
+# ─── Auto-background: convert blocking commands to background after threshold ─
+AUTO_BACKGROUND_SECONDS = 60.0  # auto-background after 60s of blocking
+
+# ─── Size watchdog: kill commands producing excessive output ──────────────
+SIZE_WATCHDOG_CHARS = 5_000_000  # 5M chars → force-kill the command
+SIZE_WATCHDOG_INTERVAL = 5.0  # check every 5 seconds
+
+# ─── Semantic exit code interpretation (Claude Code best practice) ────────
+_EXIT_CODE_MESSAGES: dict[int, str] = {
+    1: "general error",
+    2: "misuse of shell builtin",
+    126: "permission denied (not executable)",
+    127: "command not found — tool may not be installed (try: apt-get install -y <pkg>)",
+    128: "invalid exit argument",
+    130: "interrupted by Ctrl+C (SIGINT)",
+    137: "killed (SIGKILL) — likely OOM or size limit exceeded",
+    139: "segmentation fault (SIGSEGV)",
+    143: "terminated (SIGTERM)",
+}
+
+
+def _interpret_exit_code(code: int) -> str:
+    """Convert exit code to human-readable message for agent context."""
+    if code == 0:
+        return ""
+    if code in _EXIT_CODE_MESSAGES:
+        return f" — {_EXIT_CODE_MESSAGES[code]}"
+    if code > 128:
+        signal_num = code - 128
+        return f" — killed by signal {signal_num}"
+    return ""
+
 
 # ─── TmuxSessionManager ───────────────────────────────────────────────────
 
@@ -222,13 +254,33 @@ class TmuxSessionManager:
                 log.info("Command completed: exit=%s cwd=%s [%s]", exit_code, cwd, command[:50])
                 self._clear_screen()
                 result = _truncate(output).strip()
+                hint = _interpret_exit_code(exit_code)
                 if not result:
-                    result = f"[Command completed with no output. Exit code: {exit_code}]"
+                    result = f"[Command completed with no output. Exit code: {exit_code}{hint}]"
                 elif exit_code != 0:
-                    result += f"\n[Command failed with exit code: {exit_code}]"
+                    result += f"\n[Exit code: {exit_code}{hint}]"
                 if cwd:
                     result += f"\n[cwd: {cwd}]"
                 return result
+
+            # Size watchdog: kill commands producing excessive output
+            if len(screen) > SIZE_WATCHDOG_CHARS:
+                log.warning(
+                    "Size watchdog triggered (%d chars) — killing session [%s]",
+                    len(screen),
+                    command[:50],
+                )
+                try:
+                    self._docker_tmux(["send-keys", "-t", self.session, "C-c"])
+                except RuntimeError:
+                    pass
+                output = _extract_interactive_output(screen, baseline)
+                return (
+                    f"{_truncate(output).strip()}\n\n"
+                    f"[SIZE LIMIT] Output exceeded {SIZE_WATCHDOG_CHARS // 1_000_000}M chars. "
+                    f"Command interrupted.\n"
+                    f"Redirect output to a file: command > /workspace/output.txt"
+                )
 
             # Stall detection: if screen changed from baseline (program produced
             # output) but hasn't changed for STALL_SECONDS, the program is likely
@@ -337,13 +389,55 @@ class TmuxSessionManager:
                 log.info("Command completed: exit=%s cwd=%s [%s]", exit_code, cwd, command[:50])
                 await asyncio.to_thread(self._clear_screen)
                 result = _truncate(output).strip()
+                hint = _interpret_exit_code(exit_code)
                 if not result:
-                    result = f"[Command completed with no output. Exit code: {exit_code}]"
+                    result = f"[Command completed with no output. Exit code: {exit_code}{hint}]"
                 elif exit_code != 0:
-                    result += f"\n[Command failed with exit code: {exit_code}]"
+                    result += f"\n[Exit code: {exit_code}{hint}]"
                 if cwd:
                     result += f"\n[cwd: {cwd}]"
                 return result
+
+            # Size watchdog: kill commands producing excessive output
+            if len(screen) > SIZE_WATCHDOG_CHARS:
+                log.warning(
+                    "Size watchdog triggered (%d chars) — killing session [%s]",
+                    len(screen),
+                    command[:50],
+                )
+                try:
+                    await asyncio.to_thread(
+                        self._docker_tmux, ["send-keys", "-t", self.session, "C-c"]
+                    )
+                except RuntimeError:
+                    pass
+                output = _extract_interactive_output(screen, baseline)
+                return (
+                    f"{_truncate(output).strip()}\n\n"
+                    f"[SIZE LIMIT] Output exceeded {SIZE_WATCHDOG_CHARS // 1_000_000}M chars. "
+                    f"Command interrupted.\n"
+                    f"Redirect output to a file: command > /workspace/output.txt"
+                )
+
+            # Auto-background: convert blocking commands after threshold
+            elapsed = time.time() - start
+            if elapsed >= AUTO_BACKGROUND_SECONDS and command:
+                log.info(
+                    "Auto-backgrounding after %.0fs [%s] in session '%s'",
+                    elapsed,
+                    command[:50],
+                    self.session,
+                )
+                output = _extract_interactive_output(screen, baseline)
+                preview = _truncate(output).strip()
+                return (
+                    f"[AUTO-BACKGROUND] Command running >{int(AUTO_BACKGROUND_SECONDS)}s "
+                    f"in session '{self.session}'.\n"
+                    f"--- partial output ---\n{preview[-1000:] if preview else '(no output yet)'}\n"
+                    f"--- end ---\n"
+                    f"Do productive work NOW. Check later: "
+                    f'bash(command="", session="{self.session}")'
+                )
 
             # Stall detection (see sync execute() for rationale)
             if screen != prev_screen:
