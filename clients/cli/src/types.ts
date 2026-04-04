@@ -30,6 +30,9 @@ export enum EventType {
   Progress = "progress",
 }
 
+/** Screen display modes — prompt (compact) vs transcript (full). */
+export type ScreenMode = "prompt" | "transcript";
+
 /** Agent event types for CLI activity display. */
 export type AgentEventType =
   | "user"
@@ -37,7 +40,9 @@ export type AgentEventType =
   | "bash_result"
   | "ai_message"
   | "delegate"
-  | "system";
+  | "system"
+  | "subagent_start"
+  | "subagent_end";
 
 /** A single displayable event in the agent activity stream. */
 export interface AgentEvent {
@@ -52,3 +57,26 @@ export interface AgentEvent {
   timestamp: number;
 }
 
+/** A structured sub-agent execution session derived from the event stream. */
+export interface SubAgentSession {
+  /** Unique session ID (matches the subagent_start event ID). */
+  id: string;
+  /** Agent name: "recon", "exploit", "postexploit", etc. */
+  agent: string;
+  /** Description/prompt from the subagent_start event. */
+  description: string;
+  /** ID of the subagent_start event. */
+  startEventId: string;
+  /** ID of the subagent_end event (undefined if still running). */
+  endEventId?: string;
+  /** All event IDs belonging to this session. */
+  eventIds: string[];
+  /** Number of tool calls executed in this session. */
+  toolCount: number;
+  /** Session start timestamp. */
+  startTime: number;
+  /** Session end timestamp (undefined if still running). */
+  endTime?: number;
+  /** Current session status. */
+  status: "running" | "completed" | "error";
+}

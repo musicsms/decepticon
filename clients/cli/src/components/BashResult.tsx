@@ -1,5 +1,8 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { useScreen } from "./shell/ScreenContext.js";
+import { useExpandOutput } from "./shell/ExpandOutputContext.js";
+import { CtrlOToExpand } from "./shell/CtrlOToExpand.js";
 
 interface BashResultProps {
   command: string;
@@ -8,13 +11,17 @@ interface BashResultProps {
 }
 
 const CWD_PATTERN = /\n?\[cwd: (.+?)\]\s*$/;
-const MAX_OUTPUT_LINES = 50;
+const MAX_OUTPUT_LINES_PROMPT = 8;
+const MAX_OUTPUT_LINES_TRANSCRIPT = 200;
 
 export const BashResult = React.memo(function BashResult({
   command,
   output,
   status,
 }: BashResultProps) {
+  const screen = useScreen();
+  const isExpanded = useExpandOutput();
+
   // Extract [cwd: /path] metadata
   const cwdMatch = output.match(CWD_PATTERN);
   const cwd = cwdMatch?.[1] ?? "/workspace";
@@ -37,14 +44,23 @@ export const BashResult = React.memo(function BashResult({
     cleanOutput.startsWith("[RUNNING]") ||
     cleanOutput.startsWith("[BACKGROUND]");
 
+  // Screen-aware truncation:
+  // - transcript mode: generous limit
+  // - prompt mode + expanded (latest output): generous limit
+  // - prompt mode + collapsed: tight limit
+  const maxLines =
+    screen === "transcript" || isExpanded
+      ? MAX_OUTPUT_LINES_TRANSCRIPT
+      : MAX_OUTPUT_LINES_PROMPT;
+
   // Truncate very long output (60% head + 40% tail)
-  const truncated = outputLines.length > MAX_OUTPUT_LINES;
-  const headCount = Math.floor(MAX_OUTPUT_LINES * 0.6);
-  const tailCount = MAX_OUTPUT_LINES - headCount;
+  const truncated = outputLines.length > maxLines;
+  const headCount = Math.floor(maxLines * 0.6);
+  const tailCount = maxLines - headCount;
   const displayLines = truncated
     ? [
         ...outputLines.slice(0, headCount),
-        `... (${outputLines.length - MAX_OUTPUT_LINES} lines omitted)`,
+        `... (${outputLines.length - maxLines} lines omitted)`,
         ...outputLines.slice(-tailCount),
       ]
     : outputLines;
@@ -75,6 +91,8 @@ export const BashResult = React.memo(function BashResult({
             {line}
           </Text>
         ))}
+
+      {truncated && !isExpanded && <CtrlOToExpand />}
     </Box>
   );
 });

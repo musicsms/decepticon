@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { TODO_ICON } from "../utils/theme.js";
 
 interface TodoItem {
   content: string;
@@ -10,12 +11,6 @@ interface TodoItem {
 interface TodoListProps {
   todos: TodoItem[];
 }
-
-const STATUS_ICON: Record<string, { icon: string; color: string }> = {
-  completed: { icon: "✓", color: "green" },
-  in_progress: { icon: "☐", color: "white" },
-  pending: { icon: "☐", color: "gray" },
-};
 
 /** Parse todo items from write_todos tool args. */
 export function parseTodos(toolArgs: Record<string, unknown>): TodoItem[] {
@@ -46,7 +41,7 @@ export const TodoList = React.memo(function TodoList({ todos }: TodoListProps) {
   return (
     <Box flexDirection="column">
       {todos.map((todo, i) => {
-        const { icon, color } = STATUS_ICON[todo.status] ?? STATUS_ICON.pending;
+        const { icon, color } = TODO_ICON[todo.status] ?? TODO_ICON.pending!;
         return (
           <Text key={i} wrap="wrap">
             {"  "}

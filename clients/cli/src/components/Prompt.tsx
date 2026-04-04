@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import { TextInput } from "@inkjs/ui";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useSpinnerFrame } from "../hooks/useSpinnerFrame.js";
+import { getCommands } from "../commands/registry.js";
 
 interface PromptProps {
   isDisabled: boolean;
@@ -11,20 +12,13 @@ interface PromptProps {
   activeAgent?: string | null;
 }
 
-const COMMANDS = [
-  { cmd: "/help", desc: "Show this help" },
-  { cmd: "/clear", desc: "Clear conversation" },
-  { cmd: "/quit", desc: "Exit" },
-  { cmd: "/exit", desc: "Exit" },
-];
-
 /** All agents in execution order. */
-const AGENTS = ["decepticon", "planner", "recon", "exploit", "postexploit"];
+const AGENTS = ["decepticon", "soundwave", "recon", "exploit", "postexploit"];
 
 /** Display labels for the agent bar. */
 const AGENT_LABELS: Record<string, string> = {
   decepticon: "Decepticon",
-  planner: "Planner",
+  soundwave: "Soundwave",
   recon: "Recon",
   exploit: "Exploit",
   postexploit: "PostExploit",
@@ -77,11 +71,25 @@ export const Prompt = React.memo(function Prompt({
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [inputKey, setInputKey] = useState(0);
 
+  // Derive autocomplete entries from command registry
+  const commandEntries = useMemo(() => {
+    const cmds = getCommands();
+    const entries: { cmd: string; desc: string }[] = [];
+    for (const c of cmds) {
+      if (c.isHidden) continue;
+      entries.push({ cmd: `/${c.name}`, desc: c.description });
+      for (const alias of c.aliases ?? []) {
+        entries.push({ cmd: `/${alias}`, desc: c.description });
+      }
+    }
+    return entries;
+  }, []);
+
   // Filter commands — exclude exact matches (already fully typed)
   const isTypingCommand =
     inputValue.startsWith("/") && !inputValue.includes(" ");
   const filteredCommands = isTypingCommand
-    ? COMMANDS.filter(
+    ? commandEntries.filter(
         (c) => c.cmd.startsWith(inputValue) && c.cmd !== inputValue,
       )
     : [];
@@ -91,11 +99,11 @@ export const Prompt = React.memo(function Prompt({
   const suggestionList = showMenu
     ? [
         filteredCommands[selectedIdx]?.cmd,
-        ...COMMANDS.map((c) => c.cmd).filter(
+        ...commandEntries.map((c) => c.cmd).filter(
           (c) => c !== filteredCommands[selectedIdx]?.cmd,
         ),
       ].filter((c): c is string => c != null)
-    : COMMANDS.map((c) => c.cmd);
+    : commandEntries.map((c) => c.cmd);
 
   // Reset selection on input change
   useEffect(() => {
@@ -137,7 +145,7 @@ export const Prompt = React.memo(function Prompt({
     [onSubmit],
   );
 
-  const maxCmdLen = Math.max(...COMMANDS.map((c) => c.cmd.length));
+  const maxCmdLen = Math.max(...commandEntries.map((c) => c.cmd.length));
 
   return (
     <Box flexDirection="column" marginTop={1}>
@@ -173,8 +181,13 @@ export const Prompt = React.memo(function Prompt({
 
       <Text dimColor>{"─".repeat(columns)}</Text>
 
-      {/* Agent status bar — visible while streaming */}
-      {activeAgent && <AgentBar activeAgent={activeAgent} />}
+      {/* Agent status bar — always visible */}
+      <AgentBar activeAgent={activeAgent} />
+
+      {/* Keybinding hints */}
+      <Text dimColor>
+        {"  ctrl+o: expand  ctrl+c: cancel/exit"}
+      </Text>
     </Box>
   );
 });

@@ -2,6 +2,7 @@ import React, { useRef } from "react";
 import { Box, Text } from "ink";
 import { useSpinnerFrame } from "../hooks/useSpinnerFrame.js";
 import type { StreamStats } from "../hooks/useAgent.js";
+import { GLYPH_DOT, GLYPH_SEP } from "../utils/theme.js";
 
 interface ActivityIndicatorProps {
   isStreaming: boolean;
@@ -69,7 +70,12 @@ const PULSE_COLORS = [
   "#fca5a5",
 ];
 
-/** Activity indicator with pulsing dot, red shimmer, and animated token counter. */
+/** Activity indicator with pulsing dot, red shimmer, and animated token counter.
+ *
+ * Never returns null — maintains stable layout height like Claude Code's SpinnerGlyph.
+ * When idle, renders an empty line to preserve layout; when streaming, shows the full
+ * animated indicator. This prevents flicker from mount/unmount cycles.
+ */
 export const ActivityIndicator = React.memo(function ActivityIndicator({
   isStreaming,
   streamStats,
@@ -77,9 +83,11 @@ export const ActivityIndicator = React.memo(function ActivityIndicator({
   const { tick } = useSpinnerFrame(isStreaming);
   const displayTokensRef = useRef(0);
 
+  // Reset token counter when idle, but keep the component mounted
   if (!isStreaming) {
     displayTokensRef.current = 0;
-    return null;
+    // Empty placeholder — same height as active state to prevent layout shift
+    return <Box marginTop={1} height={1} />;
   }
 
   // Animate token count: ease toward actual value each tick (driven by 80ms re-renders)
@@ -98,16 +106,16 @@ export const ActivityIndicator = React.memo(function ActivityIndicator({
       ? `\u2191 ${formatTokens(displayTokensRef.current)} tokens`
       : "";
 
-  const meta = [elapsed, tokenCount].filter(Boolean).join(" \u00B7 ");
+  const meta = [elapsed, tokenCount].filter(Boolean).join(GLYPH_SEP);
   const metaStr = meta ? ` (${meta})` : "";
 
   // Slow pulse: cycle through palette every 3 ticks (240ms per step)
   const pulseIdx = Math.floor(tick / 3) % PULSE_COLORS.length;
 
   return (
-    <Box marginTop={1}>
+    <Box marginTop={1} height={1}>
       <Text>
-        <Text color={PULSE_COLORS[pulseIdx]}>{"\u25CF"}</Text>
+        <Text color={PULSE_COLORS[pulseIdx]}>{GLYPH_DOT}</Text>
         <Text>{" "}</Text>
         <ShimmerText text="Hacking..." tick={tick} />
         <Text dimColor>{metaStr}</Text>

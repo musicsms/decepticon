@@ -215,6 +215,11 @@ export function useAgent({
           switch (data.type) {
             case "subagent_start":
               setActiveAgent(data.agent);
+              addEvent({
+                type: "subagent_start",
+                content: data.prompt ?? `Starting ${data.agent}`,
+                subagent: data.agent,
+              });
               break;
 
             case "subagent_tool_call":
@@ -260,7 +265,14 @@ export function useAgent({
               break;
 
             case "subagent_end":
-              // Pop back to parent
+              addEvent({
+                type: "subagent_end",
+                content: data.elapsed
+                  ? `Completed (${Math.floor(data.elapsed / 1000)}s)`
+                  : "Completed",
+                subagent: data.agent,
+                status: data.error ? "error" : "success",
+              });
               setActiveAgent("decepticon");
               setPendingTool(null);
               break;
@@ -276,6 +288,7 @@ export function useAgent({
                 messages: [{ role: "user", content: message }],
               },
               streamMode: ["values", "custom"],
+              onDisconnect: "cancel",
               signal: abortController.signal,
             },
           );
