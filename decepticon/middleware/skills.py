@@ -156,7 +156,7 @@ class DecepticonSkillsMiddleware(SkillsMiddleware):
                 if when_to_use:
                     lines.append(f"  triggers: {when_to_use}")
 
-                lines.append(f"  `read_file(\"{skill['path']}\")`")
+                lines.append(f'  `read_file("{skill["path"]}")`')
 
             lines.append("")  # blank line between groups
 

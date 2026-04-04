@@ -109,6 +109,7 @@ def _get_tool_prompt(tool_name: str, role: str | None = None) -> str:
     """
     if tool_name == "bash":
         from decepticon.tools.bash.prompt import get_bash_prompt
+
         return get_bash_prompt(role)
 
     # Fallback: try reading from the prompts directory (backward compat)
@@ -243,9 +244,4 @@ def load_prompt(name: str, *, shared: list[str] | None = None) -> str:
     tool_prompts = [s for s in shared if s == "bash"]
     fragments = [s for s in shared if s != "bash"]
 
-    return (
-        PromptBuilder(name)
-        .with_tool_prompts(tool_prompts)
-        .with_shared(fragments)
-        .build()
-    )
+    return PromptBuilder(name).with_tool_prompts(tool_prompts).with_shared(fragments).build()

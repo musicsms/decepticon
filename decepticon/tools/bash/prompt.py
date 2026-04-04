@@ -163,7 +163,6 @@ bash(command="sleep 30 && tail recon/nmap.txt", session="main")
 
 **Key**: Always save scan output to files with `-oN`/`-o` flags — results persist even after context is cleared.
 </BASH_RECON_PATTERNS>""",
-
     "exploit": """\
 
 <BASH_EXPLOIT_PATTERNS>
@@ -183,7 +182,6 @@ bash(command="sqlmap ... --output-dir=exploit/sqlmap_target1/")
 bash(command="impacket-secretsdump ... 2>&1 | tee exploit/secretsdump.txt")
 ```
 </BASH_EXPLOIT_PATTERNS>""",
-
     "postexploit": """\
 
 <BASH_POSTEXPLOIT_PATTERNS>
@@ -209,7 +207,6 @@ bash(command="sessions", is_input=True, session="c2")
 bash(command="use <SESSION_ID>", is_input=True, session="c2")
 ```
 </BASH_POSTEXPLOIT_PATTERNS>""",
-
     "decepticon": """\
 
 <BASH_ORCHESTRATOR_PATTERNS>

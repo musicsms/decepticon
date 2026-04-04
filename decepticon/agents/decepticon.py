@@ -139,7 +139,9 @@ def create_decepticon_agent():
     # Assemble middleware stack
     middleware = [
         SafeCommandMiddleware(),
-        DecepticonSkillsMiddleware(backend=backend, sources=["/skills/decepticon/", "/skills/shared/"]),
+        DecepticonSkillsMiddleware(
+            backend=backend, sources=["/skills/decepticon/", "/skills/shared/"]
+        ),
         FilesystemMiddleware(backend=backend),
         SubAgentMiddleware(backend=backend, subagents=subagents),
         OPPLANMiddleware(),

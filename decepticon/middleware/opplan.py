@@ -135,16 +135,10 @@ def _format_opplan_status(
     total = len(objectives)
     completed = sum(1 for o in objectives if o.get("status") == "completed")
     blocked = sum(1 for o in objectives if o.get("status") == "blocked")
-    in_progress = sum(
-        1 for o in objectives if o.get("status") == "in-progress"
-    )
+    in_progress = sum(1 for o in objectives if o.get("status") == "in-progress")
     pending = sum(1 for o in objectives if o.get("status") == "pending")
 
-    actionable = [
-        o
-        for o in objectives
-        if o.get("status") in ("pending", "in-progress")
-    ]
+    actionable = [o for o in objectives if o.get("status") in ("pending", "in-progress")]
     actionable.sort(key=lambda o: o.get("priority", 999))
     next_obj = actionable[0] if actionable else None
 
@@ -191,18 +185,11 @@ def _format_opplan_status(
                 lines.append(f"    - [ ] {c}")
     else:
         lines.append("")
-        all_done = all(
-            o.get("status") == "completed"
-            for o in objectives
-        )
+        all_done = all(o.get("status") == "completed" for o in objectives)
         if all_done:
-            lines.append(
-                "**ALL OBJECTIVES COMPLETE** — Generate final engagement report."
-            )
+            lines.append("**ALL OBJECTIVES COMPLETE** — Generate final engagement report.")
         else:
-            lines.append(
-                "**No actionable objectives** — Review blocked items for retry."
-            )
+            lines.append("**No actionable objectives** — Review blocked items for retry.")
 
     lines.append("</OPPLAN_STATUS>")
     return "\n".join(lines)
@@ -240,11 +227,7 @@ def _format_opplan_for_agent(
     lines.append("")
 
     # Next objective recommendation
-    actionable = [
-        o
-        for o in objectives
-        if o.get("status") in ("pending", "in-progress")
-    ]
+    actionable = [o for o in objectives if o.get("status") in ("pending", "in-progress")]
     actionable.sort(key=lambda o: o.get("priority", 999))
     if actionable:
         nxt = actionable[0]
@@ -253,18 +236,11 @@ def _format_opplan_for_agent(
             f"(phase: {nxt.get('phase')}, priority: {nxt.get('priority')})"
         )
     else:
-        all_done = all(
-            o.get("status") == "completed"
-            for o in objectives
-        )
+        all_done = all(o.get("status") == "completed" for o in objectives)
         if all_done:
-            lines.append(
-                "ALL OBJECTIVES COMPLETE — Generate final engagement report."
-            )
+            lines.append("ALL OBJECTIVES COMPLETE — Generate final engagement report.")
         else:
-            lines.append(
-                "No actionable objectives — review blocked items for retry."
-            )
+            lines.append("No actionable objectives — review blocked items for retry.")
 
     return "\n".join(lines)
 
@@ -383,9 +359,7 @@ def _make_tools() -> list:
     ) -> Command[Any]:
         """Read one objective detail from state."""
         objectives = state.get("objectives", [])
-        target = next(
-            (o for o in objectives if o.get("id") == objective_id), None
-        )
+        target = next((o for o in objectives if o.get("id") == objective_id), None)
 
         if not target:
             available = ", ".join(o.get("id", "?") for o in objectives)
@@ -487,9 +461,7 @@ def _make_tools() -> list:
         content = _format_opplan_for_agent(objectives, engagement, threat)
         return Command(
             update={
-                "messages": [
-                    ToolMessage(content=content, tool_call_id=tool_call_id)
-                ],
+                "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)],
             }
         )
 
@@ -514,9 +486,7 @@ def _make_tools() -> list:
         """Update one objective with state transition validation."""
         # Deep copy objectives to avoid mutating state
         objectives = [dict(o) for o in state.get("objectives", [])]
-        target = next(
-            (o for o in objectives if o.get("id") == objective_id), None
-        )
+        target = next((o for o in objectives if o.get("id") == objective_id), None)
 
         if not target:
             available = ", ".join(o.get("id", "?") for o in objectives)
@@ -577,9 +547,7 @@ def _make_tools() -> list:
                     bid
                     for bid in blocked_by_ids
                     if any(
-                        o.get("id") == bid
-                        and o.get("status") != "completed"
-                        for o in objectives
+                        o.get("id") == bid and o.get("status") != "completed" for o in objectives
                     )
                 ]
                 if unresolved:
@@ -615,9 +583,7 @@ def _make_tools() -> list:
         if add_blocked_by:
             existing_blocked = set(target.get("blocked_by", []))
             all_ids = {o.get("id") for o in objectives}
-            invalid = [
-                bid for bid in add_blocked_by if bid not in all_ids
-            ]
+            invalid = [bid for bid in add_blocked_by if bid not in all_ids]
             if invalid:
                 return Command(
                     update={
@@ -715,9 +681,7 @@ class OPPLANMiddleware(AgentMiddleware):
         dynamic_parts = [OPPLAN_SYSTEM_PROMPT]
 
         if objectives:
-            dynamic_parts.append(
-                _format_opplan_status(objectives, engagement, threat)
-            )
+            dynamic_parts.append(_format_opplan_status(objectives, engagement, threat))
 
         injection = "\n\n".join(dynamic_parts)
 
@@ -729,9 +693,7 @@ class OPPLANMiddleware(AgentMiddleware):
         else:
             new_content = [{"type": "text", "text": injection}]
 
-        new_system = SystemMessage(
-            content=cast("list[str | dict[str, str]]", new_content)
-        )
+        new_system = SystemMessage(content=cast("list[str | dict[str, str]]", new_content))
         return request.override(system_message=new_system)
 
     # ── after_model: validate constraints ─────────────────────────────
@@ -757,9 +719,7 @@ class OPPLANMiddleware(AgentMiddleware):
 
         # Block parallel state-mutating calls (add + update both write objectives)
         mutating_calls = [
-            tc
-            for tc in last_ai.tool_calls
-            if tc["name"] in ("add_objective", "update_objective")
+            tc for tc in last_ai.tool_calls if tc["name"] in ("add_objective", "update_objective")
         ]
         if len(mutating_calls) > 1:
             return {

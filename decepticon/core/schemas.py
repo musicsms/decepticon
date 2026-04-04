@@ -55,19 +55,19 @@ class OpsecLevel(StrEnum):
     See docs/red-team/opplan-domain-knowledge.md for details.
     """
 
-    LOUD = "loud"           # No evasion; testing detection capability
-    STANDARD = "standard"   # Basic OPSEC; modify default signatures
-    CAREFUL = "careful"     # Active evasion; avoid known signatures
-    QUIET = "quiet"         # Minimal footprint; blend with normal traffic
-    SILENT = "silent"       # Zero detection tolerance; abort if burned
+    LOUD = "loud"  # No evasion; testing detection capability
+    STANDARD = "standard"  # Basic OPSEC; modify default signatures
+    CAREFUL = "careful"  # Active evasion; avoid known signatures
+    QUIET = "quiet"  # Minimal footprint; blend with normal traffic
+    SILENT = "silent"  # Zero detection tolerance; abort if burned
 
 
 class C2Tier(StrEnum):
     """C2 infrastructure tier for objective execution."""
 
     INTERACTIVE = "interactive"  # Direct operator control, seconds callback
-    SHORT_HAUL = "short-haul"   # Reliable access, minutes-hours callback
-    LONG_HAUL = "long-haul"     # Persistent fallback, hours-days callback
+    SHORT_HAUL = "short-haul"  # Reliable access, minutes-hours callback
+    LONG_HAUL = "long-haul"  # Persistent fallback, hours-days callback
 
 
 class ObjectiveStatus(StrEnum):
@@ -286,9 +286,7 @@ class Objective(BaseModel):
     blocked_by: list[str] = Field(
         default_factory=list, description="Objective IDs that must complete first"
     )
-    owner: str = Field(
-        default="", description="Sub-agent currently executing this objective"
-    )
+    owner: str = Field(default="", description="Sub-agent currently executing this objective")
 
 
 class OPPLAN(BaseModel):
