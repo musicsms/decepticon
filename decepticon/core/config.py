@@ -43,15 +43,15 @@ class DecepticonConfig(BaseSettings):
     """Root configuration.
 
     Set DECEPTICON_MODEL_PROFILE to switch model presets:
-      default — Balanced Anthropic-first (production)
-      high    — Opus everywhere (high-value targets)
-      test    — Haiku-only (development/CI, $1/$5 per MTok)
+      eco  — Balanced Anthropic-first (production)
+      max  — Opus everywhere (high-value targets)
+      test — Haiku-only (development/CI, $1/$5 per MTok)
     """
 
     model_config = {"env_prefix": "DECEPTICON_", "env_nested_delimiter": "__"}
 
     debug: bool = False
-    model_profile: ModelProfile = ModelProfile.DEFAULT
+    model_profile: ModelProfile = ModelProfile.ECO
     llm: LLMConfig = Field(default_factory=LLMConfig)
     docker: DockerConfig = Field(default_factory=DockerConfig)
 

@@ -30,30 +30,51 @@ class EngagementType(StrEnum):
 
 
 class ObjectivePhase(StrEnum):
-    """Kill chain phases for objective ordering."""
+    """Kill chain phases for objective ordering.
+
+    Practical 5-phase model aligned with sub-agent routing:
+      recon          → recon agent       (TA0043 Reconnaissance)
+      initial-access → exploit agent     (TA0001 Initial Access + TA0002 Execution)
+      post-exploit   → postexploit agent (TA0003-TA0009: Persistence thru Collection)
+      c2             → postexploit agent (TA0011 Command and Control)
+      exfiltration   → postexploit agent (TA0010 Exfiltration + Actions on Objectives)
+    """
 
     RECON = "recon"
-    WEAPONIZE = "weaponize"
-    DELIVER = "deliver"
-    EXPLOIT = "exploit"
-    INSTALL = "install"
+    INITIAL_ACCESS = "initial-access"
+    POST_EXPLOIT = "post-exploit"
     C2 = "c2"
-    EXFILTRATE = "exfiltrate"
+    EXFILTRATION = "exfiltration"
 
 
-class RiskLevel(StrEnum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+class OpsecLevel(StrEnum):
+    """OPSEC posture for an objective.
+
+    Determines C2 tier selection, tool choices, and detection avoidance rigor.
+    Based on Red Team Maturity Model levels and C2 tier mapping.
+    See docs/red-team/opplan-domain-knowledge.md for details.
+    """
+
+    LOUD = "loud"           # No evasion; testing detection capability
+    STANDARD = "standard"   # Basic OPSEC; modify default signatures
+    CAREFUL = "careful"     # Active evasion; avoid known signatures
+    QUIET = "quiet"         # Minimal footprint; blend with normal traffic
+    SILENT = "silent"       # Zero detection tolerance; abort if burned
+
+
+class C2Tier(StrEnum):
+    """C2 infrastructure tier for objective execution."""
+
+    INTERACTIVE = "interactive"  # Direct operator control, seconds callback
+    SHORT_HAUL = "short-haul"   # Reliable access, minutes-hours callback
+    LONG_HAUL = "long-haul"     # Persistent fallback, hours-days callback
 
 
 class ObjectiveStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in-progress"
-    PASSED = "passed"
+    COMPLETED = "completed"
     BLOCKED = "blocked"
-    OUT_OF_SCOPE = "out-of-scope"
 
 
 # ── RoE (Rules of Engagement) ────────────────────────────────────────
@@ -118,6 +139,16 @@ class RoE(BaseModel):
         default="", description="Reference to signed authorization letter or contract"
     )
 
+    # Operational limits
+    data_handling: str = Field(
+        default="",
+        description="How discovered PII, credentials, and client data must be handled",
+    )
+    cleanup_required: bool = Field(
+        default=True,
+        description="Whether red team must remove tools/artifacts after engagement",
+    )
+
     # Metadata
     version: str = "1.0"
     last_updated: str = Field(default_factory=lambda: datetime.now().isoformat())
@@ -145,7 +176,7 @@ class KillChainPhase(BaseModel):
 
     phase: ObjectivePhase
     description: str
-    success_criteria: str
+    success_criteria: str = ""
     tools: list[str] = Field(default_factory=list)
 
 
@@ -171,9 +202,6 @@ class CONOPS(BaseModel):
     methodology: str = Field(default="PTES + MITRE ATT&CK framework")
     communication_plan: str = Field(
         default="", description="How red cell communicates with client and internally"
-    )
-    deconfliction_method: str = Field(
-        default="", description="How to distinguish red team activity from real attacks"
     )
 
     # Timeline
@@ -231,12 +259,36 @@ class Objective(BaseModel):
         description="Execution order (1 = first). Respects kill chain dependencies."
     )
     status: ObjectiveStatus = ObjectiveStatus.PENDING
-    mitre: str = Field(default="", description="Primary MITRE ATT&CK technique ID")
-    risk_level: RiskLevel = RiskLevel.LOW
-    opsec_notes: str = Field(
-        default="", description="OPSEC considerations specific to this objective"
+    """pending → in-progress → completed/blocked. blocked → in-progress (retry) or completed (abandon)."""
+    mitre: list[str] = Field(
+        default_factory=list,
+        description="MITRE ATT&CK technique IDs (e.g. ['T1190', 'T1059.004'])",
     )
+
+    # Red team-specific fields (not found in pentest planning)
+    opsec: OpsecLevel = Field(
+        default=OpsecLevel.STANDARD,
+        description="OPSEC posture — drives tool selection and detection avoidance rigor",
+    )
+    opsec_notes: str = Field(
+        default="", description="Specific OPSEC constraints for this objective"
+    )
+    c2_tier: C2Tier = Field(
+        default=C2Tier.INTERACTIVE,
+        description="C2 tier: interactive (seconds), short-haul (minutes), long-haul (hours)",
+    )
+    concessions: list[str] = Field(
+        default_factory=list,
+        description="Pre-authorized assists if objective is blocked (TIBER/CORIE concept)",
+    )
+
     notes: str = ""
+    blocked_by: list[str] = Field(
+        default_factory=list, description="Objective IDs that must complete first"
+    )
+    owner: str = Field(
+        default="", description="Sub-agent currently executing this objective"
+    )
 
 
 class OPPLAN(BaseModel):
@@ -248,41 +300,10 @@ class OPPLAN(BaseModel):
     """
 
     engagement_name: str
-    branch_name: str = Field(
-        description="Git branch for this engagement, e.g. 'engage/acme-external-2026-03'"
-    )
     threat_profile: str = Field(
         description="Short threat actor summary for context injection each iteration"
     )
-    kill_chain: list[str] = Field(
-        default_factory=lambda: [p.value for p in ObjectivePhase],
-        description="Kill chain phase ordering",
-    )
     objectives: list[Objective] = Field(default_factory=list)
-
-    def next_objective(self) -> Objective | None:
-        """Return the highest-priority objective that hasn't passed yet."""
-        pending = [
-            o
-            for o in self.objectives
-            if o.status in (ObjectiveStatus.PENDING, ObjectiveStatus.IN_PROGRESS)
-        ]
-        if not pending:
-            return None
-        return min(pending, key=lambda o: o.priority)
-
-    def is_complete(self) -> bool:
-        """Check if all objectives have passed."""
-        return all(
-            o.status in (ObjectiveStatus.PASSED, ObjectiveStatus.OUT_OF_SCOPE)
-            for o in self.objectives
-        )
-
-    def progress_summary(self) -> str:
-        """Return a one-line progress summary."""
-        total = len(self.objectives)
-        passed = sum(1 for o in self.objectives if o.status == ObjectiveStatus.PASSED)
-        return f"{passed}/{total} objectives completed"
 
 
 # ── Engagement Bundle ─────────────────────────────────────────────────

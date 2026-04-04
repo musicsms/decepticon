@@ -11,7 +11,7 @@ Architecture:
                         LiteLLM proxy → Anthropic/OpenAI/Google/etc.
 
 Profile-aware: when no explicit mapping is provided, resolves
-DECEPTICON_MODEL_PROFILE (default/high/test) from DecepticonConfig.
+DECEPTICON_MODEL_PROFILE (eco/max/test) from DecepticonConfig.
 """
 
 from __future__ import annotations

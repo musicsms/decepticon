@@ -3,24 +3,26 @@
 Each agent role gets a primary model and optional fallback. Three profiles
 control the cost/performance tradeoff:
 
-  default — Balanced Anthropic-first ensemble (production engagements)
-  high    — Maximum performance, Opus everywhere (high-value targets)
-  test    — Haiku-only, cheapest possible (development and CI)
+  eco  — Balanced Anthropic-first ensemble (production engagements)
+  max  — Maximum performance, Opus everywhere (high-value targets)
+  test — Haiku-only, cheapest possible (development and CI)
 
-Profile selection: DECEPTICON_MODEL_PROFILE=high (env var) or config.
+Profile selection: DECEPTICON_MODEL_PROFILE=max (env var) or config.
 
-Profiles (March 2026):
+Profiles (April 2026):
 
-  default:
+  eco:
     Orchestrator  Opus 4.6        → GPT-5.4         $5/$25
     Planner       Opus 4.6        → GPT-5.4         $5/$25
+    Soundwave     Haiku 4.5       → Gemini 2.5 Flash $1/$5
     Exploit       Sonnet 4.6      → GPT-4.1         $3/$15
     Recon         Haiku 4.5       → Gemini 2.5 Flash $1/$5
     PostExploit   Sonnet 4.6      → GPT-4.1         $3/$15
 
-  high:
+  max:
     Orchestrator  Opus 4.6        → GPT-5.4         $5/$25
     Planner       Opus 4.6        → Sonnet 4.6      $5/$25
+    Soundwave     Sonnet 4.6      → Haiku 4.5       $3/$15
     Exploit       Opus 4.6        → Sonnet 4.6      $5/$25
     Recon         Sonnet 4.6      → Opus 4.6        $3/$15
     PostExploit   Opus 4.6        → Sonnet 4.6      $5/$25
@@ -42,8 +44,8 @@ from pydantic import BaseModel, Field, field_validator
 class ModelProfile(StrEnum):
     """Model cost/performance profile."""
 
-    DEFAULT = "default"
-    HIGH = "high"
+    ECO = "eco"
+    MAX = "max"
     TEST = "test"
 
 
@@ -107,6 +109,17 @@ class LLMModelMapping(BaseModel):
         )
     )
 
+    # ── Document tier ──────────────────────────────────────────────
+    # Structured JSON generation from interviews, schema-guided output
+
+    soundwave: ModelAssignment = Field(
+        default_factory=lambda: ModelAssignment(
+            primary=HAIKU,
+            fallback=GEMINI_FLASH,
+            temperature=0.4,
+        )
+    )
+
     # ── Precision tier ──────────────────────────────────────────────
     # High-stakes execution, moderate iterations, precision critical
 
@@ -151,16 +164,16 @@ class LLMModelMapping(BaseModel):
         """Create a model mapping from a named profile.
 
         Profiles:
-          default — Balanced Anthropic-first (Opus/Sonnet/Haiku mix)
-          high    — Maximum performance (Opus + Sonnet everywhere)
-          test    — Cheapest possible (Haiku-only, no fallbacks)
+          eco  — Balanced Anthropic-first (Opus/Sonnet/Haiku mix)
+          max  — Maximum performance (Opus + Sonnet everywhere)
+          test — Cheapest possible (Haiku-only, no fallbacks)
         """
         profile = ModelProfile(profile)
 
-        if profile == ModelProfile.DEFAULT:
+        if profile == ModelProfile.ECO:
             return cls()
 
-        if profile == ModelProfile.HIGH:
+        if profile == ModelProfile.MAX:
             return cls(
                 decepticon=ModelAssignment(
                     primary=OPUS,
@@ -170,6 +183,11 @@ class LLMModelMapping(BaseModel):
                 planning=ModelAssignment(
                     primary=OPUS,
                     fallback=SONNET,
+                    temperature=0.4,
+                ),
+                soundwave=ModelAssignment(
+                    primary=SONNET,
+                    fallback=HAIKU,
                     temperature=0.4,
                 ),
                 exploit=ModelAssignment(
@@ -196,6 +214,10 @@ class LLMModelMapping(BaseModel):
                     temperature=0.4,
                 ),
                 planning=ModelAssignment(
+                    primary=HAIKU,
+                    temperature=0.4,
+                ),
+                soundwave=ModelAssignment(
                     primary=HAIKU,
                     temperature=0.4,
                 ),
