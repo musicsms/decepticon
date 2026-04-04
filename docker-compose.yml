@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
 
   # LangGraph Platform — Agent API Server
-  # Exposes all agents (decepticon, recon, planner, exploit, postexploit)
+  # Exposes all agents (decepticon, soundwave, recon, exploit, postexploit)
   # as a streaming API on port 2024. Ink CLI connects here.
   langgraph:
     image: ghcr.io/purpleailab/decepticon-langgraph:${DECEPTICON_VERSION:-latest}

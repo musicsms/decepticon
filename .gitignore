@@ -84,3 +84,4 @@ demo.tape
 workspace/
 
 .langgraph_api/
+.omc/

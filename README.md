@@ -8,7 +8,7 @@
 
 <h1 align="center">Decepticon — Autonomous Hacking Agent</h1>
 
-<p align="center"><i>"Another AI hacking tool? Let us guess — it runs nmap and writes a report. Groundbreaking."</i></p>
+<p align="center"><i>"Another AI hacker? Let us guess — it runs nmap and writes a report. Groundbreaking. Then what?"</i></p>
 
 <div align="center">
 
@@ -39,7 +39,7 @@
 <br/>
 
 <div align="center">
-  <video src="https://github.com/user-attachments/assets/470f200c-9f0a-4fb3-9cea-3b16c21f12d2" width="800" controls></video>
+  <video src="https://github.com/user-attachments/assets/b3fd40d8-e859-4a39-97f4-bd825694ad96" width="800" controls></video>
 </div>
 
 ## Install
@@ -59,13 +59,14 @@ decepticon           # Launch
 
 ## Try the Demo
 
-No configuration needed — just Docker and an API key.
+Configure your API key first, then run the demo — nothing else needed.
 
 ```bash
+decepticon config    # Set your API key (one-time)
 decepticon demo
 ```
 
-Launches Metasploitable 2 as a target, loads a pre-built engagement, and runs the full kill chain automatically: port scan, service enumeration, vsftpd exploit, and post-exploitation.
+Launches Metasploitable 2 as a target, loads a pre-built engagement, and runs the full kill chain automatically: port scan, vsftpd exploit, Sliver C2 implant deployment, credential harvesting via C2, and internal network reconnaissance.
 
 ---
 
@@ -100,8 +101,9 @@ Here's the thing most people miss about offensive security — there's a massive
 Red Team Testing is a **regulated, authorized, professional discipline**. Before a single packet leaves the wire, there are documents. Agreements. Rules.
 
 - **RoE (Rules of Engagement)** — Defines what you can and can't touch. Scope, timing, boundaries. Violate this and you're not a red teamer, you're a criminal.
-- **OPPLAN (Operations Plan)** — The full mission plan. Objectives, kill chain phases, acceptance criteria. Every action maps to a purpose.
 - **ConOps (Concept of Operations)** — Threat actor profile, attack methodology, the "who are we pretending to be" document.
+- **Deconfliction Plan** — Separates red team activity from real threats. Source IPs, user-agents, time windows, and a shared code for real-time deconfliction calls with the SOC.
+- **OPPLAN (Operations Plan)** — The full mission plan. Objectives, kill chain phases, acceptance criteria. Every action maps to a purpose.
 
 **Decepticon supports all of this. Obviously.**
 
@@ -120,8 +122,8 @@ Three principles guide everything we build:
 **Real Red Teaming, Not Checkbox Security**
 Decepticon emulates actual adversary behavior — not just running CVE checks against a list of ports. It reads an operations plan, adapts to what it finds, and pursues objectives through whatever path opens up. The goal is to test your defenses the way they'll actually be tested.
 
-**Complete Isolation**
-Every command runs inside a hardened Kali Linux sandbox. No tools touch the host. No credentials leak. No accidental blast radius. You get the full offensive toolkit — nmap, metasploit, custom scripts — without the risk of running them on your own machine.
+**Complete Isolation — Real Red Team Infrastructure**
+Every command runs inside a hardened Kali Linux sandbox on a dedicated operational network (`sandbox-net`), fully isolated from the management infrastructure (`decepticon-net`). The C2 team server, victim targets, and the operator sandbox live on one network; the LLM gateway, agent API server, and database live on another. No cross-network access. LangGraph reaches the sandbox exclusively via Docker socket — not the network. You get the full offensive toolkit — nmap, Sliver C2, sqlmap, Impacket — without any risk of leaking credentials or touching the host.
 
 **CLI-First**
 Security work belongs in the terminal. Decepticon's interface is a real-time streaming CLI built with Ink — no browser tabs, no dashboards, no context switching. You see what the agent sees, as it happens.
@@ -144,26 +146,78 @@ Think of it as an **Offensive Vaccine**. Just as a biological vaccine exposes th
 
 The true value isn't in the attack. It's in the defense system that emerges from surviving it.
 
+## Architecture
+
+Decepticon separates **management infrastructure** from **operational infrastructure** — the same way a real red team separates its planning systems from its attack infrastructure.
+
+```mermaid
+graph TB
+    subgraph HOST["Host Machine"]
+        direction TB
+
+        subgraph MGMT["decepticon-net — Management Infrastructure"]
+            direction LR
+            LITELLM["LiteLLM Gateway<br/>:4000"]
+            POSTGRES["PostgreSQL<br/>:5432"]
+            LANGGRAPH["LangGraph API<br/>:2024"]
+            LITELLM --- POSTGRES
+            LITELLM ---|LLM routing| LANGGRAPH
+        end
+
+        subgraph OPS["sandbox-net — Operational Infrastructure"]
+            direction LR
+            SANDBOX["Kali Sandbox<br/>nmap · sqlmap · Impacket<br/>sliver-client"]
+            C2["Sliver C2 Team Server<br/>gRPC :31337 · mTLS :8888<br/>HTTPS :443"]
+            VICTIMS["Victim Targets<br/>DVWA · Metasploitable 2"]
+            SANDBOX ---|sliver-client| C2
+            SANDBOX ---|attack traffic| VICTIMS
+        end
+
+        CLI["Ink CLI — Interactive Terminal UI"]
+    end
+
+    LANGGRAPH -.->|"Docker Socket<br/>(no network access)"| SANDBOX
+    CLI -->|stream_mode=custom| LANGGRAPH
+
+    style MGMT fill:#1a1a2e,stroke:#4a90d9,color:#fff
+    style OPS fill:#1a1a2e,stroke:#e74c3c,color:#fff
+    style LANGGRAPH fill:#4a90d9,stroke:#4a90d9,color:#fff
+    style SANDBOX fill:#2ecc71,stroke:#2ecc71,color:#fff
+    style C2 fill:#e74c3c,stroke:#e74c3c,color:#fff
+    style VICTIMS fill:#95a5a6,stroke:#95a5a6,color:#fff
+    style CLI fill:#9b59b6,stroke:#9b59b6,color:#fff
+    style LITELLM fill:#f39c12,stroke:#f39c12,color:#fff
+    style POSTGRES fill:#3498db,stroke:#3498db,color:#fff
+```
+
+**Why two networks?** The sandbox has zero access to the LLM gateway, database, or agent API. If a target compromises the sandbox, it reaches nothing of value — just like a real red team isolates its C2 infrastructure from its internal systems. LangGraph controls the sandbox exclusively through Docker socket (`docker exec`), not through the network.
+
+**C2 Infrastructure**: The Sliver team server runs in its own container on the operational network. The sandbox has `sliver-client` pre-installed and auto-connects using a config generated at first boot (`/workspace/.sliver-configs/decepticon.cfg`). C2 is profile-based — swap `COMPOSE_PROFILES=c2-sliver` for a different framework without touching the rest of the stack.
+
+**LLM Routing**: LiteLLM acts as a unified API gateway, routing to any LLM backend (Anthropic, OpenAI, local models) with usage tracking, rate limiting, and key management via PostgreSQL.
+
 ## Agents
 
 Decepticon runs a **multi-agent system** where a central orchestrator delegates to specialist agents, each with its own tools, skills, and context window.
 
 | Agent | Role |
 |-------|------|
-| **Decepticon** | Orchestrator. Reads the operations plan, coordinates the kill chain, delegates tasks to specialists. |
+| **Decepticon** | Orchestrator. Reads the OPPLAN, coordinates the kill chain, delegates tasks to specialists. Owns objective tracking via OPPLAN tools. |
+| **Soundwave** | Intelligence officer. Interviews the operator and generates engagement documents — RoE, ConOps, and Deconfliction Plan. Does not execute commands. |
 | **Recon** | Reconnaissance and enumeration. Runs scans, discovers services, maps attack surface inside the sandbox. |
-| **Planner** | Document generation. Produces ConOps, operations plans, and rules of engagement from mission briefs. |
-| **Exploit** | Exploitation. Attempts access through discovered vulnerabilities, credentials, or misconfigurations. |
-| **Post-Exploit** | Post-exploitation. Privilege escalation, lateral movement, persistence, and data collection. |
+| **Exploit** | Exploitation. Attempts initial access through discovered vulnerabilities, credentials, or misconfigurations. |
+| **Post-Exploit** | Post-exploitation. Credential access, privilege escalation, lateral movement, C2 management, and data collection. |
 
 Each agent spawns with a **clean context window** per objective — no accumulated noise, no degraded reasoning. Findings persist to disk, not to memory, so every iteration starts sharp.
+
+Every agent is built with an explicit **middleware stack** tailored to its role — skills for domain knowledge, filesystem access for the sandbox, model fallback for resilience, and prompt caching for efficiency. The orchestrator additionally has OPPLAN tools (add/get/list/update objectives) and sub-agent delegation via `task()`.
 
 ## CLI Commands
 
 | Command | Description |
 |---------|-------------|
 | `decepticon` | Start all services and open the interactive CLI |
-| `decepticon demo` | Run guided demo against Metasploitable 2 |
+| `decepticon demo` | Run guided demo against Metasploitable 2 (full kill chain + Sliver C2) |
 | `decepticon stop` | Stop all services |
 | `decepticon update [-f]` | Pull latest images and sync configuration (`--force` to re-pull same version) |
 | `decepticon status` | Show service status |

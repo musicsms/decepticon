@@ -293,6 +293,7 @@ case "${1:-}" in
         ;;
 
     demo)
+        check_api_key
         echo -e "${BOLD}Starting Decepticon Demo${NC}"
         echo -e "${DIM}Target: Metasploitable 2 (decepticon-msf2)${NC}"
         echo ""
@@ -331,7 +332,7 @@ case "${1:-}" in
 
         echo ""
         echo -e "${GREEN}Demo ready.${NC} The CLI will open with a pre-configured engagement targeting Metasploitable 2."
-        echo -e "${DIM}Objectives: port scan → service enum → vsftpd exploit → post-exploitation${NC}"
+        echo -e "${DIM}Objectives: port scan → vsftpd exploit → Sliver C2 implant → credential harvesting → internal recon${NC}"
         echo ""
 
         # Run CLI with auto-start message
