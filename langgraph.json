@@ -3,7 +3,6 @@
   "graphs": {
     "decepticon": "./decepticon/agents/decepticon.py:graph",
     "recon": "./decepticon/agents/recon.py:graph",
-    "planner": "./decepticon/agents/planner.py:graph",
     "soundwave": "./decepticon/agents/soundwave.py:graph",
     "exploit": "./decepticon/agents/exploit.py:graph",
     "postexploit": "./decepticon/agents/postexploit.py:graph"

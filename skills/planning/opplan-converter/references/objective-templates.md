@@ -4,11 +4,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 
 ## Passive Recon Objectives (priority 1-5)
 
-### OBJ-REC-001: Passive Subdomain Enumeration
+### OBJ-001: Passive Subdomain Enumeration
 
 ```json
 {
-  "id": "OBJ-REC-001",
+  "id": "OBJ-001",
   "phase": "recon",
   "title": "Passive subdomain enumeration for <TARGET>",
   "description": "Enumerate all subdomains of <TARGET> using passive sources (subfinder, amass passive, crt.sh) without directly touching target infrastructure.",
@@ -28,11 +28,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-002: DNS Record Mapping
+### OBJ-002: DNS Record Mapping
 
 ```json
 {
-  "id": "OBJ-REC-002",
+  "id": "OBJ-002",
   "phase": "recon",
   "title": "DNS record mapping for <TARGET>",
   "description": "Query all DNS record types (A, AAAA, MX, NS, TXT, SOA, CAA, CNAME) for <TARGET> and discovered subdomains.",
@@ -51,11 +51,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-003: WHOIS & ASN Intelligence
+### OBJ-003: WHOIS & ASN Intelligence
 
 ```json
 {
-  "id": "OBJ-REC-003",
+  "id": "OBJ-003",
   "phase": "recon",
   "title": "WHOIS and ASN intelligence for <TARGET>",
   "description": "Gather WHOIS registration data, ASN ownership, and IP range allocation for <TARGET>.",
@@ -74,11 +74,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-004: Web Fingerprinting (httpx)
+### OBJ-004: Web Fingerprinting (httpx)
 
 ```json
 {
-  "id": "OBJ-REC-004",
+  "id": "OBJ-004",
   "phase": "recon",
   "title": "Web fingerprinting and live host probing",
   "description": "Probe all discovered subdomains with httpx for status codes, technology detection, and content analysis.",
@@ -97,11 +97,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-005: OSINT Gathering
+### OBJ-005: OSINT Gathering
 
 ```json
 {
-  "id": "OBJ-REC-005",
+  "id": "OBJ-005",
   "phase": "recon",
   "title": "OSINT gathering for <TARGET>",
   "description": "Search Google dorks, GitHub/GitLab repos, and Wayback Machine for leaked credentials, exposed config files, and historical infrastructure data.",
@@ -123,11 +123,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 
 ## Active Recon Objectives (priority 6-10)
 
-### OBJ-REC-006: TCP Port Scan
+### OBJ-006: TCP Port Scan
 
 ```json
 {
-  "id": "OBJ-REC-006",
+  "id": "OBJ-006",
   "phase": "recon",
   "title": "TCP SYN scan top 1000 ports on in-scope IPs",
   "description": "Perform TCP SYN scan of top 1000 ports on all in-scope IP addresses identified during passive recon.",
@@ -146,14 +146,14 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-007: Service Version Detection
+### OBJ-007: Service Version Detection
 
 ```json
 {
-  "id": "OBJ-REC-007",
+  "id": "OBJ-007",
   "phase": "recon",
   "title": "Service version detection on open ports",
-  "description": "Perform service version detection (-sV) on all open ports discovered in OBJ-REC-006.",
+  "description": "Perform service version detection (-sV) on all open ports discovered in OBJ-006.",
   "acceptance_criteria": [
     "nmap -sV completed on all open ports",
     "Results saved to <engagement>/recon/nmap_versions.txt and nmap_versions.xml",
@@ -169,11 +169,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-008: Web Directory Fuzzing
+### OBJ-008: Web Directory Fuzzing
 
 ```json
 {
-  "id": "OBJ-REC-008",
+  "id": "OBJ-008",
   "phase": "recon",
   "title": "Web directory fuzzing on live HTTP services",
   "description": "Run ffuf directory fuzzing against live web services identified by httpx, using common wordlist.",
@@ -192,11 +192,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-009: Vulnerability Scan (nuclei)
+### OBJ-009: Vulnerability Scan (nuclei)
 
 ```json
 {
-  "id": "OBJ-REC-009",
+  "id": "OBJ-009",
   "phase": "recon",
   "title": "Vulnerability scan on live web targets",
   "description": "Run nuclei with default templates against all live web targets for known vulnerabilities.",
@@ -215,11 +215,11 @@ Copy and customize these templates for common recon objectives. Replace `<TARGET
 }
 ```
 
-### OBJ-REC-010: Synthesis Report
+### OBJ-010: Synthesis Report
 
 ```json
 {
-  "id": "OBJ-REC-010",
+  "id": "OBJ-010",
   "phase": "recon",
   "title": "Merge findings into prioritized attack surface report",
   "description": "Consolidate all recon findings into a single prioritized report with CVSS scoring and MITRE ATT&CK mapping.",
