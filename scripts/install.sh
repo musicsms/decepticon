@@ -120,6 +120,10 @@ create_launcher() {
 
     cat > "$bin_dir/decepticon" << 'LAUNCHER'
 #!/usr/bin/env bash
+# Wrap in { } so bash reads the entire script into memory before executing.
+# This prevents "unexpected EOF" errors when `decepticon update` overwrites
+# this file while it is still running.
+{
 set -euo pipefail
 
 DECEPTICON_HOME="${DECEPTICON_HOME:-$HOME/.decepticon}"
@@ -242,14 +246,15 @@ case "${1:-}" in
 
         echo -e "${DIM}Latest version:  v${latest}${NC}"
 
-        if [[ "$latest" == "$local_version" && "$force" == false ]]; then
-            echo -e "${GREEN}Already up to date.${NC} Use ${BOLD}--force${NC} to re-pull images."
-            exit 0
+        version_changed=false
+        if [[ "$latest" != "$local_version" ]]; then
+            version_changed=true
         fi
 
         echo "$latest" > "$DECEPTICON_HOME/.version"
 
-        # Download config files from the release tag (not main branch)
+        # Always sync config files and launcher (even for same version —
+        # the release tag may have been updated with hotfixes)
         tag_base="https://raw.githubusercontent.com/$REPO/v${latest}"
         echo -e "${DIM}Updating configuration files...${NC}"
         curl -fsSL "$tag_base/docker-compose.yml" -o "$DECEPTICON_HOME/docker-compose.yml"
@@ -257,27 +262,33 @@ case "${1:-}" in
         curl -fsSL "$tag_base/config/litellm.yaml" -o "$DECEPTICON_HOME/config/litellm.yaml"
         echo -e "${GREEN}Configuration files updated.${NC}"
 
-        # Update launcher script itself
+        # Pull images only when version changed or --force
+        if [[ "$version_changed" == true || "$force" == true ]]; then
+            echo -e "${DIM}Pulling images (v${latest})...${NC}"
+            DECEPTICON_VERSION="$latest" $COMPOSE_PROFILES pull \
+                || echo -e "${YELLOW}Warning: Some images failed to pull.${NC}"
+
+            # Restart services if running
+            if docker ps --filter "name=decepticon-langgraph" --format '{{.Names}}' | grep -q .; then
+                echo -e "${DIM}Restarting services with new version...${NC}"
+                $COMPOSE --profile cli --profile victims down > /dev/null 2>&1
+                $COMPOSE up -d --no-build > /dev/null 2>&1
+                echo -e "${GREEN}Updated and restarted (v${latest}).${NC}"
+            else
+                echo -e "${GREEN}Updated to v${latest}. Run ${NC}${BOLD}decepticon${NC}${GREEN} to start.${NC}"
+            fi
+        else
+            echo -e "${GREEN}Already on v${latest}. Config and launcher synced.${NC}"
+        fi
+
+        # Update launcher script itself — MUST be last because this overwrites
+        # the currently running script. The { } wrapper makes this safe, but
+        # older launchers without it will crash after this point.
         echo -e "${DIM}Updating launcher...${NC}"
         curl -fsSL "$tag_base/scripts/install.sh" -o /tmp/decepticon-installer-$$.sh
         bash /tmp/decepticon-installer-$$.sh --launcher-only 2>/dev/null && \
             echo -e "${GREEN}Launcher updated.${NC}" || true
         rm -f /tmp/decepticon-installer-$$.sh
-
-        # Pull versioned images
-        echo -e "${DIM}Pulling images (v${latest})...${NC}"
-        DECEPTICON_VERSION="$latest" $COMPOSE_PROFILES pull \
-            || echo -e "${YELLOW}Warning: Some images failed to pull.${NC}"
-
-        # Stop running services and restart with new images
-        if docker ps --filter "name=decepticon-langgraph" --format '{{.Names}}' | grep -q .; then
-            echo -e "${DIM}Restarting services with new version...${NC}"
-            $COMPOSE --profile cli --profile victims down > /dev/null 2>&1
-            $COMPOSE up -d --no-build > /dev/null 2>&1
-            echo -e "${GREEN}Updated and restarted (v${latest}).${NC}"
-        else
-            echo -e "${GREEN}Updated to v${latest}. Run ${NC}${BOLD}decepticon${NC}${GREEN} to start.${NC}"
-        fi
         ;;
 
     status)
@@ -470,6 +481,8 @@ case "${1:-}" in
         exit 1
         ;;
 esac
+exit
+}
 LAUNCHER
 
     chmod 755 "$bin_dir/decepticon"
