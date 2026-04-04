@@ -30,6 +30,8 @@ import logging
 import time
 from typing import Any, Callable
 
+from langchain_core.messages import AIMessage
+
 log = logging.getLogger("decepticon.subagent_streaming")
 
 # Context variable for the active renderer — set by StreamingEngine.run()
@@ -244,9 +246,19 @@ class StreamingRunnable:
             log.info("[%s] invoke() cancelled", self._name)
             self._emit_end(renderer, has_renderer, writer, time.monotonic() - start, cancelled=True)
             raise
-        except Exception:
+        except Exception as exc:
+            log.error("[%s] invoke() failed: %s: %s", self._name, type(exc).__name__, exc)
             self._emit_end(renderer, has_renderer, writer, time.monotonic() - start, error=True)
-            raise
+            # Return error state instead of re-raising. Re-raising crashes the
+            # ToolNode step, which prevents ToolMessages from being saved to the
+            # thread state. On the next run, PatchToolCallsMiddleware finds the
+            # dangling tool calls and injects "cancelled" messages, causing the
+            # orchestrator to retry in an infinite loop.
+            error_msg = f"Subagent '{self._name}' failed: {type(exc).__name__}: {exc}"
+            if last_state is not None:
+                last_state.setdefault("messages", []).append(AIMessage(content=error_msg))
+                return last_state
+            return {"messages": [AIMessage(content=error_msg)]}
 
         self._emit_end(renderer, has_renderer, writer, time.monotonic() - start)
 
@@ -306,9 +318,19 @@ class StreamingRunnable:
             log.info("[%s] ainvoke() cancelled", self._name)
             self._emit_end(renderer, has_renderer, writer, time.monotonic() - start, cancelled=True)
             raise
-        except Exception:
+        except Exception as exc:
+            log.error("[%s] ainvoke() failed: %s: %s", self._name, type(exc).__name__, exc)
             self._emit_end(renderer, has_renderer, writer, time.monotonic() - start, error=True)
-            raise
+            # Return error state instead of re-raising. Re-raising crashes the
+            # ToolNode step, which prevents ToolMessages from being saved to the
+            # thread state. On the next run, PatchToolCallsMiddleware finds the
+            # dangling tool calls and injects "cancelled" messages, causing the
+            # orchestrator to retry in an infinite loop.
+            error_msg = f"Subagent '{self._name}' failed: {type(exc).__name__}: {exc}"
+            if last_state is not None:
+                last_state.setdefault("messages", []).append(AIMessage(content=error_msg))
+                return last_state
+            return {"messages": [AIMessage(content=error_msg)]}
 
         self._emit_end(renderer, has_renderer, writer, time.monotonic() - start)
 
