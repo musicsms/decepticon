@@ -53,5 +53,11 @@ RUN echo "set-option -g history-limit 50000" > /root/.tmux.conf
 # and unrestricted filesystem access during red team operations.
 WORKDIR /workspace
 
+# Entrypoint: chmod 777 /workspace so host user can access files without sudo.
+# Security boundary is the container, not file permissions.
+COPY containers/sandbox-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
 # Keep the container alive so the backend can 'docker exec' into it
 CMD ["tail", "-f", "/dev/null"]

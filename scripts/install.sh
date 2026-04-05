@@ -98,14 +98,23 @@ download_files() {
     # .env (only if not exists — never overwrite user's API keys)
     if [[ ! -f "$install_dir/.env" ]]; then
         curl -fsSL "$RAW_BASE/.env.example" -o "$install_dir/.env"
+        # Inject the actual install path (Docker Compose can't expand ~)
+        echo "DECEPTICON_HOME=$install_dir" >> "$install_dir/.env"
         info "Created .env from template. You'll need to add your API keys."
     else
+        # Ensure DECEPTICON_HOME is set in existing .env (upgrade path)
+        if ! grep -q "^DECEPTICON_HOME=" "$install_dir/.env" 2>/dev/null; then
+            echo "DECEPTICON_HOME=$install_dir" >> "$install_dir/.env"
+        fi
         info ".env already exists, preserving your configuration."
     fi
 
     # LiteLLM config
     mkdir -p "$install_dir/config"
     curl -fsSL "$RAW_BASE/config/litellm.yaml" -o "$install_dir/config/litellm.yaml"
+
+    # Workspace directory (bind-mounted into containers)
+    mkdir -p "$install_dir/workspace"
 
     # Version marker
     echo "$DECEPTICON_VERSION" > "$install_dir/.version"
