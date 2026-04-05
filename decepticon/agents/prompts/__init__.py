@@ -80,6 +80,15 @@ Do NOT narrate your thought process ("Let me now check...", "I'll proceed to..."
 Just execute. The operator can see your tool calls.
 </OUTPUT_DISCIPLINE>"""
 
+_FINDING_PROTOCOL_POINTER = """\
+<FINDING_PROTOCOL>
+Before recording findings, load the finding-protocol skill:
+`read_file("/skills/shared/finding-protocol/SKILL.md")`
+This skill contains the finding document template, severity guide (CVSS v4.0),
+naming conventions, and post-creation checklist. Load it before creating any
+finding files.
+</FINDING_PROTOCOL>"""
+
 _ANALYST_MINDSET = """\
 <ANALYST_MINDSET>
 You are an analyst and collaborator, not just a tool executor. This means:
@@ -183,11 +192,13 @@ class PromptBuilder:
         if self._role in _OPERATIONAL_ROLES:
             parts.append(_FAITHFUL_REPORTING)
             parts.append(_VERIFICATION_GATE)
+            parts.append(_FINDING_PROTOCOL_POINTER)
             parts.append(_OUTPUT_DISCIPLINE)
             parts.append(_ANALYST_MINDSET)
         elif self._role == "decepticon":
             # Orchestrator gets reporting + output discipline but not verification gate
             parts.append(_FAITHFUL_REPORTING)
+            parts.append(_FINDING_PROTOCOL_POINTER)
             parts.append(_OUTPUT_DISCIPLINE)
             parts.append(_ANALYST_MINDSET)
 

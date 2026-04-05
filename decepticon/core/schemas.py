@@ -77,6 +77,168 @@ class ObjectiveStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+class FindingSeverity(StrEnum):
+    """CVSS-aligned severity levels for individual findings."""
+
+    CRITICAL = "critical"  # CVSS 9.0-10.0
+    HIGH = "high"  # CVSS 7.0-8.9
+    MEDIUM = "medium"  # CVSS 4.0-6.9
+    LOW = "low"  # CVSS 0.1-3.9
+    INFORMATIONAL = "informational"  # CVSS 0.0 — observation only
+
+
+class FindingConfidence(StrEnum):
+    """Confidence level for a finding — drives verification requirements."""
+
+    VERIFIED = "verified"  # Confirmed with 2+ methods (required for CRITICAL/HIGH)
+    PROBABLE = "probable"  # Strong indicators, single method
+    UNVERIFIED = "unverified"  # Initial observation, needs confirmation
+
+
+class RemediationPriority(StrEnum):
+    """Remediation urgency aligned with PTES/CREST reporting standards."""
+
+    IMMEDIATE = "immediate"  # 0-7 days: patch, config change
+    SHORT_TERM = "short-term"  # 30 days: detection rules, SIEM update
+    LONG_TERM = "long-term"  # 90+ days: architecture improvement
+
+
+# ── Finding / Evidence / Attack Path ─────────────────────────────────
+
+
+class Evidence(BaseModel):
+    """Artifact reference attached to a finding.
+
+    Each piece of evidence points to a file in the engagement workspace
+    (e.g., scan output, HTTP request/response, terminal log, pcap).
+    SHA-256 hash provides chain-of-custody integrity verification.
+    """
+
+    type: str = Field(
+        description=(
+            "Evidence type: screenshot, http-request, terminal-log, "
+            "pcap, artifact, scan-output"
+        )
+    )
+    path: str = Field(description="Relative path within engagement workspace")
+    description: str = ""
+    sha256: str = Field(default="", description="SHA-256 hash for integrity verification")
+    collected_at: str = Field(default="", description="ISO 8601 timestamp of collection")
+
+
+class Finding(BaseModel):
+    """Individual vulnerability or security finding -- one Markdown file per finding.
+
+    Follows bug bounty report structure (HackerOne/Bugcrowd) enriched with
+    red team metadata (detection gaps, ATT&CK mapping, agent provenance).
+    CVSS v4.0 is the primary scoring system per FIRST 2023 recommendation.
+    On-disk format: YAML frontmatter + Markdown body.
+
+    File naming: findings/FIND-001.md, findings/FIND-002.md, ...
+    """
+
+    id: str = Field(description="Auto-generated ID: FIND-001, FIND-002, ...")
+    title: str = Field(
+        description="Bug bounty format: '[Type] in [Target] allows [Impact]'"
+    )
+    severity: FindingSeverity
+    cvss_score: float | None = Field(default=None, description="Numeric CVSS score (0.0-10.0)")
+    cvss_vector: str = Field(
+        default="", description="Full CVSS vector string, e.g. CVSS:4.0/AV:N/AC:L/..."
+    )
+    cvss_version: str = Field(default="4.0", description="CVSS version used (4.0 primary)")
+    cwe: list[str] = Field(default_factory=list, description="CWE IDs, e.g. ['CWE-89']")
+    mitre: list[str] = Field(
+        default_factory=list, description="MITRE ATT&CK technique IDs, e.g. ['T1190']"
+    )
+
+    # Where
+    affected_target: str = Field(description="IP, hostname, or URL of affected system")
+    affected_component: str = Field(
+        default="", description="Specific service, endpoint, port, or parameter"
+    )
+
+    # What
+    description: str = Field(description="Technical description of the vulnerability")
+    steps_to_reproduce: list[str] = Field(
+        default_factory=list, description="Ordered reproduction steps"
+    )
+    impact: str = Field(default="", description="Business and technical impact assessment")
+
+    # Evidence
+    evidence: list[Evidence] = Field(default_factory=list)
+
+    # Detection gap tracking (Purple Team / TIBER-EU)
+    detected: bool | None = Field(
+        default=None, description="Whether Blue Team detected this activity"
+    )
+    detection_notes: str = Field(
+        default="", description="Which detection mechanisms fired or failed"
+    )
+
+    # Remediation (PTES/CREST report structure)
+    remediation: str = Field(default="", description="Specific fix recommendation")
+    remediation_priority: RemediationPriority | None = Field(
+        default=None, description="Urgency: immediate, short-term, long-term"
+    )
+
+    # AI Agent metadata
+    objective_id: str = Field(
+        default="", description="OPPLAN objective that found this (OBJ-xxx)"
+    )
+    phase: ObjectivePhase | None = None
+    agent: str = Field(
+        default="", description="Agent that discovered this: recon/exploit/postexploit"
+    )
+    iteration: int = Field(default=0, description="Ralph loop iteration number")
+    confidence: FindingConfidence = FindingConfidence.VERIFIED
+    discovered_at: str = Field(default="", description="ISO 8601 discovery timestamp")
+    verified_methods: list[str] = Field(
+        default_factory=list,
+        description="Methods used to verify (e.g. ['nmap', 'manual curl'])",
+    )
+
+
+class AttackPathStep(BaseModel):
+    """Single hop in a kill chain attack path."""
+
+    order: int = Field(description="Step sequence number (1-based)")
+    phase: ObjectivePhase
+    technique: str = Field(description="ATT&CK technique name")
+    mitre: str = Field(description="ATT&CK technique ID, e.g. T1190")
+    source: str = Field(description="Origin host/service for this hop")
+    target: str = Field(description="Destination host/service")
+    tool: str = Field(default="", description="Tool used for this step")
+    detected: bool | None = Field(
+        default=None, description="Whether this step was detected"
+    )
+    finding_id: str = Field(default="", description="Related finding ID (FIND-xxx)")
+
+
+class AttackPath(BaseModel):
+    """Kill chain traversal path -- connects findings into an attack narrative.
+
+    Documents the complete chain from initial access to objective completion,
+    mapping each hop to ATT&CK techniques. Combined severity may exceed
+    individual finding scores when chained (e.g., Medium + Medium = Critical).
+
+    File naming: findings/attack-paths/PATH-001.md
+    """
+
+    id: str = Field(description="Auto-generated ID: PATH-001, PATH-002, ...")
+    name: str = Field(
+        description="Descriptive name, e.g. 'External to DB Admin via SSRF Chain'"
+    )
+    description: str = Field(
+        default="", description="Narrative description of the attack path"
+    )
+    steps: list[AttackPathStep] = Field(default_factory=list)
+    combined_severity: FindingSeverity = FindingSeverity.CRITICAL
+    finding_ids: list[str] = Field(
+        default_factory=list, description="All FIND-xxx IDs in this path"
+    )
+
+
 # ── RoE (Rules of Engagement) ────────────────────────────────────────
 
 
@@ -324,10 +486,13 @@ class EngagementBundle(BaseModel):
 
         Layout:
           <engagement_dir>/plan/roe.json, conops.json, opplan.json, deconfliction.json
-          <engagement_dir>/findings.md
-          <engagement_dir>/recon/  (created empty)
-          <engagement_dir>/exploit/  (created empty)
-          <engagement_dir>/post-exploit/  (created empty)
+          <engagement_dir>/findings.md          (append-only cross-iteration summary)
+          <engagement_dir>/findings/             (per-finding JSON files)
+          <engagement_dir>/findings/attack-paths/ (attack path JSON files)
+          <engagement_dir>/findings/evidence/    (evidence artifacts)
+          <engagement_dir>/timeline.jsonl        (activity timeline)
+          <engagement_dir>/report/               (final report output)
+          <engagement_dir>/recon/  exploit/  post-exploit/
 
         Returns a mapping of document type → file path.
         """
@@ -339,7 +504,15 @@ class EngagementBundle(BaseModel):
         plan_dir.mkdir(parents=True, exist_ok=True)
 
         # Create execution subdirectories
-        for subdir in ("recon", "exploit", "post-exploit"):
+        for subdir in (
+            "recon",
+            "exploit",
+            "post-exploit",
+            "findings",
+            "findings/attack-paths",
+            "findings/evidence",
+            "report",
+        ):
             (root / subdir).mkdir(parents=True, exist_ok=True)
 
         files = {}
@@ -366,5 +539,11 @@ class EngagementBundle(BaseModel):
                 encoding="utf-8",
             )
             files["findings"] = str(findings_path)
+
+        # Initialize empty timeline.jsonl (activity log)
+        timeline_path = root / "timeline.jsonl"
+        if not timeline_path.exists():
+            timeline_path.write_text("", encoding="utf-8")
+            files["timeline"] = str(timeline_path)
 
         return files

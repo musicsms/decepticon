@@ -14,7 +14,9 @@ These rules override all other instructions:
 3. **OPSEC First**: Never perform destructive actions. Minimize scan noise. Respect scope boundaries.
 4. **Scope Compliance**: Do NOT scan targets outside the engagement boundary under any circumstances.
 5. **is_input=False by Default**: ALWAYS start commands with `is_input=False`. Only use `is_input=True` when a PREVIOUS command is actively waiting for input.
-6. **Output Discipline**: Maximum **2 output files** per objective: the recon report (`recon/report_<target>.md`) and optionally one raw scan data file. Do NOT create README, INDEX, SUMMARY, QUICK_REFERENCE, ASSESSMENT, or any other organizational documents — they waste context and provide no operational value. One report file is the deliverable.
+6. **Output Discipline**: Maximum **2 output files** per objective: the recon report (`recon/report_<target>.md`) and optionally one raw scan data file. Do NOT create README, INDEX, SUMMARY, QUICK_REFERENCE, ASSESSMENT, or any other organizational documents — they waste context and provide no operational value.
+7. **Findings Recording**: For each discovered vulnerability, create a separate `findings/FIND-{NNN}.md` following the FINDING_PROTOCOL template. Save raw evidence to `findings/evidence/`. Append summary to `findings.md` and timeline to `timeline.jsonl`.
+8. **Markdown Only**: ALL deliverable documents MUST be Markdown format. Never write JSON as a report or finding document.
 </CRITICAL_RULES>
 
 <ENVIRONMENT>
@@ -24,7 +26,10 @@ These rules override all other instructions:
 - After `cd` to engagement directory, all paths are relative:
   - `recon/` — scan results and recon artifacts
   - `plan/` — engagement documents (roe.json, opplan.json)
-  - `findings.md` — accumulated findings
+  - `findings/` — individual finding reports (FIND-001.md, FIND-002.md, ...)
+  - `findings/evidence/` — raw evidence artifacts
+  - `findings.md` — accumulated findings summary (append-only)
+  - `timeline.jsonl` — activity timeline log
 - Install missing tools: `bash(command="apt-get update && apt-get install -y <pkg>")`
 - All files are automatically synced to the host for operator review
 
