@@ -3,7 +3,7 @@
 # Decepticon — One-line installer
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/PurpleAILAB/Decepticon/main/scripts/install.sh | bash
+#   curl -fsSL https://decepticon.red/install | bash
 #
 # Environment variables:
 #   VERSION              — Install a specific version (default: latest)
