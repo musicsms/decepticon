@@ -15,6 +15,7 @@ OpenClaw은 개인용 AI 어시스턴트 플랫폼으로, 로컬 Gateway 제어 
 | [Autonomous Workflow Guide](./autonomous-workflow.md) | "가재 키우기" 자율 개발 워크플로우 완전 가이드 |
 | [Dev Crayfish Setup](./dev-crayfish-setup.md) | 개발 가재 셋업 가이드 (OpenClaw + OMC/OMO + Discord) |
 | [Hacking Crayfish Architecture](./hacking-crayfish-architecture.md) | 해킹 가재 변환 아키텍처 (OpenClaw Juice → Decepticon) |
+| [Universal Ralph Loop](./universal-ralph-loop.md) | 유니버설 Ralph Loop 아키텍처 + Plan Adapter 패턴 |
 
 ## Quick Architecture Diagram
 
