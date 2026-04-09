@@ -15,7 +15,7 @@ If you discover a security vulnerability in Decepticon, please report it respons
 
 1. **GitHub Security Advisories** (preferred): Use [GitHub's private vulnerability reporting](https://github.com/PurpleAILAB/Decepticon/security/advisories/new) to submit a report directly.
 
-2. **Email**: Contact the maintainers at **purple.ai.lab@gmail.com** with:
+2. **Email**: Contact the maintainers at **purpleailab@gmail.com** with:
    - Description of the vulnerability
    - Steps to reproduce
    - Potential impact assessment
