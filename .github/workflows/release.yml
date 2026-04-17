@@ -5,7 +5,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: read
+  contents: write   # required for sbom-action to attach SBOMs to release assets
   packages: write
   id-token: write   # cosign keyless OIDC
   attestations: write
@@ -15,6 +15,7 @@ jobs:
     name: Build & push ${{ matrix.image }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false   # one image failure must not cancel the rest
       matrix:
         include:
           - image: decepticon-langgraph
