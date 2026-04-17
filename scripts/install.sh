@@ -419,7 +419,7 @@ case "${1:-}" in
             $COMPOSE_ALL_PROFILES down --volumes --remove-orphans 2>/dev/null || true
         fi
         # Clean up any remaining containers by name
-        for c in decepticon-sandbox decepticon-langgraph decepticon-litellm decepticon-postgres decepticon-cli decepticon-dvwa decepticon-msf2 decepticon-c2-sliver decepticon-neo4j; do
+        for c in decepticon-sandbox decepticon-langgraph decepticon-litellm decepticon-postgres decepticon-cli decepticon-web decepticon-dvwa decepticon-msf2 decepticon-c2-sliver decepticon-neo4j; do
             docker rm -f "$c" 2>/dev/null || true
         done
         # Clean up 'docker compose run' orphans
@@ -428,7 +428,7 @@ case "${1:-}" in
 
         # 2. Remove Docker images
         echo -e "${DIM}Removing Docker images...${NC}"
-        docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "decepticon-(sandbox|langgraph|cli|c2-sliver)" | xargs -r docker rmi -f 2>/dev/null || true
+        docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "decepticon-(sandbox|langgraph|cli|web|c2-sliver)" | xargs -r docker rmi -f 2>/dev/null || true
         echo -e "${GREEN}Images removed.${NC}"
 
         # 3. Remove install directory

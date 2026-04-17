@@ -165,7 +165,7 @@ services:
           path: ./containers/langgraph.Dockerfile
 
   # Web Dashboard — Next.js UI
-  # Runs via: docker compose --profile web up -d
+  # Included in the default stack: docker compose up -d
   web:
     image: ghcr.io/purpleailab/decepticon-web:${DECEPTICON_VERSION:-latest}
     build:
@@ -186,8 +186,6 @@ services:
         condition: service_healthy
     networks:
       - decepticon-net
-    profiles:
-      - web
     restart: unless-stopped
     develop:
       watch:
