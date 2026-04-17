@@ -49,6 +49,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/standalone/clie
 COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/standalone/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/static ./.next/static
 
+# Prisma CLI (for runtime migrate deploy) + migration files
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder --chown=nextjs:nodejs /app/clients/web/prisma ./prisma
+
+# Startup entrypoint: apply migrations then start Next.js server
+COPY containers/web-entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 USER nextjs
 
 EXPOSE 3000
@@ -56,4 +64,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["./entrypoint.sh"]

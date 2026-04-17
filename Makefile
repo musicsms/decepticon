@@ -9,7 +9,6 @@
 
 COMPOSE := docker compose
 COMPOSE_CLI := $(COMPOSE) --profile cli
-COMPOSE_WEB := $(COMPOSE) --profile web
 
 .PHONY: dev start cli cli-dev web web-dev web-db-ensure web-build web-lint web-migrate web-ee web-oss stop status logs kg-health neo4j-health build test test-cli lint lint-cli quality clean
 
@@ -35,7 +34,7 @@ start:
 
 ## Stop all services
 stop:
-	$(COMPOSE) --profile cli --profile web --profile victims --profile c2-sliver down
+	$(COMPOSE) --profile cli --profile victims --profile c2-sliver down
 
 ## Show service status
 status:
@@ -57,7 +56,7 @@ logs:
 
 ## Build all Docker images without starting
 build:
-	$(COMPOSE) --profile cli --profile web build
+	$(COMPOSE) --profile cli build
 
 ## Build a specific service (usage: make build-svc SVC=langgraph)
 build-svc:
@@ -109,7 +108,7 @@ quality: lint test-local lint-cli build-cli test-cli web-lint web-build
 
 ## Start web dashboard (Docker, includes PostgreSQL + Neo4j)
 web:
-	$(COMPOSE_WEB) up -d --build web
+	$(COMPOSE) up -d --build web
 
 ## Start web dashboard in dev mode (local Next.js, requires running PostgreSQL)
 ## Auto-ensures decepticon_web DB exists + applies migrations before starting.
@@ -174,7 +173,7 @@ demo:
 
 ## Stop services and remove volumes
 clean:
-	$(COMPOSE) --profile cli --profile web --profile victims down --volumes --remove-orphans
+	$(COMPOSE) --profile cli --profile victims down --volumes --remove-orphans
 
 # ── Help ─────────────────────────────────────────────────────────
 
