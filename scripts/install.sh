@@ -230,19 +230,19 @@ check_for_update() {
 wait_for_web() {
     local port="${WEB_PORT:-3000}"
     local max_wait=60
-    local waited=0
-    echo -ne "${DIM}Waiting for web dashboard"
+    local waited=0 frame=0 spin
+    local spinners='-\|/'
     while ! curl -sf "http://localhost:$port" >/dev/null 2>&1; do
         if [[ $waited -ge $max_wait ]]; then
-            echo -e "${NC}"
-            echo -e "${YELLOW}Web dashboard is slow to start — check: decepticon logs web${NC}"
+            printf "\r  ${YELLOW}[!]${NC} ${DIM}Web :${port} -- not ready after %ss${NC}          \n" "$waited"
+            echo -e "${DIM}Check: ${NC}${BOLD}decepticon logs web${NC}"
             return
         fi
-        echo -n "."
-        sleep 2
-        waited=$((waited + 2))
+        spin="${spinners:$((frame % 4)):1}"
+        printf "\r  ${DIM}%s Web :${port} (%ss)...${NC}" "$spin" "$waited"
+        frame=$((frame + 1)); sleep 2; waited=$((waited + 2))
     done
-    echo -e " ${GREEN}ready${NC}"
+    printf "\r  ${GREEN}[ok]${NC} ${DIM}Web :${port} (%ss)${NC}          \n" "$waited"
 }
 
 wait_for_server() {
