@@ -70,18 +70,18 @@ test:
 
 ## Run tests locally (requires uv sync --dev)
 test-local:
-	pytest $(ARGS)
+	uv run pytest $(ARGS)
 
 ## Lint and typecheck Python locally
 lint:
-	ruff check .
-	ruff format --check .
-	basedpyright
+	uv run ruff check .
+	uv run ruff format --check .
+	uv run basedpyright
 
 ## Auto-fix Python lint issues
 lint-fix:
-	ruff check --fix .
-	ruff format .
+	uv run ruff check --fix .
+	uv run ruff format .
 
 ## CLI (TypeScript) quality gates — mirror the CI workflow so local
 ## runs catch CLI breakage before push. These three targets are what
