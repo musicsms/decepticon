@@ -60,7 +60,6 @@ dev = [
 ]
 
 [project.scripts]
-decepticon = "decepticon.__main__:main"
 decepticon-kg-health = "decepticon.tools.research.health:main"
 
 [project.urls]
