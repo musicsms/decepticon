@@ -4,6 +4,8 @@ WORKDIR /app
 
 # Install dependencies
 FROM base AS deps
+# openssl is required by Prisma's migration engine binary
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY clients/cli/package.json clients/cli/
 COPY clients/web/package.json clients/web/
