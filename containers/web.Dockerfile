@@ -49,8 +49,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/standalone/clie
 COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/standalone/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/static ./.next/static
 
-# Prisma CLI (for runtime migrate deploy) + migration files
+# Prisma CLI + engines (for runtime migrate deploy) + migration files
+# @prisma/engines contains the migration engine binary — required for `prisma migrate deploy`
+# It is not included in the Next.js standalone trace since it is only used at container startup.
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder --chown=nextjs:nodejs /app/clients/web/prisma ./prisma
 
 # Startup entrypoint: apply migrations then start Next.js server
