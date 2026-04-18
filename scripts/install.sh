@@ -225,6 +225,13 @@ check_for_update() {
 
     echo -e "${GREEN}Updated to v${latest}.${NC}"
     echo ""
+
+    # Re-exec so the new launcher code takes effect immediately.
+    # The { } wrapper means bash is still running the OLD in-memory code;
+    # exec replaces this process with the NEW on-disk script.
+    # On re-entry, check_for_update will see version == latest and skip,
+    # so there is no infinite loop risk.
+    exec "$0" "$@"
 }
 
 wait_for_web() {
