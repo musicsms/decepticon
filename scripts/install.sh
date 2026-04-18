@@ -306,7 +306,7 @@ case "${1:-}" in
         wait_for_web
 
         # Print web dashboard URL (reads WEB_PORT from .env, defaults to 3000)
-        _web_port=$(grep -m1 '^WEB_PORT=' "$DECEPTICON_HOME/.env" 2>/dev/null | cut -d= -f2 | tr -d "'\"")
+        _web_port=$(grep -m1 '^WEB_PORT=' "$DECEPTICON_HOME/.env" 2>/dev/null | cut -d= -f2 | tr -d "'\"" || true)
         echo -e "${DIM}Web dashboard:${NC} ${BOLD}http://localhost:${_web_port:-3000}${NC}"
 
         # Export installed version so the CLI container can display it
