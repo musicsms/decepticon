@@ -93,6 +93,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-ra",
+    "--ignore=tests/bugclaw",
 ]
 
 [tool.coverage.run]
