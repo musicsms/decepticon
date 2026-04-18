@@ -50,13 +50,7 @@
 ```bash
 curl -fsSL https://decepticon.red/install | bash
 decepticon config    # Set your API key (Anthropic, OpenAI, or Google)
-decepticon           # Launch the terminal CLI
-```
-
-Or launch the web dashboard instead:
-
-```bash
-make web             # Opens http://localhost:3000
+decepticon           # Start everything: terminal CLI + web dashboard at http://localhost:3000
 ```
 
 → **[Full setup guide](docs/getting-started.md)**

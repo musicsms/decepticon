@@ -4,7 +4,7 @@
 
 | Command | Description |
 |---------|-------------|
-| `decepticon` | Start all services and open the interactive terminal UI |
+| `decepticon` | Start all services, open the terminal UI, and print the web dashboard URL |
 | `decepticon demo` | Run guided demo (Metasploitable 2, full kill chain + Sliver C2) |
 | `decepticon config` | Edit API keys and settings (opens `$EDITOR`) |
 | `decepticon stop` | Stop all services |
@@ -15,6 +15,8 @@
 | `decepticon update [-f]` | Pull latest Docker images (`-f` forces re-pull) |
 | `decepticon remove` | Uninstall Decepticon completely |
 | `decepticon --version` | Show installed version |
+
+> **Web dashboard** is included in the default stack. After `decepticon` starts, the dashboard is available at `http://localhost:3000` (configurable via `WEB_PORT` in `.env`).
 
 ### `decepticon logs` — Service names
 
