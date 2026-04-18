@@ -189,10 +189,19 @@ check_for_update() {
     latest=$(curl -sf --max-time 3 "https://api.github.com/repos/$REPO/releases/latest" \
         | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p') 2>/dev/null || true
 
+    # Only notify when latest is strictly NEWER than current.
+    # Simple string compare is wrong: "1.0.3" != "1.0.4" would fire even when
+    # the user is already on a newer pre-release or the GitHub release is a draft.
+    # sort -V (version sort) puts the higher version last; if latest comes after
+    # current it is genuinely newer.
     if [[ -n "$latest" && "$latest" != "$current" ]]; then
-        echo -e "${CYAN}Update available: ${BOLD}v${latest}${NC}${CYAN} (current: v${current})${NC}"
-        echo -e "${DIM}Run ${NC}${BOLD}decepticon update${NC}${DIM} to upgrade.${NC}"
-        echo ""
+        local newer
+        newer=$(printf '%s\n%s' "$latest" "$current" | sort -V | tail -1)
+        if [[ "$newer" == "$latest" ]]; then
+            echo -e "${CYAN}Update available: ${BOLD}v${latest}${NC}${CYAN} (current: v${current})${NC}"
+            echo -e "${DIM}Run ${NC}${BOLD}decepticon update${NC}${DIM} to upgrade.${NC}"
+            echo ""
+        fi
     fi
 }
 
