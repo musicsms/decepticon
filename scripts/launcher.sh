@@ -50,6 +50,12 @@ check_api_key() {
 }
 
 check_for_update() {
+    local auto_update
+    auto_update=$(grep -m1 '^AUTO_UPDATE=' "$DECEPTICON_HOME/.env" 2>/dev/null | cut -d= -f2 | tr -d "'\"" || true)
+    if [[ "${auto_update,,}" == "false" ]]; then
+        return
+    fi
+
     local current
     current=$(cat "$DECEPTICON_HOME/.version" 2>/dev/null || echo "")
     [[ -z "$current" ]] && return
