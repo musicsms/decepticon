@@ -77,7 +77,6 @@ packages = ["decepticon"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-exclude = ["clients/bugclaw", "tests/bugclaw"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
@@ -93,7 +92,6 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-ra",
-    "--ignore=tests/bugclaw",
 ]
 
 [tool.coverage.run]
