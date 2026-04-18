@@ -205,6 +205,24 @@ check_for_update() {
     fi
 }
 
+wait_for_web() {
+    local port="${WEB_PORT:-3000}"
+    local max_wait=60
+    local waited=0
+    echo -ne "${DIM}Waiting for web dashboard"
+    while ! curl -sf "http://localhost:$port" >/dev/null 2>&1; do
+        if [[ $waited -ge $max_wait ]]; then
+            echo -e "${NC}"
+            echo -e "${YELLOW}Web dashboard is slow to start — check: decepticon logs web${NC}"
+            return
+        fi
+        echo -n "."
+        sleep 2
+        waited=$((waited + 2))
+    done
+    echo -e " ${GREEN}ready${NC}"
+}
+
 wait_for_server() {
     local port="${LANGGRAPH_PORT:-2024}"
     local max_wait=90
@@ -246,9 +264,10 @@ case "${1:-}" in
 
         # Start background services including victim targets
         echo -e "${DIM}Starting services...${NC}"
-        $COMPOSE --profile victims up -d --no-build > /dev/null 2>&1
+        $COMPOSE --profile victims up -d --no-build > /dev/null
 
         wait_for_server
+        wait_for_web
 
         # Print web dashboard URL (reads WEB_PORT from .env, defaults to 3000)
         _web_port=$(grep -m1 '^WEB_PORT=' "$DECEPTICON_HOME/.env" 2>/dev/null | cut -d= -f2 | tr -d '"'"'"')
@@ -313,7 +332,7 @@ case "${1:-}" in
             if docker ps --filter "name=decepticon-langgraph" --format '{{.Names}}' | grep -q .; then
                 echo -e "${DIM}Restarting services with new version...${NC}"
                 $COMPOSE_ALL_PROFILES down > /dev/null 2>&1
-                $COMPOSE up -d --no-build > /dev/null 2>&1
+                $COMPOSE up -d --no-build > /dev/null
                 echo -e "${GREEN}Updated and restarted (v${latest}).${NC}"
             else
                 echo -e "${GREEN}Updated to v${latest}. Run ${NC}${BOLD}decepticon${NC}${GREEN} to start.${NC}"
@@ -382,11 +401,11 @@ case "${1:-}" in
 
         # Start victim target
         echo -e "${DIM}Starting Metasploitable 2...${NC}"
-        $COMPOSE --profile victims up -d --no-build > /dev/null 2>&1 metasploitable2 > /dev/null 2>&1
+        $COMPOSE --profile victims up -d --no-build metasploitable2 > /dev/null
 
         # Start core services (COMPOSE_PROFILES in .env controls which C2 framework starts)
         echo -e "${DIM}Starting services...${NC}"
-        $COMPOSE up -d --no-build > /dev/null 2>&1
+        $COMPOSE up -d --no-build > /dev/null
 
         wait_for_server
 
@@ -441,7 +460,7 @@ case "${1:-}" in
 
         # 2. Remove Docker images
         echo -e "${DIM}Removing Docker images...${NC}"
-        docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "decepticon-(sandbox|langgraph|cli|web|c2-sliver)" | xargs -r docker rmi -f 2>/dev/null || true
+        docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "(ghcr\.io/purpleailab/)?decepticon-(sandbox|langgraph|cli|web|c2-sliver)" | xargs -r docker rmi -f 2>/dev/null || true
         echo -e "${GREEN}Images removed.${NC}"
 
         # 3. Remove install directory

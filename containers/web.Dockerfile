@@ -42,6 +42,9 @@ ENV NODE_ENV=production
 # OSS mode — same edition marker used at build time, propagated to runtime.
 ENV NEXT_PUBLIC_DECEPTICON_EDITION=oss
 
+# openssl required by Prisma migration engine
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
@@ -51,8 +54,21 @@ COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/standalone/clie
 COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/standalone/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/clients/web/.next/static ./.next/static
 
-# Startup entrypoint: start Next.js server
-# Migrations run in a separate web-migrate service (see docker-compose.yml)
+# Prisma CLI for migrations — fresh install brings the full transitive dep tree.
+# Cherry-picking individual packages breaks on deep deps (effect, @prisma/debug, etc.).
+# Pin to the exact version from deps stage to guarantee schema/engine compatibility.
+COPY --from=deps /app/node_modules/prisma/package.json /tmp/prisma-version.json
+COPY --from=deps /app/node_modules/dotenv/package.json /tmp/dotenv-version.json
+RUN PRISMA_VER=$(node -p "require('/tmp/prisma-version.json').version") && \
+    DOTENV_VER=$(node -p "require('/tmp/dotenv-version.json').version") && \
+    npm install --no-save --prefix /tmp/prisma-cli \
+        "prisma@${PRISMA_VER}" "dotenv@${DOTENV_VER}" && \
+    cp -rn /tmp/prisma-cli/node_modules/. ./node_modules/ && \
+    rm -rf /tmp/prisma-cli /tmp/prisma-version.json /tmp/dotenv-version.json
+COPY --from=deps --chown=nextjs:nodejs /app/clients/web/prisma ./prisma
+COPY --chown=nextjs:nodejs clients/web/prisma.config.ts ./prisma.config.ts
+
+# Startup entrypoint: run DB migrations then start Next.js server
 COPY containers/web-entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 

@@ -8,16 +8,13 @@ datasource db {
 }
 
 // ── Target types ─────────────────────────────────────────────────────
-// OSS: local_path, git_url, file_upload, web_url, ip_range
+// OSS: web_url, ip_range (network/web attack surface)
+// Future SAST product line will add: local_path, git_url, file_upload
 // EE adds: github_repo (requires OAuth — provided by @decepticon/ee)
 
 enum TargetType {
-  local_path
-  git_url
-  file_upload
   web_url
   ip_range
-  github_repo // EE only — hidden in OSS UI, but kept in schema for compatibility
 }
 
 enum EngagementStatus {

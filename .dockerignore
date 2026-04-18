@@ -18,8 +18,11 @@
 .DS_Store
 
 # ── Environment / secrets ────────────────────────────────────
+.env
 .env.local
 .env.*.local
+clients/web/.env
+clients/web/.env.*
 *.pem
 *.key
 
@@ -32,8 +35,8 @@
 **/.mypy_cache
 
 # ── Agent tooling state ─────────────────────────────────────
-.omc
-.claude
+**/.omc
+**/.claude
 .claude-flow
 
 # ── Logs ─────────────────────────────────────────────────────

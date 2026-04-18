@@ -82,6 +82,26 @@ jobs:
       - name: Run CLI tests
         run: cd clients/cli && npm test --if-present
 
+  web:
+    name: Web (lint + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Generate Prisma client
+        run: cd clients/web && npx prisma generate
+      - name: Lint
+        run: cd clients/web && npx eslint src/ --max-warnings 0
+      - name: Build
+        run: cd clients/web && npm run build
+        env:
+          NEXT_PUBLIC_DECEPTICON_EDITION: oss
+
   docker-build:
     name: Docker build (${{ matrix.image }})
     runs-on: ubuntu-latest
@@ -96,6 +116,8 @@ jobs:
             dockerfile: containers/cli.Dockerfile
           - image: web
             dockerfile: containers/web.Dockerfile
+          - image: c2-sliver
+            dockerfile: containers/c2-sliver.Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4

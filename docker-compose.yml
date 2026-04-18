@@ -13,7 +13,7 @@ services:
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-decepticon-master}
       - LITELLM_SALT_KEY=${LITELLM_SALT_KEY:-sk-decepticon-salt}
-      - DATABASE_URL=postgresql://decepticon:decepticon@postgres:5432/litellm
+      - DATABASE_URL=postgresql://decepticon:${POSTGRES_PASSWORD:-decepticon}@postgres:5432/litellm
     depends_on:
       postgres:
         condition: service_healthy
@@ -165,25 +165,7 @@ services:
           path: ./containers/langgraph.Dockerfile
 
   # Web Dashboard — Next.js UI
-  # One-off migration job — runs prisma migrate deploy then exits.
-  # Uses the deps stage (full node_modules) so all Prisma CLI dependencies are available.
-  web-migrate:
-    build:
-      context: .
-      dockerfile: containers/web.Dockerfile
-      target: deps
-    working_dir: /app/clients/web
-    command: npx prisma migrate deploy
-    environment:
-      - DATABASE_URL=postgresql://decepticon:decepticon@postgres:5432/decepticon_web
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - decepticon-net
-    restart: "no"
-
-  # Included in the default stack: docker compose up -d
+  # Migrations run automatically at startup via web-entrypoint.sh (prisma migrate deploy).
   web:
     image: ghcr.io/purpleailab/decepticon-web:${DECEPTICON_VERSION:-latest}
     build:
@@ -196,10 +178,8 @@ services:
     environment:
       - NEXT_PUBLIC_DECEPTICON_EDITION=oss
       - LANGGRAPH_API_URL=http://langgraph:2024
-      - DATABASE_URL=postgresql://decepticon:decepticon@postgres:5432/decepticon_web
+      - DATABASE_URL=postgresql://decepticon:${POSTGRES_PASSWORD:-decepticon}@postgres:5432/decepticon_web
     depends_on:
-      web-migrate:
-        condition: service_completed_successfully
       langgraph:
         condition: service_started
       postgres:

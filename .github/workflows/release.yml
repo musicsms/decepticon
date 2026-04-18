@@ -30,6 +30,9 @@ jobs:
           - image: decepticon-web
             dockerfile: containers/web.Dockerfile
             platforms: linux/amd64,linux/arm64
+          - image: decepticon-c2-sliver
+            dockerfile: containers/c2-sliver.Dockerfile
+            platforms: linux/amd64
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +59,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           platforms: ${{ matrix.platforms }}
           push: true
           provenance: mode=max
