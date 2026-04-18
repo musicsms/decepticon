@@ -214,6 +214,7 @@ services:
       - DECEPTICON_API_URL=http://langgraph:2024
       - TERM=xterm-256color
       - COLORTERM=truecolor
+      - DECEPTICON_VERSION=${DECEPTICON_VERSION:-}
     depends_on:
       langgraph:
         condition: service_started

@@ -10,6 +10,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 function readVersion(): string {
+  // Prefer the injected release tag (set by the launcher from ~/.decepticon/.version)
+  // so the status bar reflects the actual running deployment version, not the
+  // npm package version baked into the Docker image.
+  const envVersion = process.env.DECEPTICON_VERSION;
+  if (envVersion && envVersion !== "latest") return envVersion;
+
   try {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
