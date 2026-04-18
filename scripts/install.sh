@@ -184,25 +184,47 @@ check_for_update() {
     current=$(cat "$DECEPTICON_HOME/.version" 2>/dev/null || echo "")
     [[ -z "$current" ]] && return
 
-    # Background check — don't block startup
     local latest
-    latest=$(curl -sf --max-time 3 "https://api.github.com/repos/$REPO/releases/latest" \
+    latest=$(curl -sf --max-time 5 "https://api.github.com/repos/$REPO/releases/latest" \
         | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p') 2>/dev/null || true
 
-    # Only notify when latest is strictly NEWER than current.
-    # Simple string compare is wrong: "1.0.3" != "1.0.4" would fire even when
-    # the user is already on a newer pre-release or the GitHub release is a draft.
-    # sort -V (version sort) puts the higher version last; if latest comes after
-    # current it is genuinely newer.
-    if [[ -n "$latest" && "$latest" != "$current" ]]; then
-        local newer
-        newer=$(printf '%s\n%s' "$latest" "$current" | sort -V | tail -1)
-        if [[ "$newer" == "$latest" ]]; then
-            echo -e "${CYAN}Update available: ${BOLD}v${latest}${NC}${CYAN} (current: v${current})${NC}"
-            echo -e "${DIM}Run ${NC}${BOLD}decepticon update${NC}${DIM} to upgrade.${NC}"
-            echo ""
-        fi
+    [[ -z "$latest" ]] && return  # offline / API error -- skip silently
+
+    # sort -V puts the higher version last; skip if current is already >= latest
+    local newer
+    newer=$(printf '%s\n%s' "$latest" "$current" | sort -V | tail -1)
+    [[ "$newer" == "$current" ]] && return  # already up to date or ahead
+
+    echo -e "${CYAN}Auto-updating: ${BOLD}v${current}${NC}${CYAN} -> ${BOLD}v${latest}${NC}"
+
+    local tag_base="https://raw.githubusercontent.com/$REPO/v${latest}"
+
+    # Sync config files
+    if ! curl -fsSL "$tag_base/docker-compose.yml" \
+        -o "$DECEPTICON_HOME/docker-compose.yml" 2>/dev/null; then
+        echo -e "${YELLOW}Auto-update: failed to fetch docker-compose.yml -- skipping.${NC}"
+        return
     fi
+    mkdir -p "$DECEPTICON_HOME/config"
+    curl -fsSL "$tag_base/config/litellm.yaml" \
+        -o "$DECEPTICON_HOME/config/litellm.yaml" 2>/dev/null || true
+    echo "$latest" > "$DECEPTICON_HOME/.version"
+
+    # Pull updated images
+    echo -e "${DIM}Pulling images (v${latest})...${NC}"
+    if ! DECEPTICON_VERSION="$latest" $COMPOSE_PROFILES pull 2>/dev/null; then
+        echo -e "${YELLOW}Some images failed to pull -- cached versions will be used.${NC}"
+    fi
+
+    # Update launcher itself (safe: { } wrapper keeps this script in memory)
+    if curl -fsSL "$tag_base/scripts/install.sh" \
+        -o /tmp/decepticon-installer-$$.sh 2>/dev/null; then
+        bash /tmp/decepticon-installer-$$.sh --launcher-only 2>/dev/null || true
+        rm -f /tmp/decepticon-installer-$$.sh
+    fi
+
+    echo -e "${GREEN}Updated to v${latest}.${NC}"
+    echo ""
 }
 
 wait_for_web() {
@@ -225,36 +247,50 @@ wait_for_web() {
 
 wait_for_server() {
     local port="${LANGGRAPH_PORT:-2024}"
+    local litellm_port="${LITELLM_PORT:-4000}"
     local max_wait=90
-    local waited=0
-    echo -ne "${DIM}Waiting for LangGraph server"
-    # Phase 1: Wait for HTTP server to respond
-    while ! curl -sf "http://localhost:$port/ok" >/dev/null 2>&1; do
+    local litellm_max=60
+    local waited frame spin
+    local spinners='-\|/'
+
+    echo -e "${DIM}Waiting for services to be ready:${NC}"
+
+    # Phase 1+2: LangGraph HTTP up + agent graph loaded
+    waited=0; frame=0
+    while true; do
+        if curl -sf "http://localhost:$port/assistants/search" \
+            -H "Content-Type: application/json" -d '{"graph_id":"decepticon","limit":1}' \
+            2>/dev/null | grep -q "decepticon"; then
+            printf "\r  ${GREEN}[ok]${NC} ${DIM}LangGraph :${port} (%ss)${NC}          \n" "$waited"
+            break
+        fi
         if [[ $waited -ge $max_wait ]]; then
-            echo -e "${NC}"
-            echo -e "${RED}Server failed to start within ${max_wait}s.${NC}"
+            printf "\r  ${RED}[!!] LangGraph :${port} -- not ready after %ss${NC}          \n" "$max_wait"
             echo -e "${DIM}Check logs: ${NC}${BOLD}decepticon logs${NC}"
             exit 1
         fi
-        echo -n "."
-        sleep 2
-        waited=$((waited + 2))
+        spin="${spinners:$((frame % 4)):1}"
+        printf "\r  ${DIM}%s LangGraph :${port} (%ss)...${NC}" "$spin" "$waited"
+        frame=$((frame + 1)); sleep 2; waited=$((waited + 2))
     done
-    # Phase 2: Wait for agent graph to be loaded and ready
-    while ! curl -sf "http://localhost:$port/assistants/search" \
-        -H "Content-Type: application/json" -d '{"graph_id":"decepticon","limit":1}' \
-        | grep -q "decepticon" 2>/dev/null; do
-        if [[ $waited -ge $max_wait ]]; then
-            echo -e "${NC}"
-            echo -e "${RED}Agent graph failed to load within ${max_wait}s.${NC}"
-            echo -e "${DIM}Check logs: ${NC}${BOLD}decepticon logs${NC}"
-            exit 1
+
+    # Phase 3: LiteLLM readiness -- prevents APIConnectionError window where
+    # LangGraph is up but LiteLLM is still initializing (service_started, not service_healthy)
+    waited=0; frame=0
+    while true; do
+        if curl -sf "http://localhost:${litellm_port}/health/readiness" >/dev/null 2>&1; then
+            printf "\r  ${GREEN}[ok]${NC} ${DIM}LiteLLM :${litellm_port} (%ss)${NC}          \n" "$waited"
+            break
         fi
-        echo -n "."
-        sleep 2
-        waited=$((waited + 2))
+        if [[ $waited -ge $litellm_max ]]; then
+            printf "\r  ${YELLOW}[!]${NC} ${DIM}LiteLLM :${litellm_port} -- not ready after %ss${NC}          \n" "$litellm_max"
+            echo -e "${DIM}First LLM call may fail. Check: ${NC}${BOLD}decepticon logs litellm${NC}"
+            break
+        fi
+        spin="${spinners:$((frame % 4)):1}"
+        printf "\r  ${DIM}%s LiteLLM :${litellm_port} (%ss)...${NC}" "$spin" "$waited"
+        frame=$((frame + 1)); sleep 2; waited=$((waited + 2))
     done
-    echo -e " ${GREEN}ready${NC}"
 }
 
 case "${1:-}" in
@@ -270,8 +306,12 @@ case "${1:-}" in
         wait_for_web
 
         # Print web dashboard URL (reads WEB_PORT from .env, defaults to 3000)
-        _web_port=$(grep -m1 '^WEB_PORT=' "$DECEPTICON_HOME/.env" 2>/dev/null | cut -d= -f2 | tr -d '"'"'"')
+        _web_port=$(grep -m1 '^WEB_PORT=' "$DECEPTICON_HOME/.env" 2>/dev/null | cut -d= -f2 | tr -d "'\"")
         echo -e "${DIM}Web dashboard:${NC} ${BOLD}http://localhost:${_web_port:-3000}${NC}"
+
+        # Export installed version so the CLI container can display it
+        _ver=$(cat "$DECEPTICON_HOME/.version" 2>/dev/null || echo "")
+        [[ -n "$_ver" ]] && export DECEPTICON_VERSION="$_ver"
 
         # Run CLI in foreground (interactive)
         $COMPOSE_PROFILES run --rm cli
