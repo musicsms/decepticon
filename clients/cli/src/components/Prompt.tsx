@@ -98,9 +98,7 @@ export const Prompt = React.memo(function Prompt({
     for (const c of cmds) {
       if (c.isHidden) continue;
       entries.push({ cmd: `/${c.name}`, desc: c.description });
-      for (const alias of c.aliases ?? []) {
-        entries.push({ cmd: `/${alias}`, desc: c.description });
-      }
+      // Aliases work for execution but are hidden from autocomplete
     }
     return entries;
   }, []);
@@ -204,6 +202,9 @@ export const Prompt = React.memo(function Prompt({
         />
       </Box>
 
+      <Text dimColor>{"─".repeat(columns)}</Text>
+
+      {/* Autocomplete menu — below the input divider, Claude Code style */}
       {showMenu && (
         <Box flexDirection="column" marginLeft={2}>
           {filteredCommands.map((cmd, i) => (
@@ -219,8 +220,6 @@ export const Prompt = React.memo(function Prompt({
           ))}
         </Box>
       )}
-
-      <Text dimColor>{"─".repeat(columns)}</Text>
 
       {/* Compact status line — always visible */}
       <StatusLine activeAgent={activeAgent} />

@@ -4,12 +4,13 @@ import { REPL } from "./screens/REPL.js";
 
 interface AppProps {
   initialMessage?: string;
+  resumeThread?: boolean;
 }
 
-export function App({ initialMessage }: AppProps) {
+export function App({ initialMessage, resumeThread }: AppProps) {
   return (
     <AppStateProvider>
-      <REPL initialMessage={initialMessage} />
+      <REPL initialMessage={initialMessage} resumeThread={resumeThread} />
     </AppStateProvider>
   );
 }
