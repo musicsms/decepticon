@@ -15,7 +15,7 @@ COMPOSE_CLI := $(COMPOSE) --profile cli
 # expand it here via Make's $(HOME) before passing it to the compose process.
 export DECEPTICON_HOME ?= $(HOME)/.decepticon
 
-.PHONY: dev start cli cli-dev web web-dev web-db-ensure web-build web-lint web-migrate web-ee web-oss \
+.PHONY: dev start cli cli-dev web web-dev infra web-db-ensure web-build web-lint web-migrate web-ee web-oss \
         stop status logs health smoke build \
         test test-local lint lint-fix quality-cli quality \
         clean demo victims help
@@ -30,9 +30,10 @@ dev:
 cli:
 	$(COMPOSE_CLI) run --rm cli
 
-## Run interactive CLI locally (dev mode with hot-reload, reflects source changes instantly)
-cli-dev:
-	DECEPTICON_API_URL=$${DECEPTICON_API_URL:-http://localhost:2024} npm run cli:dev
+## Run interactive CLI locally (dev mode — starts backend with hot-reload, then local CLI)
+cli-dev: infra
+	@$(COMPOSE) watch --no-up --quiet langgraph &
+	cd clients/cli && DECEPTICON_API_URL=$${DECEPTICON_API_URL:-http://localhost:2024} npm run dev
 
 # ── Production-like ──────────────────────────────────────────────
 
@@ -111,17 +112,18 @@ web:
 	$(COMPOSE) up -d --build web
 
 ## Start web dashboard in dev mode (Next.js + terminal WebSocket server)
-## Automatically starts infra services (postgres, neo4j, etc.) if not running.
-web-dev: web-infra web-db-ensure
+## Automatically starts infra services with hot-reload, then local web.
+web-dev: infra web-db-ensure
+	@$(COMPOSE) watch --no-up --quiet langgraph &
 	@echo "[web-dev] Starting terminal server (ws://localhost:3003)..."
 	@cd clients/web && npx tsx server/terminal-server.ts &
 	@echo "[web-dev] Starting Next.js dev server (http://localhost:3000)..."
 	cd clients/web && npm run dev
 
-# Internal: start infra services needed by web (skip web container itself)
-web-infra:
-	@echo "[web-infra] Ensuring backend services are running..."
-	@$(COMPOSE) up -d postgres neo4j litellm langgraph sandbox
+# Internal: start infra services (postgres, neo4j, litellm, langgraph, sandbox)
+infra:
+	@echo "[infra] Ensuring backend services are running..."
+	@$(COMPOSE) up -d --build postgres neo4j litellm langgraph sandbox
 
 # Internal: ensure decepticon_web DB exists and migrations are applied
 web-db-ensure:

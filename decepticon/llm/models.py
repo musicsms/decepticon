@@ -45,6 +45,7 @@ class ModelProfile(StrEnum):
     ECO = "eco"
     MAX = "max"
     TEST = "test"
+    AUTH = "auth"
 
 
 # ── Model constants ──────────────────────────────────────────────────────
@@ -54,6 +55,14 @@ HAIKU = "anthropic/claude-haiku-4-5"
 GPT_5 = "openai/gpt-5.4"
 GPT_4 = "openai/gpt-4.1"
 GEMINI_FLASH = "gemini/gemini-2.5-flash"
+MINIMAX = "minimax/MiniMax-M2.7"
+MINIMAX_HIGHSPEED = "minimax/MiniMax-M2.7-highspeed"
+OLLAMA_LOCAL = "ollama/llama3.2"
+CLAUDE_CODE_AUTH_OPUS = "claude-code-auth/claude-opus-4-6"
+CLAUDE_CODE_AUTH_SONNET = "claude-code-auth/claude-sonnet-4-6"
+CLAUDE_CODE_AUTH_HAIKU = "claude-code-auth/claude-haiku-4-5"
+CODEX_AUTH_GPT5 = "codex-auth/gpt-5.4"
+CODEX_AUTH_GPT4 = "codex-auth/gpt-4.1"
 
 
 class ProxyConfig(BaseModel):
@@ -323,6 +332,96 @@ class LLMModelMapping(BaseModel):
                 verifier=ModelAssignment(primary=HAIKU, temperature=0.2),
                 patcher=ModelAssignment(primary=HAIKU, temperature=0.2),
                 exploiter=ModelAssignment(primary=HAIKU, temperature=0.2),
+            )
+
+        if profile == ModelProfile.AUTH:
+            # Auth profile: subscription-based primary (free) → API-key fallback (paid)
+            return cls(
+                decepticon=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_OPUS,
+                    fallback=OPUS,
+                    temperature=0.4,
+                ),
+                soundwave=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.4,
+                ),
+                exploit=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.3,
+                ),
+                analyst=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                reverser=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                contract_auditor=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                cloud_hunter=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                ad_operator=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                recon=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.3,
+                ),
+                postexploit=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.3,
+                ),
+                defender=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                vulnresearch=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.4,
+                ),
+                scanner=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                detector=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                verifier=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                patcher=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
+                exploiter=ModelAssignment(
+                    primary=CLAUDE_CODE_AUTH_HAIKU,
+                    fallback=HAIKU,
+                    temperature=0.2,
+                ),
             )
 
         raise ValueError(f"Unknown profile: {profile}")

@@ -44,6 +44,9 @@ dependencies = [
     # HTTP
     "httpx>=0.27.0",
     "deepagents>=0.4.4",
+    # CLI
+    "typer[all]>=0.9.0",
+    "xxhash>=3.0.0",
     # Security
     "defusedxml>=0.7.0",
     # Graph memory (Neo4j attack-chain graph)

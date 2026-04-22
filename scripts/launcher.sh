@@ -291,7 +291,12 @@ case "${1:-}" in
         ;;
 
     config)
-        ${EDITOR:-${VISUAL:-nano}} "$DECEPTICON_HOME/.env"
+        echo -e "${YELLOW}Note: 'decepticon config' is deprecated. Use 'decepticon onboard' instead.${NC}"
+        echo ""
+        ;&
+
+    onboard)
+        $COMPOSE_PROFILES run --rm cli python -m decepticon.cli.app onboard
         ;;
 
     demo)

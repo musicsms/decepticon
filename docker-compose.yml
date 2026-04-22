@@ -2,10 +2,15 @@ services:
   # LiteLLM Proxy — LLM API Gateway
   # Handles model routing, authentication, usage tracking, billing
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.82.3-stable.patch.2
+    image: ghcr.io/purpleailab/decepticon-litellm:${DECEPTICON_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: containers/litellm.Dockerfile
     container_name: decepticon-litellm
     volumes:
       - ./config/litellm.yaml:/app/config.yaml:ro
+      - ${HOME}/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+    entrypoint: ["python", "/app/litellm_startup.py"]
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:
       - "127.0.0.1:${LITELLM_PORT:-4000}:4000"
@@ -23,6 +28,8 @@ services:
       timeout: 3s
       retries: 20
       start_period: 10s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - decepticon-net
     restart: unless-stopped

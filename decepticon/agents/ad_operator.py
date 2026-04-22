@@ -16,7 +16,6 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
-from decepticon.middleware import SafeCommandMiddleware
 from decepticon.middleware.skills import DecepticonSkillsMiddleware
 from decepticon.tools.ad.tools import AD_TOOLS
 from decepticon.tools.bash import bash
@@ -51,7 +50,6 @@ def create_ad_operator_agent():
     )
 
     middleware = [
-        SafeCommandMiddleware(),
         DecepticonSkillsMiddleware(backend=backend, sources=["/skills/ad/", "/skills/shared/"]),
         FilesystemMiddleware(backend=backend),
     ]

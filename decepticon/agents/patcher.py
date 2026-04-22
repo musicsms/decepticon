@@ -29,7 +29,6 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
-from decepticon.middleware import SafeCommandMiddleware
 from decepticon.middleware.skills import DecepticonSkillsMiddleware
 from decepticon.tools.bash import bash
 from decepticon.tools.bash.bash import set_sandbox
@@ -64,7 +63,6 @@ def create_patcher_agent():
     )
 
     middleware = [
-        SafeCommandMiddleware(),
         DecepticonSkillsMiddleware(
             backend=backend,
             sources=["/skills/patcher/", "/skills/shared/"],
