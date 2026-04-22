@@ -49,9 +49,10 @@
 
 ```bash
 curl -fsSL https://decepticon.red/install | bash
-decepticon config    # API 키 설정 (Anthropic, OpenAI, 또는 Google)
+decepticon onboard   # 대화형 설정 위자드 (프로바이더, API 키, 모델 프로필)
 decepticon           # 터미널 CLI 실행
 ```
+
 
 또는 웹 대시보드로 실행:
 

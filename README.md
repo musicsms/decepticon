@@ -49,7 +49,7 @@
 
 ```bash
 curl -fsSL https://decepticon.red/install | bash
-decepticon config    # Set your API key (Anthropic, OpenAI, or Google)
+decepticon onboard   # Interactive setup wizard (provider, API key, model profile)
 decepticon           # Start everything: terminal CLI + web dashboard at http://localhost:3000
 ```
 
