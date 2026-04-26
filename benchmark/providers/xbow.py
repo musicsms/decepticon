@@ -94,7 +94,9 @@ class XBOWProvider(BaseBenchmarkProvider):
                     text=True,
                 )
                 if retry.returncode != 0:
-                    failures[challenge.id] = retry.stderr[-500:] if retry.stderr else "Unknown build error"
+                    failures[challenge.id] = (
+                        retry.stderr[-500:] if retry.stderr else "Unknown build error"
+                    )
         return failures
 
     def setup(self, challenge: Challenge) -> SetupResult:
@@ -163,12 +165,20 @@ class XBOWProvider(BaseBenchmarkProvider):
                         timeout=3,
                         follow_redirects=True,
                     )
-                    log.info("Challenge %s ready (HTTP %d) after %ds", challenge.id, r.status_code, attempt * 2)
+                    log.info(
+                        "Challenge %s ready (HTTP %d) after %ds",
+                        challenge.id,
+                        r.status_code,
+                        attempt * 2,
+                    )
                     break
                 except Exception:
                     time.sleep(2)
             else:
-                log.warning("Challenge %s: health check timed out after 30s, proceeding anyway", challenge.id)
+                log.warning(
+                    "Challenge %s: health check timed out after 30s, proceeding anyway",
+                    challenge.id,
+                )
 
             return SetupResult(
                 target_url=target_url,

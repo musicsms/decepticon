@@ -110,14 +110,10 @@ class Reporter:
             ],
         }
         index_path = run_dir / "index.json"
-        index_path.write_text(
-            json.dumps(index, indent=2, default=str), encoding="utf-8"
-        )
+        index_path.write_text(json.dumps(index, indent=2, default=str), encoding="utf-8")
         return run_dir
 
-    def _write_challenge_evidence(
-        self, run_dir: Path, result: ChallengeResult
-    ) -> None:
+    def _write_challenge_evidence(self, run_dir: Path, result: ChallengeResult) -> None:
         """Write JSON and Markdown evidence for a single challenge."""
         evidence = {
             "challenge_id": result.challenge_id,
@@ -132,9 +128,7 @@ class Reporter:
             "error": result.error,
         }
         json_path = run_dir / f"{result.challenge_id}.json"
-        json_path.write_text(
-            json.dumps(evidence, indent=2, default=str), encoding="utf-8"
-        )
+        json_path.write_text(json.dumps(evidence, indent=2, default=str), encoding="utf-8")
 
         lines = [
             f"# {result.challenge_id}: {result.challenge_name}",

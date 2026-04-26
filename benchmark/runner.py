@@ -25,7 +25,9 @@ def run(
     range_end: int | None = typer.Option(None, "--range-end", help="End index (1-based)"),
     batch_size: int = typer.Option(10, "--batch-size", "-b", help="Challenges per batch"),
     timeout: int = typer.Option(1800, "--timeout", help="Per-challenge timeout in seconds"),
-    parallel: int = typer.Option(1, "--parallel", "-p", help="Max concurrent challenges (1=sequential)"),
+    parallel: int = typer.Option(
+        1, "--parallel", "-p", help="Max concurrent challenges (1=sequential)"
+    ),
 ) -> None:
     """Run the benchmark suite against loaded challenges."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -138,10 +140,7 @@ async def _run_parallel(
                 )
             return result
 
-    tasks = [
-        run_one(i, challenge)
-        for i, challenge in enumerate(challenges, start=1)
-    ]
+    tasks = [run_one(i, challenge) for i, challenge in enumerate(challenges, start=1)]
     results = await asyncio.gather(*tasks)
     passed = sum(1 for r in results if r.passed)
     pct = (passed / total * 100) if total > 0 else 0.0

@@ -290,7 +290,11 @@ class Harness:
             log.info(
                 "Agent response type=%s keys=%s",
                 type(data).__name__,
-                list(data.keys()) if isinstance(data, dict) else f"len={len(data)}" if isinstance(data, list) else "N/A",
+                list(data.keys())
+                if isinstance(data, dict)
+                else f"len={len(data)}"
+                if isinstance(data, list)
+                else "N/A",
             )
             text = self._extract_message(data)
             return AgentResponse(text=text, thread_id=thread_id)
