@@ -17,7 +17,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Client } from "@langchain/langgraph-sdk";
 import { saveThread, touchThread, loadThreadByIndex } from "../utils/threadStore.js";
-import type { AgentEvent } from "../types.js";
+import type { ActiveQuestion, AgentEvent, AskUserOption } from "../types.js";
 import {
   type SubagentCustomEvent,
   STREAM_OPTIONS,
@@ -87,14 +87,30 @@ interface UseAgentReturn {
   streamStats: StreamStats | null;
   /** Currently active agent name (e.g. "decepticon", "recon"). */
   activeAgent: string | null;
+  /** Persistent assistant id ("soundwave" | "decepticon") — shown when no subagent is streaming. */
+  assistantId: string;
   /** Queued message to auto-submit on completion. */
   queuedMessage: string | null;
+  /** Pending operator question while a picker is awaiting an answer. */
+  activeQuestion: ActiveQuestion | null;
+  /** Submit a structured answer to the current ask_user_question prompt. */
+  answerQuestion: (value: string | string[]) => void;
   error: string | null;
   clearEvents: () => void;
   addSystemEvent: (content: string) => void;
 }
 
-const ASSISTANT_ID = "decepticon";
+// Initial assistant_id from the launcher's engagement picker:
+// - "soundwave" for new engagements (interview lane)
+// - "decepticon" for resuming an existing engagement
+// Defaults to "decepticon" when launched directly (legacy / dev workflows).
+//
+// When soundwave finishes its interview and emits the `engagement_ready`
+// custom event, the active assistant is flipped in-flight to "decepticon"
+// and the next operator message starts a fresh thread on that assistant —
+// no CLI restart needed.
+const INITIAL_ASSISTANT_ID =
+  process.env.DECEPTICON_ASSISTANT_ID || "decepticon";
 
 export function useAgent({
   apiUrl = process.env.DECEPTICON_API_URL || "http://localhost:2024",
@@ -116,12 +132,28 @@ export function useAgent({
   const [pendingTool, setPendingTool] = useState<PendingTool | null>(null);
   const [streamStats, setStreamStats] = useState<StreamStats | null>(null);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [assistantId, setAssistantId] = useState<string>(INITIAL_ASSISTANT_ID);
   const [error, setError] = useState<string | null>(null);
   const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
+  const [activeQuestion, setActiveQuestion] = useState<ActiveQuestion | null>(null);
 
   // Ref for runState to avoid stale closures in async callbacks
   const runStateRef = useRef<RunState>(runState);
   runStateRef.current = runState;
+  // Mirror activeQuestion so handleStreamComplete can check it without stale state.
+  const activeQuestionRef = useRef<ActiveQuestion | null>(activeQuestion);
+  activeQuestionRef.current = activeQuestion;
+  // tool_call_ids the CLI has already shown a picker for. Dedupes the second
+  // emission LangGraph fires when the ToolNode re-executes the tool body
+  // after Command(resume=...).
+  const askedQuestionIds = useRef<Set<string>>(new Set());
+  // Active LangGraph assistant. Soundwave's complete_engagement_planning
+  // tool flips this to "decepticon" mid-flight; the next submit() then opens
+  // a fresh thread on the new assistant.
+  const assistantIdRef = useRef<string>(INITIAL_ASSISTANT_ID);
+  // Slug captured from the engagement_ready event — kept for system-level
+  // logging when the handoff fires.
+  const pendingHandoffRef = useRef<string | null>(null);
 
   // Derived for backward compatibility
   const isStreaming = runState === "streaming" || runState === "connecting";
@@ -260,6 +292,66 @@ export function useAgent({
             setActiveAgent("decepticon");
             setPendingTool(null);
             break;
+
+          case "engagement_ready": {
+            // Soundwave finished writing the planning bundle. Flip the
+            // active assistant so the next submit() lands on decepticon.
+            // The current run continues to completion (soundwave's closing
+            // message); thread handoff fires from handleStreamComplete.
+            const slug = data.engagement ?? "";
+            pendingHandoffRef.current = slug || "(unnamed)";
+            assistantIdRef.current = "decepticon";
+            setAssistantId("decepticon");
+            addEvent({
+              type: "system",
+              content: slug
+                ? `Engagement '${slug}' planning complete — Decepticon will pick up your next message.`
+                : "Engagement planning complete — Decepticon will pick up your next message.",
+            });
+            break;
+          }
+
+          case "ask_user_question": {
+            // The backend tool body re-runs once on Command(resume=...) so the
+            // same custom event arrives twice. Dedupe by tool_call_id.
+            const sourceId = data.id ?? "";
+            if (sourceId && askedQuestionIds.current.has(sourceId)) {
+              break;
+            }
+            if (sourceId) askedQuestionIds.current.add(sourceId);
+
+            const question = data.question ?? "";
+            const header = data.header ?? "";
+            const options = (data.options ?? []) as AskUserOption[];
+            const multiSelect = !!data.multi_select;
+            const allowOther = !!data.allow_other;
+
+            addEvent({
+              type: "ask_user_question",
+              content: question,
+              subagent: data.agent,
+              sourceId,
+              question,
+              header,
+              options,
+              multiSelect,
+              allowOther,
+            });
+            setPendingTool(null);
+            setActiveQuestion({
+              sourceId,
+              question,
+              header,
+              options,
+              multiSelect,
+              allowOther,
+            });
+            // The backend interrupt() will pause the stream; flag the run as
+            // paused immediately so the REPL hides the normal prompt and
+            // shows the picker.
+            setRunState("paused");
+            break;
+          }
         }
       };
 
@@ -293,6 +385,31 @@ export function useAgent({
           const data = event.data as SubagentCustomEvent;
           if (data && typeof data === "object" && "type" in data) {
             handleCustomEvent(data);
+          }
+          continue;
+        }
+
+        // Belt-and-braces: a LangGraph interrupt() bubbles up as an
+        // `updates` chunk with `__interrupt__` even if the preceding custom
+        // event was lost. Surface the picker from the interrupt payload so
+        // the run never silently ends with the operator stranded.
+        if (event.event === "updates") {
+          const updates = event.data as
+            | { __interrupt__?: Array<{ value?: unknown }> }
+            | undefined;
+          const interrupts = updates?.__interrupt__;
+          if (Array.isArray(interrupts)) {
+            for (const it of interrupts) {
+              const v = it?.value;
+              if (
+                v &&
+                typeof v === "object" &&
+                "type" in v &&
+                (v as { type: unknown }).type === "ask_user_question"
+              ) {
+                handleCustomEvent(v as SubagentCustomEvent);
+              }
+            }
           }
           continue;
         }
@@ -391,19 +508,38 @@ export function useAgent({
 
   const handleStreamComplete = useCallback(
     (abortController: AbortController) => {
-      if (!abortController.signal.aborted) {
-        abortRef.current = null;
-        runIdRef.current = null;
-        resetStreamState();
+      if (abortController.signal.aborted) return;
 
-        // Auto-submit queued message
-        const pending = queuedMessageRef.current;
-        if (pending) {
-          queuedMessageRef.current = null;
-          setQueuedMessage(null);
-          // Defer to next tick so React state settles
-          setTimeout(() => submitRef.current(pending), 0);
-        }
+      // The stream ended because the backend tool called langgraph.interrupt
+      // and is waiting for the operator's pick. Keep runState=paused so the
+      // REPL renders the picker, but null abortRef so a follow-up submit/
+      // cancel is not silently blocked by a completed AbortController.
+      if (activeQuestionRef.current) {
+        abortRef.current = null;
+        return;
+      }
+
+      abortRef.current = null;
+      runIdRef.current = null;
+      resetStreamState();
+
+      // Engagement handoff: soundwave's complete_engagement_planning tool
+      // flipped assistantIdRef to "decepticon" during this run. Drop the
+      // soundwave thread so the next submit opens a fresh decepticon
+      // thread. Reset askedQuestionIds since they were per-thread.
+      if (pendingHandoffRef.current) {
+        threadIdRef.current = null;
+        lastCountRef.current = 0;
+        askedQuestionIds.current.clear();
+        pendingHandoffRef.current = null;
+      }
+
+      // Auto-submit queued message
+      const pending = queuedMessageRef.current;
+      if (pending) {
+        queuedMessageRef.current = null;
+        setQueuedMessage(null);
+        setTimeout(() => submitRef.current(pending), 0);
       }
     },
     [resetStreamState],
@@ -454,9 +590,10 @@ export function useAgent({
     }
 
     runIdRef.current = null;
-    // Clear queued message on hard cancel
+    // Clear queued message and any pending picker on hard cancel
     queuedMessageRef.current = null;
     setQueuedMessage(null);
+    setActiveQuestion(null);
     resetStreamState();
     addEvent({ type: "system", content: "Cancelled." });
   }, [addEvent, resetStreamState]);
@@ -471,6 +608,8 @@ export function useAgent({
     runIdRef.current = null;
     queuedMessageRef.current = null;
     setQueuedMessage(null);
+    setActiveQuestion(null);
+    askedQuestionIds.current.clear();
     setRunState("idle");
   }, []);
 
@@ -491,6 +630,9 @@ export function useAgent({
             .catch(() => {});
         }
         runIdRef.current = null;
+        // Clear any leftover picker so a fresh submit does not render on top
+        // of a stale ask_user_question.
+        setActiveQuestion(null);
       }
 
       setRunState("connecting");
@@ -511,7 +653,7 @@ export function useAgent({
             try {
               const thread = await client.threads.create();
               threadIdRef.current = thread.thread_id;
-              await saveThread(thread.thread_id, ASSISTANT_ID, message);
+              await saveThread(thread.thread_id, assistantIdRef.current, message);
               break;
             } catch (err) {
               if (attempt === maxRetries) {
@@ -536,14 +678,28 @@ export function useAgent({
         setActiveAgent("decepticon");
         setStreamStats({ startTime: Date.now(), totalTokens: 0, promptTokens: 0, completionTokens: 0 });
 
+        // Engagement context flows in as regular state fields. A small
+        // middleware on the agent side picks engagement_name + workspace_path
+        // out of state and injects them into the model's system prompt —
+        // the LangGraph-idiomatic way to surface launcher-set context to the
+        // LLM without polluting user messages.
+        const slug = process.env.DECEPTICON_ENGAGEMENT;
+        const input: Record<string, unknown> = {
+          messages: [{ role: "user", content: message }],
+        };
+        if (slug) {
+          input.engagement_name = slug;
+          // Sandbox /workspace is bound to this engagement directory, so the
+          // agent always sees its workspace at /workspace regardless of slug.
+          input.workspace_path = "/workspace";
+        }
+
         try {
           const stream = client.runs.stream(
             threadIdRef.current!,
-            ASSISTANT_ID,
+            assistantIdRef.current,
             {
-              input: {
-                messages: [{ role: "user", content: message }],
-              },
+              input,
               ...STREAM_OPTIONS,
               onDisconnect: "continue",
               signal: abortController.signal,
@@ -576,6 +732,82 @@ export function useAgent({
   // Ref to submit for use in deferred auto-submit (avoids stale closure)
   const submitRef = useRef(submit);
   submitRef.current = submit;
+
+  // ── Answer a structured ask_user_question prompt ───────────────
+
+  const answerQuestion = useCallback(
+    (value: string | string[]): void => {
+      const current = activeQuestionRef.current;
+      if (!current) return;
+
+      const display = Array.isArray(value) ? value.join(", ") : value;
+      addEvent({
+        type: "ask_user_answer",
+        content: display,
+        subagent: "soundwave",
+        sourceId: current.sourceId,
+      });
+      setActiveQuestion(null);
+
+      if (!threadIdRef.current) {
+        addEvent({ type: "system", content: "No active thread — cannot resume." });
+        setRunState("idle");
+        return;
+      }
+
+      const abortController = new AbortController();
+      abortRef.current = abortController;
+
+      const runResume = async () => {
+        const client = clientRef.current;
+        setError(null);
+
+        try {
+          const state = await client.threads.getState(threadIdRef.current!);
+          const msgs = (state.values as { messages?: unknown[] })?.messages;
+          if (msgs) lastCountRef.current = msgs.length;
+        } catch { /* proceed with current count */ }
+
+        if (abortController.signal.aborted) return;
+
+        setRunState("streaming");
+        setPendingTool(null);
+        setStreamStats({
+          startTime: Date.now(),
+          totalTokens: 0,
+          promptTokens: 0,
+          completionTokens: 0,
+        });
+
+        try {
+          const stream = client.runs.stream(
+            threadIdRef.current!,
+            assistantIdRef.current,
+            {
+              command: { resume: value },
+              ...STREAM_OPTIONS,
+              onDisconnect: "continue",
+              signal: abortController.signal,
+            },
+          );
+          await processStream(stream, abortController);
+        } catch (err) {
+          if (abortController.signal.aborted) return;
+          setError(err instanceof Error ? err.message : "Answer submit failed");
+        }
+        handleStreamComplete(abortController);
+      };
+
+      runResume().catch((err) => {
+        if (abortController.signal.aborted) return;
+        setError(err instanceof Error ? err.message : "Answer submit error");
+        abortRef.current = null;
+        runIdRef.current = null;
+        resetStreamState();
+      });
+    },
+    [addEvent, processStream, handleStreamComplete, resetStreamState],
+  );
 
   // ── Resume (pause point OR previous session) ───────────────────
 
@@ -612,7 +844,7 @@ export function useAgent({
           try {
             const stream = client.runs.stream(
               threadIdRef.current!,
-              ASSISTANT_ID,
+              assistantIdRef.current,
               {
                 command: { resume: value ?? true },
                 ...STREAM_OPTIONS,
@@ -691,7 +923,10 @@ export function useAgent({
     pendingTool,
     streamStats,
     activeAgent,
+    assistantId,
     queuedMessage,
+    activeQuestion,
+    answerQuestion,
     error,
     clearEvents,
     addSystemEvent,

@@ -1,13 +1,13 @@
-"""Decepticon Orchestrator — autonomous red team coordinator with engagement flow routing.
+"""Decepticon — autonomous red team coordinator agent.
 
-Wraps the Decepticon and Soundwave agents in a StateGraph router that checks
-for engagement documents (roe.json, conops.json, deconfliction.json) on every
-turn. No docs → Soundwave interviews the user. Docs exist → Decepticon takes
-over for OPPLAN creation and kill chain execution.
+Engagement-ready agent that builds the OPPLAN from existing RoE/CONOPS
+documents and executes the kill chain by delegating to specialist sub-agents.
+The launcher selects this assistant when the operator picks an existing
+engagement; for fresh engagements it picks the standalone soundwave assistant
+instead, which writes the planning documents this agent then consumes.
 
 Uses create_agent() directly (not create_deep_agent()) to control the
-middleware stack precisely. The orchestrator coordinates the full kill chain
-by delegating to specialist sub-agents (soundwave, recon, exploit, postexploit).
+middleware stack precisely.
 
 Middleware stack (selected for orchestration):
   1. SafeCommandMiddleware — block session-destroying bash commands
@@ -26,99 +26,36 @@ OPPLAN replaces TodoListMiddleware with domain-specific objective tracking:
   - State transition validation with dependency checking
 
 Sub-agents are passed as CompiledSubAgent, wrapping existing agent factories
-(create_soundwave_agent, create_recon_agent, create_exploit_agent,
-create_postexploit_agent) so they run with their full middleware stack and
-skill sets intact.
+(create_recon_agent, create_exploit_agent, create_postexploit_agent, and the
+specialist analyst/reverser/contract_auditor/cloud_hunter/ad_operator agents)
+so they run with their full middleware stack and skill sets intact. Soundwave
+is intentionally NOT a sub-agent here: the launcher routes to its standalone
+assistant when document generation is needed.
 """
 
-import os
-import subprocess
 from pathlib import Path
-from typing import Annotated, Literal, NotRequired
 
 from deepagents.backends import CompositeBackend, FilesystemBackend
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import CompiledSubAgent, SubAgentMiddleware
 from deepagents.middleware.summarization import create_summarization_middleware
-from langchain.agents import AgentState, create_agent
+from langchain.agents import create_agent
 from langchain.agents.middleware import ModelFallbackMiddleware
-from langchain.agents.middleware.types import OmitFromInput
 from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
-from langgraph.graph import END, START, StateGraph
 
 from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
-from decepticon.middleware import OPPLANMiddleware
+from decepticon.middleware import EngagementContextMiddleware, OPPLANMiddleware
 from decepticon.middleware.skills import DecepticonSkillsMiddleware
 from decepticon.tools.bash import bash
 from decepticon.tools.bash.bash import set_sandbox
 
 # Resolve paths relative to repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-# ---------------------------------------------------------------------------
-# Orchestrator state & routing
-# ---------------------------------------------------------------------------
-
-
-class OrchestratorState(AgentState):
-    """Router state for engagement flow orchestration.
-
-    Checks for engagement docs and routes to the appropriate agent:
-    - No docs → Soundwave (interview + document generation)
-    - Docs exist → Decepticon (OPPLAN + kill chain execution)
-    """
-
-    has_engagement_docs: Annotated[NotRequired[bool], OmitFromInput]
-    # OPPLAN fields — pass through to Decepticon subgraph
-    objectives: Annotated[NotRequired[list[dict]], OmitFromInput]
-    engagement_name: Annotated[NotRequired[str], OmitFromInput]
-    threat_profile: Annotated[NotRequired[str], OmitFromInput]
-    objective_counter: Annotated[NotRequired[int], OmitFromInput]
-    workspace_path: Annotated[NotRequired[str], OmitFromInput]
-
-
-def _check_engagement_docs(state: dict) -> dict:
-    """Check Docker sandbox for existing engagement documents (roe + conops + deconfliction).
-
-    When BENCHMARK_MODE env var is set (via .env → docker-compose), skip the
-    doc check entirely and route straight to the decepticon agent.
-    """
-    if os.getenv("BENCHMARK_MODE"):
-        return {"has_engagement_docs": True}
-
-    app_config = load_config()
-    container = app_config.docker.sandbox_container_name
-    try:
-        result = subprocess.run(
-            [
-                "docker",
-                "exec",
-                container,
-                "sh",
-                "-c",
-                "ls /workspace/*/plan/roe.json /workspace/*/plan/conops.json"
-                " /workspace/*/plan/deconfliction.json 2>/dev/null | wc -l",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        count = int(result.stdout.strip() or "0")
-        has_docs = count >= 3
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError, ValueError):
-        has_docs = False
-    return {"has_engagement_docs": has_docs}
-
-
-def _route_agent(state: dict) -> Literal["soundwave", "decepticon"]:
-    """Route to Soundwave (no docs) or Decepticon (docs exist)."""
-    return "decepticon" if state.get("has_engagement_docs") else "soundwave"
 
 
 def create_decepticon_agent():
@@ -162,23 +99,19 @@ def create_decepticon_agent():
     from decepticon.agents.postexploit import create_postexploit_agent
     from decepticon.agents.recon import create_recon_agent
     from decepticon.agents.reverser import create_reverser_agent
-    from decepticon.agents.soundwave import create_soundwave_agent
 
     # Wrap each sub-agent with StreamingRunnable so their tool calls, results,
     # and AI messages stream through both Python CLI (UIRenderer) and
     # LangGraph Platform HTTP API (get_stream_writer → custom events).
+    #
+    # Soundwave is intentionally NOT a sub-agent here: it is registered at the
+    # orchestrator level (create_orchestrator) and routed to whenever
+    # engagement docs are missing. Soundwave is designed standalone (no
+    # SubAgentMiddleware, no bash tool — see soundwave.py module docstring),
+    # so document regeneration goes through the orchestrator routing, not
+    # decepticon delegation. Document edits while docs already exist are
+    # handled by decepticon's FilesystemMiddleware directly.
     subagents = [
-        CompiledSubAgent(
-            name="soundwave",
-            description=(
-                "Document writer agent. Generates engagement document bundles: RoE, CONOPS, "
-                "Deconfliction Plan. Use when engagement documents are missing or need updating. "
-                "Interviews the user, produces JSON documents, validates against schemas. "
-                "Does NOT manage OPPLAN — the orchestrator owns OPPLAN directly. "
-                "Saves results to /workspace/"
-            ),
-            runnable=StreamingRunnable(create_soundwave_agent(), "soundwave"),
-        ),
         CompiledSubAgent(
             name="recon",
             description=(
@@ -270,6 +203,7 @@ def create_decepticon_agent():
 
     # Assemble middleware stack
     middleware = [
+        EngagementContextMiddleware(),
         DecepticonSkillsMiddleware(
             backend=backend, sources=["/skills/decepticon/", "/skills/shared/"]
         ),
@@ -295,37 +229,9 @@ def create_decepticon_agent():
         name="decepticon",
     )
 
-    # Orchestrator needs a higher recursion budget than sub-agents (100).
+    # Higher recursion budget than sub-agents (100) — top-level coordinator.
     return agent.with_config({"recursion_limit": 200})
 
 
-def create_orchestrator():
-    """Build the engagement flow orchestrator graph.
-
-    Routes each turn based on engagement document existence:
-      - No engagement docs → Soundwave interviews user, generates RoE/CONOPS
-      - Engagement docs exist → Decepticon builds OPPLAN, executes kill chain
-
-    Each user message is independently routed, enabling seamless transition
-    from Soundwave to Decepticon once documents are written.
-    """
-    from decepticon.agents.soundwave import create_soundwave_agent
-
-    soundwave = create_soundwave_agent()
-    decepticon = create_decepticon_agent()
-
-    builder = StateGraph(OrchestratorState)
-    builder.add_node("check_docs", _check_engagement_docs)
-    builder.add_node("soundwave", soundwave)
-    builder.add_node("decepticon", decepticon)
-
-    builder.add_edge(START, "check_docs")
-    builder.add_conditional_edges("check_docs", _route_agent)
-    builder.add_edge("soundwave", END)
-    builder.add_edge("decepticon", END)
-
-    return builder.compile()
-
-
 # Module-level graph for LangGraph Platform (langgraph serve)
-graph = create_orchestrator()
+graph = create_decepticon_agent()

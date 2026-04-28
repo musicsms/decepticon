@@ -3,8 +3,6 @@
  *
  * - Prompt mode (default): compact view with collapsed sub-agent sessions
  * - Transcript mode (ctrl+o): full expanded view of all events
- *
- * Adopted from Claude Code CLI's REPL.tsx dual-screen architecture.
  */
 
 import React, {
@@ -25,6 +23,7 @@ import { EventItem } from "../components/EventItem.js";
 import { ActivityIndicator } from "../components/ActivityIndicator.js";
 import { OpplanStatus } from "../components/OpplanStatus.js";
 import { Prompt } from "../components/Prompt.js";
+import { QuestionPicker } from "../components/QuestionPicker.js";
 import { AgentSessionGroup } from "../components/agents/AgentSessionGroup.js";
 import { CoordinatorPanel } from "../components/agents/CoordinatorPanel.js";
 import { ScreenProvider } from "../components/shell/ScreenContext.js";
@@ -288,11 +287,18 @@ export function REPL({ initialMessage, resumeThread }: REPLProps) {
               }}
               onCancel={() => setShowSessionPicker(false)}
             />
+          ) : agent.activeQuestion ? (
+            <QuestionPicker
+              question={agent.activeQuestion}
+              onSubmit={agent.answerQuestion}
+              onCancel={agent.cancel}
+            />
           ) : (
             <Prompt
               runState={agent.runState}
               onSubmit={handleSubmit}
               activeAgent={agent.activeAgent}
+              assistantId={agent.assistantId}
               queuedMessage={agent.queuedMessage}
               onEditQueue={agent.enqueue}
             />

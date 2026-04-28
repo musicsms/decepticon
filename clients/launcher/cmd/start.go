@@ -8,6 +8,7 @@ import (
 
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/compose"
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/config"
+	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/engagement"
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/health"
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/ui"
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/updater"
@@ -82,7 +83,22 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return restartSelf()
 	}
 
-	// 3. Start services
+	// 3. Engagement picker — must run BEFORE compose Up so the sandbox
+	// container starts with /workspace bound to the chosen engagement
+	// directory. Without this, the operator would briefly see the whole
+	// workspace through the sandbox before any picking happens.
+	fmt.Println()
+	choice, err := engagement.Select(home)
+	if err != nil {
+		return err
+	}
+	// Export the bind path. composeEnv() forwards os.Environ(), so docker
+	// compose interpolates ${DECEPTICON_ENGAGEMENT_WORKSPACE} from this var.
+	if err := os.Setenv("DECEPTICON_ENGAGEMENT_WORKSPACE", choice.WorkspacePath); err != nil {
+		return fmt.Errorf("set engagement workspace env: %w", err)
+	}
+
+	// 4. Start services
 	c := compose.New()
 
 	ui.Info("Starting Decepticon services...")
@@ -90,17 +106,19 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("start services: %w", err)
 	}
 
-	// 4. Health checks
+	// 5. Health checks
 	if err := health.WaitForServices(env); err != nil {
 		return err
 	}
 
-	// 5. Launch CLI
+	// 6. Launch CLI
 	fmt.Println()
 	ui.Info("Launching Decepticon CLI...")
 
 	cliEnv := map[string]string{
-		"DECEPTICON_VERSION": version,
+		"DECEPTICON_VERSION":      version,
+		"DECEPTICON_ASSISTANT_ID": choice.AssistantID,
+		"DECEPTICON_ENGAGEMENT":   choice.Engagement,
 	}
 	if port := config.Get(env, "WEB_PORT", "3000"); port != "" {
 		cliEnv["WEB_PORT"] = port

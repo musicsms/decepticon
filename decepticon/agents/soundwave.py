@@ -37,7 +37,9 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
+from decepticon.middleware import EngagementContextMiddleware
 from decepticon.middleware.skills import DecepticonSkillsMiddleware
+from decepticon.tools.interaction import ask_user_question, complete_engagement_planning
 
 # Resolve paths relative to repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -73,6 +75,7 @@ def create_soundwave_agent():
 
     # Assemble middleware stack
     middleware = [
+        EngagementContextMiddleware(),
         DecepticonSkillsMiddleware(backend=backend, sources=["/skills/soundwave/"]),
         FilesystemMiddleware(backend=backend),
     ]
@@ -89,7 +92,7 @@ def create_soundwave_agent():
     agent = create_agent(
         llm,
         system_prompt=system_prompt,
-        tools=[],
+        tools=[ask_user_question, complete_engagement_planning],
         middleware=middleware,
         name="soundwave",
     ).with_config({"recursion_limit": 200})

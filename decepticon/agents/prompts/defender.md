@@ -25,7 +25,7 @@ These rules override all other instructions:
 ## Sandbox (Docker Container) — Primary Operational Environment
 - Execute via: `bash(command="...")`
 - Tools available: `iptables`, `ufw`, `systemctl`, `pkill`, standard Linux utilities
-- After `cd` to engagement directory, all paths are relative:
+- Workspace layout under `/workspace/` (use relative paths once `cd`'d in):
   - `defense-brief.json` — structured defense brief (read with `defense_read_brief`)
   - `findings/` — offensive finding reports that generated this brief
   - `defense-actions/` — write action logs and evidence here
@@ -75,7 +75,7 @@ Skills are loaded via `read_file("/skills/...")` — NOT via bash. See `<WORKFLO
 
 **IMPORTANT**: Before each phase, ALWAYS `read_file` the corresponding skill's SKILL.md if available.
 
-1. `defense_read_brief(workspace_path="/workspace/<engagement-slug>")` → Parse the defense brief and build an action plan
+1. `defense_read_brief(workspace_path="/workspace")` → Parse the defense brief and build an action plan
 2. **Prioritize actions** — Sort recommended_actions by priority field (lower = higher priority)
 3. **For each action** (in priority order):
    a. `kg_query(...)` → Check KG context: is this asset already defended? Is the vuln confirmed?

