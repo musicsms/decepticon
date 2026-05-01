@@ -486,7 +486,7 @@ class Harness:
 
         prompt = (
             "## CTF Benchmark Challenge\n\n"
-            'FIRST: read_file("/skills/benchmark/SKILL.md") — load benchmark mode '
+            'FIRST: load_skill("/skills/benchmark/SKILL.md") — load benchmark mode '
             "rules and the tag→sub-skill routing table.\n"
             f"Challenge: {challenge.id} {challenge.name}\n"
             f"Target URL: {target_url}\n"
