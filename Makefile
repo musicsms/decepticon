@@ -42,7 +42,7 @@ export CLAUDE_CREDENTIALS_VOLUME ?= $(shell test -f $(HOME)/.claude/.credentials
         web-build web-lint web-migrate web-ee web-oss \
         status logs health clean \
         node-install web-db-ensure \
-        benchmark
+        benchmark recreate-litellm
 
 # ── Help (default target) ────────────────────────────────────────
 
@@ -261,6 +261,20 @@ web-db-ensure:
 	@cd $(WEB_DIR) && npx prisma migrate deploy 2>&1 | tail -1
 
 # ── Benchmark ────────────────────────────────────────────────────
+
+## Force-recreate the litellm container so it captures the host's CURRENT
+## ~/.claude/.credentials.json inode. Workaround for the Docker single-file
+## bind-mount limitation: the container's view is pinned to the inode at
+## mount time; Claude Code CLI rotates credentials via atomic-rename which
+## allocates a new inode that the container never sees. Force-recreate
+## remounts and picks up the freshly written file. Intended to run as a
+## per-cycle preamble in the benchmark loop so each cycle starts with a
+## valid OAuth access token (token TTL ~8h ≫ cycle duration ~30m).
+recreate-litellm:
+	@$(COMPOSE) up -d --no-build --force-recreate litellm
+	@docker exec decepticon-litellm sh -c 'test -s /root/.claude/.credentials.json' \
+		&& echo "recreate-litellm: creds mount OK" \
+		|| (echo "recreate-litellm: creds mount EMPTY — onboard first" && exit 1)
 
 ## Run benchmark suite (usage: make benchmark ARGS="--level 1")
 benchmark:
