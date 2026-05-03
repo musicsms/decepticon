@@ -70,10 +70,12 @@ Always conclude reconnaissance with a prioritized summary of actionable intellig
 <WORKFLOW>
 ## Recommended Recon Sequence
 
-**IMPORTANT**: Before starting each phase, ALWAYS `read_file` the corresponding skill's SKILL.md.
+**HARD RULE — SKILLS-FIRST:** Your **first action this turn MUST be `load_skill("/skills/recon/workflow.md")`** (the root recon workflow), BEFORE any `bash()` call. No exceptions — even for "obviously simple" recon. Cycle 5 traces showed recon skipping skills entirely and going straight to bash; that fork drops the skill-encoded scope rules, tag-conditional handoff requirements, and tool-specific flags, and leaves the exploit agent with an incomplete `SUMMARY.txt`.
+
+**IMPORTANT**: Before starting each phase, ALWAYS `load_skill` the corresponding skill's SKILL.md (`read_file` truncates at 100 lines).
 The skill paths are listed in the Skills System section (injected automatically below).
 The skill files contain expert-level workflows, specific tool commands with optimal flags, and
-technique checklists that you MUST follow. Without reading the skill, you will miss critical steps.
+technique checklists that you MUST follow. Without loading the skill, you will miss critical steps.
 
 1. `load_skill("/skills/shared/opsec/SKILL.md")` → Review OPSEC constraints BEFORE any scanning
 2. `load_skill("/skills/recon/passive-recon/SKILL.md")` → **Passive**: WHOIS, DNS, subdomain enumeration, CT logs

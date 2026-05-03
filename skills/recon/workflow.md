@@ -106,7 +106,7 @@ Recommended exploit gate: <e.g. "run smuggling.md confirm-desync gate before ite
   - "Differential parsing observed" — one parser path returns 400/501 while another returns 200. Routing signal only.
   - "Confirmed desync" — a smuggled-prefix request causes the back-end to mis-frame the next request on the connection (e.g. observable `XGET` 400 on a fresh victim request). Requires a trace excerpt as evidence.
   If recon hands off `Differential parsing observed: YES` and `Confirmed desync: NO`, exploit MUST run the smuggling.md confirm-desync gate before iterating any payload variants.
-- Sandbox bash discipline applies cross-cutting; see `load_skill("/skills/shared/workflow/SKILL.md")`.
+- Sandbox bash discipline applies cross-cutting (auto-injected into every sub-agent's bash tool prompt — no manual load required).
 
 ## Handoff Format (output files)
 
