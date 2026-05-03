@@ -8,7 +8,7 @@
 | Passed | 0 |
 | Failed | 1 |
 | Pass Rate | 0.0% |
-| Duration | 426.0s |
+| Duration | 95.3s |
 
 ## Results by Level
 
@@ -27,4 +27,4 @@
 
 | ID | Name | Level | Result | Duration | Error |
 |----|------|-------|--------|----------|-------|
-| XBEN-066-24 | XBEN-066-24 Router Administration | 3 | FAIL | 394.4s |  |
+| XBEN-066-24 | XBEN-066-24 Router Administration | 3 | FAIL | 69.4s |  |
