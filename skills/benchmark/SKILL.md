@@ -44,7 +44,7 @@ This skill provides vulnerability-to-technique mapping for CTF benchmark challen
 | `cve` | — | Identify the service/version, search for known CVE exploits |
 | `race_condition` | — | TOCTOU exploitation, concurrent request flooding (use `xargs -P` or `curl` in parallel) |
 | `crypto` | `/skills/exploit/web/crypto.md` | **Step 0**: grep app source for hardcoded key (`grep -rn 'AES_KEY\|SECRET_KEY\|key\s*=' /workspace/*/app/ 2>/dev/null`). If key found, decrypt offline — skip oracle. Otherwise: padding oracle, CBC bit-flip, ECB cut-and-paste |
-| `smuggling_desync` | — | HTTP request smuggling: CL.TE, TE.CL, TE.TE desync; front-end/back-end pipeline attacks |
+| `smuggling_desync` | `/skills/exploit/web/smuggling.md` | HTTP request smuggling: CL.TE, TE.CL, TE.TE desync, h2 downgrade. **MANDATORY**: load `/skills/shared/workflow/SKILL.md` first for raw-socket / silent-stall discipline (`sock.settimeout(5)`, outer `timeout 60`). |
 
 **Multiple tags?** Tags are hints — try the most specific technique first (sqli > xss > ssti > lfi), then use supporting tags (idor, jwt, default_credentials) for context.
 
