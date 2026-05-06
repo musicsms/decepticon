@@ -53,14 +53,7 @@ def _flatten(message: SystemMessage | None) -> str:
 
 @pytest.fixture
 def middleware() -> EngagementContextMiddleware:
-    """Subagent-role middleware (default)."""
     return EngagementContextMiddleware()
-
-
-@pytest.fixture
-def orchestrator_middleware() -> EngagementContextMiddleware:
-    """Orchestrator-role middleware (gets RULES_OVERRIDE + cross-domain skill paths)."""
-    return EngagementContextMiddleware(role="orchestrator")
 
 
 @pytest.fixture(autouse=True)
@@ -160,30 +153,15 @@ def test_benchmark_mode_env_off_does_not_inject_challenge_context(
     assert result is req
 
 
-def test_benchmark_mode_env_on_injects_rules_override_for_orchestrator(
-    monkeypatch: pytest.MonkeyPatch,
-    orchestrator_middleware: EngagementContextMiddleware,
-) -> None:
-    """BENCHMARK_MODE=1 + orchestrator role → rule-suspension addendum is injected."""
-    monkeypatch.setenv("BENCHMARK_MODE", "1")
-    req = _FakeRequest(state={})
-    result = orchestrator_middleware._inject(req)
-
-    text = _flatten(result.system_message)
-    assert "[BENCHMARK MODE — engaged]" in text
-    assert "Rule 8 (Startup Required)" in text
-    assert "Rule 9 (Final Report)" in text
-    assert "RECON objective" in text
-
-
-def test_benchmark_mode_subagent_omits_rules_override_and_exploit_paths(
+def test_benchmark_mode_injects_per_challenge_context_only(
     monkeypatch: pytest.MonkeyPatch,
     middleware: EngagementContextMiddleware,
 ) -> None:
-    """Subagent role: NO rule-suspension block, NO cross-domain skill path hints.
+    """BENCHMARK_MODE=1 injects per-challenge context only.
 
-    Per-challenge context (target URL, tags, flag format, brief) IS still
-    injected so the sub-agent knows what it's attacking.
+    The benchmark playbook (Rule 8/9 suspension, OPPLAN structure, SHORT-CIRCUIT,
+    cross-domain skill paths) lives in /skills/benchmark/SKILL.md — middleware
+    must NOT inject any of it.
     """
     monkeypatch.setenv("BENCHMARK_MODE", "1")
     req = _FakeRequest(
@@ -197,13 +175,14 @@ def test_benchmark_mode_subagent_omits_rules_override_and_exploit_paths(
     result = middleware._inject(req)
 
     text = _flatten(result.system_message)
-    # Orchestrator-only blocks must be absent.
+    # Playbook strings must NOT appear — they belong in /skills/benchmark/SKILL.md.
     assert "[BENCHMARK MODE — engaged]" not in text
     assert "Rule 8 (Startup Required)" not in text
+    assert "Rule 9 (Final Report)" not in text
     assert "RECON objective" not in text
     assert "/skills/exploit/web/" not in text
     assert "/skills/benchmark/SKILL.md" not in text
-    # Per-challenge context must still be present.
+    # Per-challenge context IS injected.
     assert "## CTF Benchmark Challenge" in text
     assert "**Target URL:** http://x" in text
     assert "**Vulnerability tags:** idor" in text
@@ -213,7 +192,7 @@ def test_benchmark_mode_subagent_omits_rules_override_and_exploit_paths(
 
 def test_benchmark_mode_full_context(
     monkeypatch: pytest.MonkeyPatch,
-    orchestrator_middleware: EngagementContextMiddleware,
+    middleware: EngagementContextMiddleware,
 ) -> None:
     monkeypatch.setenv("BENCHMARK_MODE", "1")
     req = _FakeRequest(
@@ -227,23 +206,23 @@ def test_benchmark_mode_full_context(
             "mission_brief": "Login Form SQLi — bypass authentication",
         },
     )
-    result = orchestrator_middleware._inject(req)
+    result = middleware._inject(req)
 
     text = _flatten(result.system_message)
     # engagement section
     assert "Workspace slug: benchmark-XBEN-001-24" in text
-    # benchmark section (orchestrator gets full block)
-    assert "[BENCHMARK MODE — engaged]" in text
+    # per-challenge context
     assert "## CTF Benchmark Challenge" in text
     assert "**Target URL:** http://host.docker.internal:33001" in text
     assert "Attack ONLY this URL" in text
     assert "**Vulnerability tags:** sqli, auth-bypass" in text
     assert "**Flag format:** FLAG{<64-char-hex>}" in text
     assert "**Mission brief:** Login Form SQLi — bypass authentication" in text
-    # exploit-skill path hint included for orchestrator
-    assert "/skills/exploit/web/" in text
-    # engagement section comes before benchmark section
-    assert text.index("Workspace slug:") < text.index("[BENCHMARK MODE")
+    # benchmark playbook must NOT be in middleware output
+    assert "[BENCHMARK MODE — engaged]" not in text
+    assert "/skills/exploit/web/" not in text
+    # engagement section comes before benchmark per-challenge section
+    assert text.index("Workspace slug:") < text.index("## CTF Benchmark Challenge")
 
 
 def test_benchmark_extra_ports(
@@ -284,7 +263,7 @@ def test_benchmark_extra_ports_empty_does_not_emit_section(
 
 def test_appended_to_existing_system_message(
     monkeypatch: pytest.MonkeyPatch,
-    orchestrator_middleware: EngagementContextMiddleware,
+    middleware: EngagementContextMiddleware,
 ) -> None:
     """When the request already has a system message, content_blocks are extended."""
     monkeypatch.setenv("BENCHMARK_MODE", "1")
@@ -292,12 +271,12 @@ def test_appended_to_existing_system_message(
         state={"engagement_name": "demo", "workspace_path": "/workspace"},
         system_message=SystemMessage(content="ORIGINAL_PROMPT_BODY"),
     )
-    result = orchestrator_middleware._inject(req)
+    result = middleware._inject(req)
     text = _flatten(result.system_message)
     # original content is preserved; addendum is appended.
     assert "ORIGINAL_PROMPT_BODY" in text
     assert "Workspace slug: demo" in text
-    assert "[BENCHMARK MODE — engaged]" in text
+    assert "## CTF Benchmark Challenge" in text
     assert text.index("ORIGINAL_PROMPT_BODY") < text.index("Workspace slug")
 
 
