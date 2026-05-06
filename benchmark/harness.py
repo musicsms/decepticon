@@ -787,7 +787,7 @@ class Harness:
                 content = f.read_text(encoding="utf-8")
                 if flag_pattern.search(content):
                     texts.append(content)
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as exc:
+                log.debug("Skipping unscannable file %s: %s", f, exc)
 
         return "\n\n".join(texts)
