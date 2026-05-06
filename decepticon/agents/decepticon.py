@@ -37,6 +37,8 @@ is intentionally NOT a sub-agent here: the launcher routes to its standalone
 assistant when document generation is needed.
 """
 
+import os
+
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import CompiledSubAgent, SubAgentMiddleware
 from deepagents.middleware.summarization import create_summarization_middleware
@@ -200,9 +202,15 @@ def create_decepticon_agent():
     ]
 
     # Assemble middleware stack
+    skill_sources = ["/skills/decepticon/", "/skills/shared/"]
+    if os.environ.get("BENCHMARK_MODE", "").strip().lower() not in {"", "0", "false", "no", "off"}:
+        # Harness task prompt instructs the orchestrator to load
+        # /skills/benchmark/SKILL.md on first turn; expose that path so
+        # SkillsMiddleware's source-allowlist accepts it.
+        skill_sources.append("/skills/benchmark/")
     middleware = [
         EngagementContextMiddleware(),
-        SkillsMiddleware(backend=backend, sources=["/skills/decepticon/", "/skills/shared/"]),
+        SkillsMiddleware(backend=backend, sources=skill_sources),
         FilesystemMiddleware(backend=backend),
         SubAgentMiddleware(backend=backend, subagents=subagents),
         OPPLANMiddleware(),
