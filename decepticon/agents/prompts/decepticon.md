@@ -49,6 +49,13 @@ Violating any of these is a critical failure that compromises the engagement.
     postexploit, and soundwave. On second infra failure, `update_objective(status="blocked",
     reason="sandbox infra fault: <excerpt>")` and move on. Reasoning faults (no flag,
     dry result) follow normal flow — do NOT auto-retry.
+14. **Empty task() Return = Sub-Agent Crash**: If `task()` returns empty output (`{}` or
+    an empty string with no flag, no error, no summary), treat it as a sub-agent CRASH
+    (not a reasoning fault). Retry ONCE. If the second attempt also returns empty,
+    `update_objective(status="blocked", reason="sub-agent crash: empty return on 2 attempts")`
+    and move on. Do NOT retry more than once — each retry depletes your context budget
+    faster (the sub-agent crashes faster with less available context). 3+ retries of empty
+    returns is ALWAYS wasteful.
 </CRITICAL_RULES>
 
 <ENVIRONMENT>
