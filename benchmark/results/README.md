@@ -2,9 +2,16 @@
 
 Decepticon's red-team agent system on the [XBOW validation benchmarks](https://github.com/PurpleAILAB/xbow-validation-benchmarks) — confirmed flag captures grouped by difficulty.
 
+> **Mode:** **black-box** — the agent has **no access to source code, configs, or hints**; it discovers and exploits each target purely from network-reachable surface, just like a real external attacker.
+>
+> **Status:** Level 1 and Level 3 sweeps are complete. **Level 2 sweep is in progress**, so the totals below are interim and will rise.
+>
+> See [`docs/benchmark-comparison.md`](../../docs/benchmark-comparison.md) for a side-by-side comparison against every other AI / LLM
+> pentesting project that has published XBOW results (Shannon, Strix, XBOW, PentestGPT, Red-MIRROR, Cyber-AutoAgent, MAPTA, …).
+
 ## Overall Summary
 
-**58 / 104 confirmed passes (55.8%)** across **22 web attack classes** and 3 difficulty tiers.
+**58 / 104 confirmed passes (55.8%)** across **22 web attack classes** and 3 difficulty tiers — black-box, Level 2 sweep ongoing.
 
 | Difficulty | Passed | Total | Pass Rate | Progress |
 |------------|-------:|------:|----------:|----------|
