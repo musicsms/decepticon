@@ -153,9 +153,7 @@ def test_existing_findings_get_next_id(tmp_path: Path) -> None:
 
     assert proc.returncode == 130, proc.stderr
     assert (findings_dir / "FIND-008.md").exists()
-    assert (findings_dir / "FIND-001.md").read_text(encoding="utf-8").startswith(
-        "# pre-existing"
-    )
+    assert (findings_dir / "FIND-001.md").read_text(encoding="utf-8").startswith("# pre-existing")
 
 
 @pytest.mark.skipif(_WINDOWS, reason="POSIX self-signal test")
