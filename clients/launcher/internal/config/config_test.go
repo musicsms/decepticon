@@ -165,6 +165,7 @@ func TestValidateAuth_OAuthSubscriptions(t *testing.T) {
 		t.Run(c.envName+" via env", func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 			env := map[string]string{c.toggle: "true", c.envName: "anything-not-empty"}
 			if err := ValidateAuth(env); err != nil {
 				t.Errorf("expected env-token to satisfy %s: %v", c.toggle, err)
@@ -173,6 +174,7 @@ func TestValidateAuth_OAuthSubscriptions(t *testing.T) {
 		t.Run(c.envName+" via tokens.json", func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 			dir := filepath.Join(home, ".config", c.configDir)
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				t.Fatal(err)
@@ -188,6 +190,7 @@ func TestValidateAuth_OAuthSubscriptions(t *testing.T) {
 		t.Run(c.envName+" toggle on but no creds fails", func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 			env := map[string]string{c.toggle: "true"}
 			err := ValidateAuth(env)
 			if err == nil {
@@ -201,6 +204,7 @@ func TestValidateAuth_ChatGPTNativeOAuth(t *testing.T) {
 	t.Run("toggle on allows native device login without session cookie", func(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 		env := map[string]string{"DECEPTICON_AUTH_CHATGPT": "true"}
 		if err := ValidateAuth(env); err != nil {
 			t.Errorf("expected native ChatGPT OAuth to pass without launcher-side token input: %v", err)
@@ -210,6 +214,7 @@ func TestValidateAuth_ChatGPTNativeOAuth(t *testing.T) {
 	t.Run("uses codex auth.json path", func(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 		got := subscriptionTokenPaths(map[string]string{}, home, oauthSubscriptions["chatgpt"])
 		want := []string{filepath.Join(home, ".codex", "auth.json")}
 		if !reflect.DeepEqual(got, want) {
@@ -224,6 +229,7 @@ func TestValidateAuth_ChatGPTNativeOAuth(t *testing.T) {
 func TestValidateAuth_OllamaLocal(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 
 	t.Run("priority+base passes", func(t *testing.T) {
 		env := map[string]string{
@@ -259,6 +265,7 @@ func TestValidateAuth_OllamaLocal(t *testing.T) {
 func TestValidateAuth_OAuth(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 	// OAuth requested, no API keys configured.
 	env := map[string]string{"DECEPTICON_AUTH_CLAUDE_CODE": "true"}
 
@@ -322,6 +329,7 @@ func TestValidateAuth_OAuthFallsBackToAPIKey(t *testing.T) {
 	// "at least one method works" rule.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 	env := map[string]string{
 		"DECEPTICON_AUTH_CLAUDE_CODE": "true",
 		"ANTHROPIC_API_KEY":           "sk-ant-api03-realkeythatislongenough",
@@ -334,6 +342,7 @@ func TestValidateAuth_OAuthFallsBackToAPIKey(t *testing.T) {
 func TestValidateAuth_NeitherConfigured(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows: os.UserHomeDir reads USERPROFILE
 	// No OAuth, no real API keys.
 	env := map[string]string{
 		"ANTHROPIC_API_KEY": "your-anthropic-key-here",

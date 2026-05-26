@@ -15,12 +15,12 @@ Sub-skills under this directory:
 
 | Sub-skill | Path | When to load |
 |---|---|---|
-| Discovery | `load_skill("/skills/standard/recon/web-recon/discovery.md")` | directory/file fuzzing, vhost, JS analysis |
-| API enumeration | `load_skill("/skills/standard/recon/web-recon/api-enumeration.md")` | REST/GraphQL/parameter fuzzing |
-| CMS scanning | `load_skill("/skills/standard/recon/web-recon/cms-scanning.md")` | WordPress/Joomla/Drupal detected |
-| WAF detection | `load_skill("/skills/standard/recon/web-recon/waf-detection.md")` | proxy/CDN suspected |
-| Auth mapping | `load_skill("/skills/standard/recon/web-recon/auth-mapping.md")` | login flow analysis |
-| Cookie audit | `load_skill("/skills/standard/recon/web-recon/cookie-audit.md")` | sink behind session, race-condition recon |
+| Discovery | `load_skill("/skills/standard/recon/web-recon/discovery/SKILL.md")` | directory/file fuzzing, vhost, JS analysis |
+| API enumeration | `load_skill("/skills/standard/recon/web-recon/api-enumeration/SKILL.md")` | REST/GraphQL/parameter fuzzing |
+| CMS scanning | `load_skill("/skills/standard/recon/web-recon/cms-scanning/SKILL.md")` | WordPress/Joomla/Drupal detected |
+| WAF detection | `load_skill("/skills/standard/recon/web-recon/waf-detection/SKILL.md")` | proxy/CDN suspected |
+| Auth mapping | `load_skill("/skills/standard/recon/web-recon/auth-mapping/SKILL.md")` | login flow analysis |
+| Cookie audit | `load_skill("/skills/standard/recon/web-recon/cookie-audit/SKILL.md")` | sink behind session, race-condition recon |
 
 For overall recon workflow, scope rules, and handoff format, see `load_skill("/skills/standard/recon/workflow.md")` (root workflow).
 
@@ -30,8 +30,8 @@ When the orchestrator passes challenge tags, skip straight to the matching sub-s
 
 | Tag | First action | Sub-skill to load |
 |-----|-------------|-------------------|
-| `sqli` | Fire a single error-triggering payload on every form/param | `/skills/standard/exploit/web/sqli.md` recon section |
-| `ssti` | Probe every reflection point with `{{7*7}}` | `/skills/standard/exploit/web/ssti.md` recon section |
+| `sqli` | Fire a single error-triggering payload on every form/param | `/skills/standard/exploit/web/sqli/SKILL.md` recon section |
+| `ssti` | Probe every reflection point with `{{7*7}}` | `/skills/standard/exploit/web/ssti/SKILL.md` recon section |
 | `lfi` | Path-traversal probe on every file/path param | discovery.md |
 | `idor` | Enumerate object IDs on every user-data endpoint | api-enumeration.md |
 | `auth` | Map the full auth flow before other recon | auth-mapping.md |

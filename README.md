@@ -46,13 +46,20 @@
 ## Install
 
 **Prerequisites**: [Docker](https://docs.docker.com/get-docker/) and Docker Compose v2.
-Supported on macOS (Apple Silicon + Intel), Linux (amd64 + arm64), and Windows via WSL2 (Ubuntu or Kali).
-Native Windows is not supported — install WSL2 first, then run the commands below from inside the WSL shell.
+Supported on macOS (Apple Silicon + Intel), Linux (amd64 + arm64), and Windows (amd64 + arm64) — native via PowerShell or via WSL2 (Ubuntu / Kali).
 
+**macOS / Linux / WSL2**
 ```bash
 curl -fsSL https://decepticon.red/install | bash
 decepticon onboard   # Interactive setup wizard (provider, API key, model profile)
 decepticon           # Start everything: terminal CLI + web dashboard at http://localhost:3000
+```
+
+**Windows (PowerShell, native)**
+```powershell
+irm https://decepticon.red/install.ps1 | iex
+decepticon onboard
+decepticon
 ```
 
 → **[Quick start](docs/getting-started.md)** · **[Full setup walkthrough](docs/setup-guide.md)**

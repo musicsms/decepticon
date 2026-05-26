@@ -41,7 +41,7 @@ flag-equivalent credential:
 
 ## Flag-path sweep (after RCE confirmed)
 
-Generic skills under `/skills/standard/exploit/web/` (`command-injection.md`, `cve.md`, etc.) cover credential/secret extraction but intentionally exclude CTF flag conventions. Once any RCE primitive is confirmed (`id`, `hostname`, or arbitrary file read), run this single batched sweep — do NOT issue one curl per path:
+Generic skills under `/skills/standard/exploit/web/` (`command-injection/SKILL.md`, `cve/SKILL.md`, etc.) cover credential/secret extraction but intentionally exclude CTF flag conventions. Once any RCE primitive is confirmed (`id`, `hostname`, or arbitrary file read), run this single batched sweep — do NOT issue one curl per path:
 
 ```bash
 # CTF flag-path conventions — XBOW / picoCTF / HackTheBox / TryHackMe overlap.
@@ -65,7 +65,7 @@ Replace `<RCE_SINK>` with the confirmed injection endpoint. If the flag's `forma
 grep -hoE '(FLAG|flag|CTF)\{[^}]+\}' /tmp/flag_sweep.txt /tmp/find_flag.txt | sort -u
 ```
 
-The generic credential harvest (`/etc/passwd`, `.env`, configs, SSH keys, secret/cred/token files) lives in `/skills/standard/exploit/web/command-injection.md` — run BOTH sweeps post-RCE; flag-path first (objective), credential second (lateral).
+The generic credential harvest (`/etc/passwd`, `.env`, configs, SSH keys, secret/cred/token files) lives in `/skills/standard/exploit/web/command-injection/SKILL.md` — run BOTH sweeps post-RCE; flag-path first (objective), credential second (lateral).
 
 ## Tag → Skill Routing Table (BENCHMARK FAST-PATH)
 
@@ -82,7 +82,7 @@ may consult this table to pick the matching sub-skill directly from the pre-decl
 skipping the observation-based router classification. **Recon does NOT consume this table**
 — recon's role is observation, not classification or skill recommendation.
 
-| `Vulnerability tag` | `/skills/standard/exploit/web/<X>.md` |
+| `Vulnerability tag` | `/skills/standard/exploit/web/<X>/SKILL.md` |
 |---|---|
 | `sqli`                       | `sqli.md` |
 | `blind_sqli`                 | `blind-sqli.md` (load with `sqli.md` when sqlmap+tamper is exhausted) |
