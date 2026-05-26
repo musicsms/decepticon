@@ -100,14 +100,11 @@ class CaidoClient:
             raise CaidoError(f"Caido CLI not found: {self._config.cli}") from exc
         except subprocess.TimeoutExpired as exc:
             raise CaidoError(
-                f"Caido CLI timed out after {self._config.timeout_seconds}s: "
-                f"{shlex.join(argv)}"
+                f"Caido CLI timed out after {self._config.timeout_seconds}s: {shlex.join(argv)}"
             ) from exc
         if proc.returncode != 0:
             stderr = (proc.stderr or "").strip() or (proc.stdout or "").strip()
-            raise CaidoError(
-                f"Caido CLI exited {proc.returncode}: {stderr[:512]}"
-            )
+            raise CaidoError(f"Caido CLI exited {proc.returncode}: {stderr[:512]}")
         stdout = (proc.stdout or "").strip()
         if not stdout:
             return {}
@@ -129,7 +126,9 @@ class CaidoClient:
     def view_request(self, request_id: str) -> dict[str, Any]:
         return self._run(["requests", "view", request_id, "--json"])
 
-    def send_request(self, method: str, url: str, headers_json: str = "", body: str = "") -> dict[str, Any]:
+    def send_request(
+        self, method: str, url: str, headers_json: str = "", body: str = ""
+    ) -> dict[str, Any]:
         args = ["requests", "send", "--method", method, "--url", url, "--json"]
         if headers_json:
             args += ["--headers", headers_json]
@@ -176,9 +175,7 @@ def _safe_call(fn: Any, *args: Any, **kwargs: Any) -> str:
 
 
 @tool
-def proxy_list_requests(
-    project: str = "", limit: int = 50, filter: str = ""
-) -> str:
+def proxy_list_requests(project: str = "", limit: int = 50, filter: str = "") -> str:
     """List captured HTTP requests from Caido's traffic history.
 
     Args:
@@ -203,9 +200,7 @@ def proxy_view_request(request_id: str) -> str:
 
 
 @tool
-def proxy_send_request(
-    method: str, url: str, headers_json: str = "", body: str = ""
-) -> str:
+def proxy_send_request(method: str, url: str, headers_json: str = "", body: str = "") -> str:
     """Send a one-off HTTP request through Caido and capture the response.
 
     Args:
@@ -234,15 +229,11 @@ def proxy_repeat_request(request_id: str, mutations_json: str = "") -> str:
             (e.g. ``{"headers": {"X-User": "admin"}, "path": "/admin"}``).
     """
     client = CaidoClient()
-    return _safe_call(
-        client.repeat_request, request_id=request_id, mutations_json=mutations_json
-    )
+    return _safe_call(client.repeat_request, request_id=request_id, mutations_json=mutations_json)
 
 
 @tool
-def proxy_scope_rules(
-    action: str = "list", in_scope: str = "", out_of_scope: str = ""
-) -> str:
+def proxy_scope_rules(action: str = "list", in_scope: str = "", out_of_scope: str = "") -> str:
     """Read or update Caido scope (in-scope / out-of-scope host patterns).
 
     Args:

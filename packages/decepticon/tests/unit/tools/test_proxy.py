@@ -24,7 +24,9 @@ from decepticon.tools.proxy import (
 )
 
 
-def _completed(stdout: str = "", stderr: str = "", returncode: int = 0) -> subprocess.CompletedProcess:
+def _completed(
+    stdout: str = "", stderr: str = "", returncode: int = 0
+) -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
@@ -123,9 +125,7 @@ class TestCaidoClientCommandShapes:
 class TestCaidoClientErrorHandling:
     def test_cli_not_found_raises_caido_error(self) -> None:
         client = CaidoClient(CaidoConfig(cli="definitely-not-on-path"))
-        with patch(
-            "subprocess.run", side_effect=FileNotFoundError("not found")
-        ):
+        with patch("subprocess.run", side_effect=FileNotFoundError("not found")):
             with pytest.raises(CaidoError, match="not found"):
                 client.list_requests()
 
@@ -198,9 +198,7 @@ class TestToolWrappers:
             "subprocess.run",
             return_value=_completed(stdout=json.dumps({"status": 401})),
         ):
-            out = asyncio.run(
-                proxy_repeat_request.ainvoke({"request_id": "REQ-5"})
-            )
+            out = asyncio.run(proxy_repeat_request.ainvoke({"request_id": "REQ-5"}))
         assert json.loads(out)["status"] == 401
 
     def test_proxy_scope_rules_returns_json(self) -> None:
@@ -224,9 +222,7 @@ class TestToolWrappers:
             "subprocess.run",
             return_value=_completed(stdout=json.dumps({"url": "/login"})),
         ):
-            out = asyncio.run(
-                proxy_view_sitemap_entry.ainvoke({"entry_id": "ENTRY-1"})
-            )
+            out = asyncio.run(proxy_view_sitemap_entry.ainvoke({"entry_id": "ENTRY-1"}))
         assert json.loads(out)["url"] == "/login"
 
     def test_cli_not_found_surfaces_as_error_json(self) -> None:
