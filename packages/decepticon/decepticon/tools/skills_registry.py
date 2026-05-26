@@ -136,7 +136,7 @@ def iter_skill_records(
         except OSError:
             continue
         fm = _frontmatter(body)
-        rel = virtual[len(SKILL_PATH_PREFIX):]
+        rel = virtual[len(SKILL_PATH_PREFIX) :]
         parts = rel.split("/")
         if parts[-1] == "SKILL.md" and len(parts) >= 2:
             slug = parts[-2]
@@ -214,29 +214,21 @@ def resolve_skill(
         return AmbiguousSkill(query=q, candidates=tuple(name_hits))
 
     slug_index = {r.slug: r for r in pool}
-    fuzzy = difflib.get_close_matches(
-        normalized, list(slug_index.keys()), n=5, cutoff=fuzzy_cutoff
-    )
+    fuzzy = difflib.get_close_matches(normalized, list(slug_index.keys()), n=5, cutoff=fuzzy_cutoff)
     if not fuzzy:
         return None
     if len(fuzzy) == 1:
         return slug_index[fuzzy[0]]
-    return AmbiguousSkill(
-        query=q, candidates=tuple(slug_index[s] for s in fuzzy)
-    )
+    return AmbiguousSkill(query=q, candidates=tuple(slug_index[s] for s in fuzzy))
 
 
-def list_skill_strings(
-    registry: Iterable[SkillRecord], *, filter: str | None = None
-) -> list[str]:
+def list_skill_strings(registry: Iterable[SkillRecord], *, filter: str | None = None) -> list[str]:
     """Return ``slug — id — description`` strings, optionally filtered."""
     out: list[str] = []
     needle = filter.strip().lower() if isinstance(filter, str) else ""
     for rec in registry:
         if needle:
-            haystack = " ".join(
-                [rec.slug, rec.name, rec.description, rec.id]
-            ).lower()
+            haystack = " ".join([rec.slug, rec.name, rec.description, rec.id]).lower()
             if needle not in haystack:
                 continue
         desc = rec.description or "(no description)"

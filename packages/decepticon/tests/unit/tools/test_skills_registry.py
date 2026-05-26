@@ -27,11 +27,9 @@ def _make_record(
     source: str = SKILL_PATH_PREFIX,
 ) -> SkillRecord:
     if slug is None:
-        parts = id_[len(SKILL_PATH_PREFIX):].split("/")
+        parts = id_[len(SKILL_PATH_PREFIX) :].split("/")
         slug = parts[-2] if parts[-1] == "SKILL.md" else parts[-1].removesuffix(".md")
-    return SkillRecord(
-        id=id_, slug=slug, name=name or slug, description=description, source=source
-    )
+    return SkillRecord(id=id_, slug=slug, name=name or slug, description=description, source=source)
 
 
 @pytest.fixture
@@ -111,16 +109,12 @@ class TestIsSafeSkillPath:
 
 class TestResolveSkill:
     def test_exact_path_match(self, small_registry: list[SkillRecord]) -> None:
-        rec = resolve_skill(
-            "/skills/standard/analyst/sql-injection/SKILL.md", small_registry
-        )
+        rec = resolve_skill("/skills/standard/analyst/sql-injection/SKILL.md", small_registry)
         assert isinstance(rec, SkillRecord)
         assert rec.slug == "sql-injection"
 
     def test_exact_path_unsafe_rejected(self, small_registry: list[SkillRecord]) -> None:
-        assert (
-            resolve_skill("/skills/../etc/passwd", small_registry) is None
-        )
+        assert resolve_skill("/skills/../etc/passwd", small_registry) is None
 
     def test_trailing_slug_match(self, small_registry: list[SkillRecord]) -> None:
         rec = resolve_skill("sql-injection", small_registry)
@@ -142,9 +136,7 @@ class TestResolveSkill:
         assert isinstance(rec, SkillRecord)
         assert rec.slug == "reentrancy"
 
-    def test_ambiguous_slug_returns_disambiguation(
-        self, small_registry: list[SkillRecord]
-    ) -> None:
+    def test_ambiguous_slug_returns_disambiguation(self, small_registry: list[SkillRecord]) -> None:
         result = resolve_skill("reporting", small_registry)
         assert isinstance(result, AmbiguousSkill)
         ids = {c.id for c in result.candidates}
@@ -179,23 +171,17 @@ class TestResolveSkill:
 
 
 class TestListSkillStrings:
-    def test_no_filter_returns_all_sorted(
-        self, small_registry: list[SkillRecord]
-    ) -> None:
+    def test_no_filter_returns_all_sorted(self, small_registry: list[SkillRecord]) -> None:
         out = list_skill_strings(small_registry)
         assert len(out) == len(small_registry)
         assert out == sorted(out)
 
-    def test_filter_matches_by_description(
-        self, small_registry: list[SkillRecord]
-    ) -> None:
+    def test_filter_matches_by_description(self, small_registry: list[SkillRecord]) -> None:
         out = list_skill_strings(small_registry, filter="injection")
         assert len(out) == 1
         assert "sql-injection" in out[0]
 
-    def test_filter_matches_by_slug_substring(
-        self, small_registry: list[SkillRecord]
-    ) -> None:
+    def test_filter_matches_by_slug_substring(self, small_registry: list[SkillRecord]) -> None:
         out = list_skill_strings(small_registry, filter="smuggl")
         assert len(out) == 1
         assert "/skills/standard/exploit/web/smuggling.md" in out[0]
