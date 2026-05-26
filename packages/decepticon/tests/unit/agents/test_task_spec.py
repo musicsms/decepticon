@@ -94,9 +94,7 @@ def test_scoped_dispatch_is_smaller_than_full_history() -> None:
     spec = _full_spec()
     fake_parent_history_chars = 80_000
 
-    savings = estimate_token_savings(
-        parent_message_chars=fake_parent_history_chars, task_spec=spec
-    )
+    savings = estimate_token_savings(parent_message_chars=fake_parent_history_chars, task_spec=spec)
 
     scoped_chars = len(SUBAGENT_TASK_SYSTEM_PROMPT) + len(spec.render())
     assert savings == fake_parent_history_chars - scoped_chars

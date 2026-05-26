@@ -123,9 +123,7 @@ def scoped_dispatch_payload(task_spec: SubAgentTaskSpec) -> list[Mapping[str, An
     ]
 
 
-def estimate_token_savings(
-    parent_message_chars: int, task_spec: SubAgentTaskSpec
-) -> int:
+def estimate_token_savings(parent_message_chars: int, task_spec: SubAgentTaskSpec) -> int:
     """Estimate the character delta between full-history vs scoped dispatch.
 
     Used by tests to assert the scoped dispatch is materially smaller
