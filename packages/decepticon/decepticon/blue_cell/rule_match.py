@@ -101,9 +101,6 @@ def _selection_matches(
     return True, matched
 
 
-_BOOLEAN_TOKEN_RE = re.compile(r"\w+|\s+|\(|\)|and|or|not", re.IGNORECASE)
-
-
 def _evaluate_condition(condition: str, selection_results: dict[str, bool]) -> bool:
     """Boolean evaluation of a selection-name condition.
 

@@ -100,6 +100,8 @@ def _parse_line_to_event(line: str, source: str, fallback_ts: float) -> TapEvent
             parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
             ts = parsed.timestamp()
         except (ValueError, AttributeError):
+            # Malformed timestamps fall back to the file-mtime-derived
+            # ts already assigned above. We never raise from the tap.
             pass
     cmd_match = _LEADING_CMD_RE.match(sanitised)
     actor_process = (cmd_match.group(1) or cmd_match.group(2) or "") if cmd_match else ""

@@ -56,6 +56,8 @@ def _is_valid_target(token: str) -> bool:
         ipaddress.ip_network(token, strict=False)
         return True
     except ValueError:
+        # Not a valid IP/CIDR literal - fall through to hostname validation
+        # below. Bare strings like 'example.com' are legitimate targets.
         pass
     if "." not in token:
         return False
@@ -182,6 +184,10 @@ def extract_targets(command: str) -> set[str]:
             try:
                 targets.update(extractor(command))
             except Exception:
+                # Tool-specific extractors fail soft. If e.g. impacket's
+                # credentials-target parser hits a malformed input we fall
+                # back to the generic IP/URL scraper below rather than
+                # raising into the middleware hot path.
                 pass
             break
     targets.update(_extract_generic(command))

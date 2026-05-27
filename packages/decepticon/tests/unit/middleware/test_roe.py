@@ -142,7 +142,8 @@ class TestExtractTargets:
         assert "10.0.0.5" in extract_targets("ssh -p 2222 user@10.0.0.5")
 
     def test_extracts_curl_url(self) -> None:
-        assert "api.acme.com" in extract_targets("curl -X GET https://api.acme.com/v1/users")
+        targets = extract_targets("curl -X GET https://api.acme.com/v1/users")
+        assert "api.acme.com" in targets
 
     def test_extracts_hostname_after_verb(self) -> None:
         assert "target.example" in extract_targets("nmap target.example -p 80")

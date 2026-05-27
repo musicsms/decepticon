@@ -144,6 +144,10 @@ class RoEAuditSink:
                     try:
                         os.fsync(fh.fileno())
                     except OSError:
+                        # fsync best-effort. The audit line is already in the
+                        # kernel buffer and the outer write succeeded; fsync
+                        # not being supported on this fs (tmpfs, network mounts)
+                        # must not block the hot path.
                         pass
             except OSError as exc:
                 log.error("audit_sink: failed to write to %s: %s", self.path, exc)

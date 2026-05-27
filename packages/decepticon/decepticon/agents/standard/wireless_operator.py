@@ -130,8 +130,9 @@ def create_wireless_operator_agent(
     )
 
 
+# Module-level graph for LangGraph Platform (langgraph serve)
 if is_bundle_enabled("standard"):
-    graph = create_wireless_operator_agent()
+    graph = create_wireless_operator_agent()  # noqa: F841  # consumed by langgraph platform at runtime
 
 
 SUBAGENT_SPEC = SubAgentSpec(

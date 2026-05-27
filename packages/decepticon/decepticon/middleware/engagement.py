@@ -131,6 +131,10 @@ def _hydrate_engagement_state(state: Any) -> dict[str, Any] | None:
         try:
             set_active_engagement(engagement_label)
         except ValueError:
+            # Invalid engagement label format (e.g. contains slashes or
+            # control chars). The contextvar stays unset; downstream
+            # Neo4j writes will hit the explicit no-engagement guard and
+            # fail loud rather than silently writing to the global scope.
             pass
 
     return updates or None
