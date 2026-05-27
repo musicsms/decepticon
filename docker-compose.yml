@@ -183,10 +183,44 @@ services:
     container_name: decepticon${DECEPTICON_STACK_NAME:+-${DECEPTICON_STACK_NAME}}-sandbox
     networks:
       - sandbox-net
+    # ──────────────────────────────────────────────────────────────────
+    # Sandbox hardening - see docs/security/sandbox-isolation.md.
+    #
+    # The Kali sandbox runs root inside the container because raw sockets
+    # (nmap SYN scans, packet capture) require root and the container
+    # boundary IS the security boundary, not the user boundary. To keep
+    # that boundary tight:
+    #
+    #   - cap_drop ALL, then re-add the minimum set the offensive
+    #     toolset actually needs (NET_RAW for SYN scans, NET_ADMIN for
+    #     raw routing, NET_BIND_SERVICE for low ports, SYS_PTRACE for
+    #     frida/gdb in the Reverser path, SETUID/SETGID for tools like
+    #     msfconsole that drop privileges internally).
+    #   - no-new-privileges blocks setuid escalation within the
+    #     container even if a tool ships with a setuid binary.
+    #   - mem_limit caps a runaway scan / fuzzer at 4G so it can't
+    #     starve the management plane.
+    #   - pids_limit was already 1024; kept.
+    #   - read_only: NOT set. The Kali toolset writes to /tmp, /var,
+    #     /root, /workspace. A read_only root with tmpfs everywhere
+    #     would break ~30 tools. Per-engagement container isolation
+    #     (sandbox-isolation.md) is the right structural fix.
+    cap_drop:
+      - ALL
     cap_add:
       - NET_RAW
       - NET_ADMIN
       - NET_BIND_SERVICE
+      - SYS_PTRACE
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 4g
     environment:
       # SANDBOX_DAEMON=1 makes containers/sandbox-entrypoint.sh run the
       # FastAPI daemon on port 9999 instead of the legacy
