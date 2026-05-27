@@ -29,6 +29,8 @@ from __future__ import annotations
 import ipaddress
 import re
 import shlex
+from collections.abc import Callable
+from typing import Any
 
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _CIDR_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}/\d{1,2}\b")
@@ -143,7 +145,7 @@ def _extract_impacket_targets(command: str) -> set[str]:
     return targets
 
 
-_TOOL_EXTRACTORS: tuple[tuple[re.Pattern[str], callable], ...] = (
+_TOOL_EXTRACTORS: tuple[tuple[re.Pattern[str], Callable[[str], set[str]]], ...] = (
     (re.compile(r"^\s*(?:sudo\s+)?(?:nmap|masscan|rustscan|naabu)\b", re.IGNORECASE), _extract_nmap_targets),
     (re.compile(r"^\s*(?:ssh|scp|sftp)\b", re.IGNORECASE), _extract_ssh_targets),
     (re.compile(r"^\s*(?:impacket-[A-Za-z0-9_-]+|GetUserSPNs|GetNPUsers|secretsdump|psexec|wmiexec)", re.IGNORECASE), _extract_impacket_targets),

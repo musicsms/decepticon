@@ -159,7 +159,7 @@ class RoEEnforcementMiddleware(AgentMiddleware):
 
     @override
     async def awrap_tool_call(self, request, handler) -> ToolMessage | Command:
-        return self._dispatch_async(request, handler)
+        return await self._dispatch_async(request, handler)
 
     def _dispatch_sync(self, request, handler):
         decision, rules, tool_name = self._evaluate(request)
