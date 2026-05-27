@@ -428,15 +428,22 @@ class Neo4jStore:
         """Query all nodes of a given kind using native Neo4j labels.
 
         ``kind`` can be either a NodeKind value (e.g. "host") or a Neo4j
-        label (e.g. "Host"). Both are accepted.
+        label (e.g. "Host"). Both are accepted. Anything else raises
+        ``ValueError`` - the label is interpolated into the Cypher template
+        (Neo4j Cypher does not parameter-bind labels), so an unvalidated
+        caller-supplied label would be a direct Cypher-injection vector.
         """
-        # Resolve kind to a Neo4j label
         try:
             nk = NodeKind(kind)
             label = _label_for(nk)
         except ValueError:
-            # Maybe it's already a label name (PascalCase)
-            label = kind if kind in _ALL_NODE_LABELS else kind
+            if kind not in _ALL_NODE_LABELS:
+                raise ValueError(
+                    f"unknown node kind/label: {kind!r}; "
+                    f"expected one of {sorted(_ALL_NODE_LABELS)} "
+                    "or a valid NodeKind value"
+                ) from None
+            label = kind
 
         query = f"""
         MATCH (n:{label})
