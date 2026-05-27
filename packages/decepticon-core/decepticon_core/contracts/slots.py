@@ -28,6 +28,7 @@ class MiddlewareSlot(StrEnum):
     """
 
     ENGAGEMENT_CONTEXT = "engagement-context"
+    ROE_ENFORCEMENT = "roe-enforcement"
     UNTRUSTED_OUTPUT = "untrusted-output"
     SKILLS = "skills"
     FILESYSTEM = "filesystem"
@@ -49,6 +50,12 @@ SAFETY_CRITICAL_SLOTS: frozenset[MiddlewareSlot] = frozenset(
         # middleware honours the same contract; full disable is the
         # actual hazard.
         MiddlewareSlot.ENGAGEMENT_CONTEXT,
+        # RoEEnforcementMiddleware is the legal/safety gate for every
+        # bash tool call. Disabling it lets the agent attempt commands
+        # against out-of-scope targets without record. Replacement is
+        # fine if the new middleware honours the same contract (target
+        # extraction + RoE evaluation + chained audit log).
+        MiddlewareSlot.ROE_ENFORCEMENT,
         # UntrustedOutputMiddleware structurally separates attacker-
         # influenceable tool output (bash stdout, file reads, KG
         # queries) from authoritative instructions via the
@@ -97,6 +104,7 @@ _BASE_SLOTS: frozenset[MiddlewareSlot] = _TAIL_SLOTS | {
     MiddlewareSlot.SKILLS,
     MiddlewareSlot.FILESYSTEM,
     MiddlewareSlot.UNTRUSTED_OUTPUT,
+    MiddlewareSlot.ROE_ENFORCEMENT,
 }
 
 # Standard bash-executing agents (recon/exploit/postexploit/analyst/
