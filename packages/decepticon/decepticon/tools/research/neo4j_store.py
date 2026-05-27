@@ -29,6 +29,11 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
+from decepticon.tools.research._apoc_safety import ensure_safe
+from decepticon.tools.research._engagement_scope import (
+    get_active_engagement,
+    with_engagement_property,
+)
 from decepticon_core.types.kg import Edge, EdgeKind, KnowledgeGraph, Node, NodeKind
 from decepticon_core.utils.logging import get_logger
 
@@ -224,15 +229,24 @@ class Neo4jStore:
     # ── Single upserts ───────────────────────────────────────────────────
 
     def upsert_node(self, node: Node) -> None:
-        """MERGE a node using its NodeKind as the Neo4j label."""
+        """MERGE a node using its NodeKind as the Neo4j label.
+
+        Every upsert tags the node with the active engagement
+        (``n.engagement = $engagement``). This is what makes
+        per-engagement query filtering work on the read side
+        (see docs/security/neo4j-hardening.md).
+        """
         label = _label_for(node.kind)
         now = time.time()
+        scoped_props = with_engagement_property(node.props)
+        engagement = scoped_props["engagement"]
         query = f"""
         MERGE (n:{label} {{id: $id}})
         SET n.kind = $kind,
             n.label = $label,
             n.props = $props,
             n.key = $key,
+            n.engagement = $engagement,
             n.created_at = coalesce(n.created_at, $created_at),
             n.updated_at = $updated_at
         """
@@ -240,8 +254,9 @@ class Neo4jStore:
             "id": node.id,
             "kind": node.kind.value,
             "label": node.label,
-            "props": _encode_props(node.props),
+            "props": _encode_props(scoped_props),
             "key": node.props.get("key", node.id),
+            "engagement": engagement,
             "created_at": node.created_at,
             "updated_at": now,
         }
@@ -249,15 +264,23 @@ class Neo4jStore:
             session.run(query, params)
 
     def upsert_edge(self, edge: Edge) -> None:
-        """MERGE a relationship using its EdgeKind as the Neo4j relationship type."""
+        """MERGE a relationship using its EdgeKind as the Neo4j relationship type.
+
+        Edges inherit the active engagement so the read-side filter
+        (`MATCH (a)-[r]->(b) WHERE r.engagement = $engagement`) can
+        prune edges to the current tenant without joining on both
+        endpoints.
+        """
         rel_type = edge.kind.value.upper()
-        # Match src and dst nodes by id across all labels (no label constraint)
+        scoped_props = with_engagement_property(edge.props)
+        engagement = scoped_props["engagement"]
         query = f"""
         MATCH (src {{id: $src_id}}), (dst {{id: $dst_id}})
         MERGE (src)-[r:{rel_type} {{id: $edge_id}}]->(dst)
         SET r.kind = $kind,
             r.weight = $weight,
             r.props = $props,
+            r.engagement = $engagement,
             r.created_at = coalesce(r.created_at, $created_at)
         """
         params = {
@@ -266,7 +289,8 @@ class Neo4jStore:
             "edge_id": edge.id,
             "kind": edge.kind.value,
             "weight": edge.weight,
-            "props": _encode_props(edge.props),
+            "props": _encode_props(scoped_props),
+            "engagement": engagement,
             "created_at": edge.created_at,
         }
         with self._driver.session(database=self._database) as session:
@@ -287,13 +311,15 @@ class Neo4jStore:
         now = time.time()
         for node in nodes:
             label = _label_for(node.kind)
+            scoped_props = with_engagement_property(node.props)
             grouped[label].append(
                 {
                     "id": node.id,
                     "kind": node.kind.value,
                     "label": node.label,
-                    "props": _encode_props(node.props),
+                    "props": _encode_props(scoped_props),
                     "key": node.props.get("key", node.id),
+                    "engagement": scoped_props["engagement"],
                     "created_at": node.created_at,
                     "updated_at": now,
                 }
@@ -309,6 +335,7 @@ class Neo4jStore:
                     n.label = row.label,
                     n.props = row.props,
                     n.key = row.key,
+                    n.engagement = row.engagement,
                     n.created_at = coalesce(n.created_at, row.created_at),
                     n.updated_at = row.updated_at
                 """
@@ -329,6 +356,7 @@ class Neo4jStore:
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for edge in edges:
             rel_type = edge.kind.value.upper()
+            scoped_props = with_engagement_property(edge.props)
             grouped[rel_type].append(
                 {
                     "id": edge.id,
@@ -336,7 +364,8 @@ class Neo4jStore:
                     "src_id": edge.src,
                     "dst_id": edge.dst,
                     "weight": edge.weight,
-                    "props": _encode_props(edge.props),
+                    "props": _encode_props(scoped_props),
+                    "engagement": scoped_props["engagement"],
                     "created_at": edge.created_at,
                 }
             )
@@ -351,6 +380,7 @@ class Neo4jStore:
                 SET r.kind = row.kind,
                     r.weight = row.weight,
                     r.props = row.props,
+                    r.engagement = row.engagement,
                     r.created_at = coalesce(r.created_at, row.created_at)
                 """
                 session.run(query, batch=batch)
