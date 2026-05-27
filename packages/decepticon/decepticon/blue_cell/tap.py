@@ -72,10 +72,16 @@ class TapEvent:
         return {
             "ts": self.ts,
             "source": self.source,
-            "actor.process": self.actor_process,
-            "actor.command_line": self.actor_command_line,
-            "network.destinations": list(self.network_destinations),
-            "event.outcome": self.event_outcome,
+            "actor": {
+                "process": self.actor_process,
+                "command_line": self.actor_command_line,
+            },
+            "network": {
+                "destinations": list(self.network_destinations),
+            },
+            "event": {
+                "outcome": self.event_outcome,
+            },
             "raw": self.raw,
         }
 

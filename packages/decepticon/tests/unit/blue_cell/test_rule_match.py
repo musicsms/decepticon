@@ -185,6 +185,50 @@ class TestRuleLoading:
         assert {r.id for r in rules} == {"r-0", "r-1"}
 
 
+class TestTapToMatcherShape:
+    def test_tap_event_to_dict_shape_matches_rule_event_field_traversal(self) -> None:
+        """Regression: TapEvent.to_dict() must emit nested dicts.
+
+        The matcher's _event_field() traverses dotted paths by splitting
+        on '.' and walking nested dicts. If TapEvent.to_dict() emits
+        flat keys like {'actor.command_line': '...'}, the traversal
+        does event.get('actor') which returns None and every rule
+        misses. Caught by the E2E audit pass; this test pins the
+        contract so the regression can't recur.
+        """
+        from decepticon.blue_cell.tap import TapEvent
+
+        event = TapEvent(
+            ts=1000.0,
+            source="sandbox.tmux.main",
+            actor_process="nmap",
+            actor_command_line="nmap 10.0.0.5",
+            network_destinations=("10.0.0.5",),
+            raw="nmap 10.0.0.5",
+        )
+        d = event.to_dict()
+        assert isinstance(d.get("actor"), dict), (
+            "actor must be a nested dict, not flat dotted keys"
+        )
+        assert d["actor"]["command_line"] == "nmap 10.0.0.5"
+        assert d["actor"]["process"] == "nmap"
+        assert isinstance(d.get("network"), dict)
+        assert d["network"]["destinations"] == ["10.0.0.5"]
+
+        rule = DetectionRule(
+            id="r-pipe",
+            title="pipeline-shape",
+            selections={"sel": {"actor.command_line": "nmap"}},
+            condition="sel",
+        )
+        matcher = RuleMatcher([rule])
+        hits = matcher.match(d, now_ts=1001.0)
+        assert len(hits) == 1, (
+            "rule with 'actor.command_line' selection MUST match the "
+            "tap's emitted event - if this fails, the shapes drifted"
+        )
+
+
 class TestEndToEnd:
     def test_full_pipeline_red_attack_blue_detect(self) -> None:
         """A simulated kerberoast attack should fire the matching rule."""

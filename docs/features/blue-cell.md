@@ -248,7 +248,7 @@ Proposed rule improvements:
   this matcher's authoring conventions follow.
 - [Mordor](https://github.com/OTRF/mordor) — adversary-activity
   datasets useful as Blue Cell regression-test corpora.
-- [`docs/features/offensive-vaccine-pipeline.md`](../features/offensive-vaccine-pipeline.md)
+- [`docs/offensive-vaccine.md`](../offensive-vaccine.md)
   — the broader pipeline this closes.
 - [`docs/security/decepticon-threat-model.md`](../security/decepticon-threat-model.md)
   — the threat model Blue Cell helps validate (Red Cell on the front
