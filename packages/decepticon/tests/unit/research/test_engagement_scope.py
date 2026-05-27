@@ -144,9 +144,15 @@ class TestNeo4jUpsertCypherShape:
         """The upsert template sets n.engagement = $engagement on every write."""
         from pathlib import Path
 
-        source = Path(
-            __file__,
-        ).parent.parent.parent.parent / "decepticon" / "tools" / "research" / "neo4j_store.py"
+        source = (
+            Path(
+                __file__,
+            ).parent.parent.parent.parent
+            / "decepticon"
+            / "tools"
+            / "research"
+            / "neo4j_store.py"
+        )
         text = source.read_text(encoding="utf-8")
         assert "n.engagement = $engagement" in text, (
             "upsert_node Cypher template must set n.engagement = $engagement"
@@ -165,9 +171,15 @@ class TestNeo4jUpsertCypherShape:
         """The upsert path must wrap props in with_engagement_property()."""
         from pathlib import Path
 
-        source = Path(
-            __file__,
-        ).parent.parent.parent.parent / "decepticon" / "tools" / "research" / "neo4j_store.py"
+        source = (
+            Path(
+                __file__,
+            ).parent.parent.parent.parent
+            / "decepticon"
+            / "tools"
+            / "research"
+            / "neo4j_store.py"
+        )
         text = source.read_text(encoding="utf-8")
         assert text.count("with_engagement_property(") >= 4, (
             "every upsert path (single+batch, node+edge) must call with_engagement_property()"

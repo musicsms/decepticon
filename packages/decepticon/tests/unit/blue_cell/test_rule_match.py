@@ -120,9 +120,7 @@ class TestMTTD:
         assert score_mttd(red_event_ts=2000.0, blue_detection_ts=1995.0) == 0.0
 
     def test_detection_event_mttd_property(self) -> None:
-        rule = DetectionRule(
-            id="r-7", title="x", selections={"s": {"raw": "test"}}, condition="s"
-        )
+        rule = DetectionRule(id="r-7", title="x", selections={"s": {"raw": "test"}}, condition="s")
         m = RuleMatcher([rule])
         hits = m.match(_event(cmd="test", ts=1000.0), now_ts=1004.2)
         assert hits[0].mttd_seconds == pytest.approx(4.2)
@@ -207,9 +205,7 @@ class TestTapToMatcherShape:
             raw="nmap 10.0.0.5",
         )
         d = event.to_dict()
-        assert isinstance(d.get("actor"), dict), (
-            "actor must be a nested dict, not flat dotted keys"
-        )
+        assert isinstance(d.get("actor"), dict), "actor must be a nested dict, not flat dotted keys"
         assert d["actor"]["command_line"] == "nmap 10.0.0.5"
         assert d["actor"]["process"] == "nmap"
         assert isinstance(d.get("network"), dict)

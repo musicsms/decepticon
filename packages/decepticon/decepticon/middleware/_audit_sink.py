@@ -52,9 +52,9 @@ _GENESIS_PREV_HASH = "0" * 64
 
 
 def _canonical(record: dict[str, Any]) -> bytes:
-    return json.dumps(
-        record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    return json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
 
 
 def _record_hash(record: dict[str, Any], prev_hash: str) -> str:

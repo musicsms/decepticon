@@ -287,9 +287,7 @@ class TestRoEMiddleware:
         _write_roe(tmp_path, {"mode": "warn", "out_of_scope": ["10.99.0.0/16"]})
         mw = RoEEnforcementMiddleware()
         req = _make_request("bash", "nmap 10.99.1.1", state={"workspace_path": str(tmp_path)})
-        handler = MagicMock(
-            return_value=ToolMessage(content="scan output", tool_call_id="tc-test")
-        )
+        handler = MagicMock(return_value=ToolMessage(content="scan output", tool_call_id="tc-test"))
         result = mw.wrap_tool_call(req, handler)
         assert handler.called
         assert "[ROE_WARN]" in result.content

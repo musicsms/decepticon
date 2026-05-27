@@ -59,7 +59,10 @@ def _is_valid_target(token: str) -> bool:
         pass
     if "." not in token:
         return False
-    if any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-:" for ch in token):
+    if any(
+        ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-:"
+        for ch in token
+    ):
         return False
     return True
 
@@ -145,9 +148,18 @@ def _extract_impacket_targets(command: str) -> set[str]:
 
 
 _TOOL_EXTRACTORS: tuple[tuple[re.Pattern[str], Callable[[str], set[str]]], ...] = (
-    (re.compile(r"^\s*(?:sudo\s+)?(?:nmap|masscan|rustscan|naabu)\b", re.IGNORECASE), _extract_nmap_targets),
+    (
+        re.compile(r"^\s*(?:sudo\s+)?(?:nmap|masscan|rustscan|naabu)\b", re.IGNORECASE),
+        _extract_nmap_targets,
+    ),
     (re.compile(r"^\s*(?:ssh|scp|sftp)\b", re.IGNORECASE), _extract_ssh_targets),
-    (re.compile(r"^\s*(?:impacket-[A-Za-z0-9_-]+|GetUserSPNs|GetNPUsers|secretsdump|psexec|wmiexec)", re.IGNORECASE), _extract_impacket_targets),
+    (
+        re.compile(
+            r"^\s*(?:impacket-[A-Za-z0-9_-]+|GetUserSPNs|GetNPUsers|secretsdump|psexec|wmiexec)",
+            re.IGNORECASE,
+        ),
+        _extract_impacket_targets,
+    ),
 )
 
 
