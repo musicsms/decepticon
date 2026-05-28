@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Decepticon scan
-        uses: PurpleAILAB/Decepticon/.github/actions/decepticon-scan@main
+        uses: ./.github/actions/decepticon-scan
         with:
           target: "./"
           scan-mode: "quick"

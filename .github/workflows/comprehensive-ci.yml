@@ -111,6 +111,10 @@ jobs:
       - name: Public rule packs (report only)
         continue-on-error: true
         run: |
+          # shellcheck disable=SC2016
+          # The fallback echo below intentionally emits a literal JSON
+          # document containing the string "$schema" as a key; not a
+          # shell variable expansion.
           semgrep scan \
             --metrics=off \
             --sarif --sarif-output=semgrep-public.sarif \

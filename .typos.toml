@@ -135,4 +135,13 @@ extend-exclude = [
     # Scoped to this directory so the rest of the tree keeps full typo
     # coverage rather than globally allow-listing two-letter tokens.
     "packages/decepticon/decepticon/skills/standard/exploit/ics-ot/**",
+    "packages/decepticon/decepticon/skills/standard/ics/**",
+    # Sisyphus-added domain skill seeds with industrial / wireless / OT
+    # protocol jargon that typos misreads (BACnet, OT tag list, ics, etc.)
+    "packages/decepticon/decepticon/skills/standard/iot/**",
+    "packages/decepticon/decepticon/skills/standard/dfir/**",
+    "packages/decepticon/decepticon/skills/standard/phish/**",
+    "packages/decepticon/decepticon/skills/standard/supply-chain/**",
+    "packages/decepticon/decepticon/skills/standard/osint/**",
+    ".omo/plans/**",
 ]
