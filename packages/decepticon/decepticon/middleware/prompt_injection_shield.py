@@ -70,9 +70,7 @@ _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
         "high",
     ),
     (
-        re.compile(
-            r"(?im)\b(you\s+are\s+now|from\s+now\s+on|new\s+instructions?)\s*:"
-        ),
+        re.compile(r"(?im)\b(you\s+are\s+now|from\s+now\s+on|new\s+instructions?)\s*:"),
         "role_reset",
         "high",
     ),
@@ -198,11 +196,7 @@ def _build_warning_banner(detections: list[tuple[str, str, str]]) -> str:
 
 def _wrap_untrusted(content: str, banner: str | None) -> str:
     """Wrap content in ``<untrusted_tool_output>…</untrusted_tool_output>`` markers."""
-    body = (
-        "<untrusted_tool_output>\n"
-        f"{content}\n"
-        "</untrusted_tool_output>"
-    )
+    body = f"<untrusted_tool_output>\n{content}\n</untrusted_tool_output>"
     if banner:
         return f"{banner}\n\n{body}"
     return body
@@ -273,19 +267,21 @@ class PromptInjectionShieldMiddleware(AgentMiddleware):
 
     # TODO(Skillogy migration): replace hardcoded ``load_skill``/``list_skills``
     # entries with a registry-driven lookup once the Skillogy middleware lands.
-    _SAFE_TOOL_NAMES: ClassVar[frozenset[str]] = frozenset({
-        "add_objective",
-        "get_objective",
-        "list_objectives",
-        "update_objective",
-        "objective_expand",
-        "load_skill",
-        "list_skills",
-        "read_file",
-        "write_file",
-        "list_directory",
-        "task",
-    })
+    _SAFE_TOOL_NAMES: ClassVar[frozenset[str]] = frozenset(
+        {
+            "add_objective",
+            "get_objective",
+            "list_objectives",
+            "update_objective",
+            "objective_expand",
+            "load_skill",
+            "list_skills",
+            "read_file",
+            "write_file",
+            "list_directory",
+            "task",
+        }
+    )
 
     def __init__(self, *, append_policy_to_system: bool = True) -> None:
         super().__init__()

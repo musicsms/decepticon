@@ -145,9 +145,7 @@ class ApprovalTransport(Protocol):
 
     def submit(self, request: ApprovalRequest) -> None: ...
 
-    def wait_for_decision(
-        self, request_id: str, timeout: float
-    ) -> ApprovalDecision | None: ...
+    def wait_for_decision(self, request_id: str, timeout: float) -> ApprovalDecision | None: ...
 
 
 class InProcessApprovalTransport:
@@ -166,9 +164,7 @@ class InProcessApprovalTransport:
     def provide_decision(self, decision: ApprovalDecision) -> None:
         self._decisions[decision.request_id] = decision
 
-    def wait_for_decision(
-        self, request_id: str, timeout: float
-    ) -> ApprovalDecision | None:
+    def wait_for_decision(self, request_id: str, timeout: float) -> ApprovalDecision | None:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if request_id in self._decisions:
@@ -248,9 +244,7 @@ class FileBackedApprovalTransport:
                 )
         return out
 
-    def wait_for_decision(
-        self, request_id: str, timeout: float
-    ) -> ApprovalDecision | None:
+    def wait_for_decision(self, request_id: str, timeout: float) -> ApprovalDecision | None:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             for decision in self._scan_decisions():
@@ -323,9 +317,7 @@ class HITLApprovalMiddleware(AgentMiddleware):
         self._engagement_name = engagement_name
         self._agent_name = agent_name
 
-    def _match_rule(
-        self, tool_name: str, technique_tag: str | None
-    ) -> ApprovalPolicyRule | None:
+    def _match_rule(self, tool_name: str, technique_tag: str | None) -> ApprovalPolicyRule | None:
         for rule in self._policy:
             if rule.technique_tag and technique_tag and rule.technique_tag == technique_tag:
                 return rule
@@ -388,18 +380,13 @@ class HITLApprovalMiddleware(AgentMiddleware):
             note = decision.operator_note
 
         tool_call_id = getattr(request, "tool_call_id", "") or ""
-        tool_name = (
-            getattr(getattr(request, "tool", None), "name", "") if request else ""
-        )
+        tool_name = getattr(getattr(request, "tool", None), "name", "") if request else ""
         if action == "allow":
             return handler(request)
         if action == "redirect" and decision and decision.redirect_args is not None:
             redirected = request.override(tool_call_args=decision.redirect_args)
             return handler(redirected)
-        denial_text = (
-            f"HITL gate denied tool call ``{tool_name}``"
-            + (f": {note}" if note else "")
-        )
+        denial_text = f"HITL gate denied tool call ``{tool_name}``" + (f": {note}" if note else "")
         return ToolMessage(
             content=denial_text,
             tool_call_id=tool_call_id,
@@ -425,18 +412,13 @@ class HITLApprovalMiddleware(AgentMiddleware):
             note = decision.operator_note
 
         tool_call_id = getattr(request, "tool_call_id", "") or ""
-        tool_name = (
-            getattr(getattr(request, "tool", None), "name", "") if request else ""
-        )
+        tool_name = getattr(getattr(request, "tool", None), "name", "") if request else ""
         if action == "allow":
             return await handler(request)
         if action == "redirect" and decision and decision.redirect_args is not None:
             redirected = request.override(tool_call_args=decision.redirect_args)
             return await handler(redirected)
-        denial_text = (
-            f"HITL gate denied tool call ``{tool_name}``"
-            + (f": {note}" if note else "")
-        )
+        denial_text = f"HITL gate denied tool call ``{tool_name}``" + (f": {note}" if note else "")
         return ToolMessage(
             content=denial_text,
             tool_call_id=tool_call_id,
@@ -454,9 +436,7 @@ class HITLApprovalMiddleware(AgentMiddleware):
             return handler(request)
         appr = self._build_request(tool_name, tool_args, rule, request)
         self._transport.submit(appr)
-        decision = self._transport.wait_for_decision(
-            appr.request_id, rule.timeout_seconds
-        )
+        decision = self._transport.wait_for_decision(appr.request_id, rule.timeout_seconds)
         return self._decision_to_response(decision, rule, request, handler)
 
     @override
@@ -469,9 +449,7 @@ class HITLApprovalMiddleware(AgentMiddleware):
             return await handler(request)
         appr = self._build_request(tool_name, tool_args, rule, request)
         self._transport.submit(appr)
-        decision = self._transport.wait_for_decision(
-            appr.request_id, rule.timeout_seconds
-        )
+        decision = self._transport.wait_for_decision(appr.request_id, rule.timeout_seconds)
         return await self._adecision_to_response(decision, rule, request, handler)
 
 

@@ -59,7 +59,12 @@ _POLICY_PROMPT = (
 
 
 def _is_enabled() -> bool:
-    return os.environ.get("DECEPTICON_USE_SKILLOGY", "").strip().lower() in {"1", "true", "yes", "on"}
+    return os.environ.get("DECEPTICON_USE_SKILLOGY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _resolve_base_url() -> str:

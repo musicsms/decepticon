@@ -59,37 +59,30 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=sandbox-apt-cache
         # ── C2 client (connects to the separate c2-sliver server container) ──
         sliver \
         # ── AD attack chain — Responder → ntlmrelayx → secretsdump ──
-        # impacket-scripts is provided by Kali's python3-impacket; responder
-        # ships its own apt package. These three chain together for the
-        # canonical internal-network AD chain documented in
-        # docs/red-team/tools-techniques.md §11.
+        # responder + python3-impacket are both in kali-rolling apt; they
+        # chain together for the canonical internal-network AD attack
+        # documented in docs/red-team/tools-techniques.md.
         responder \
         python3-impacket \
-        # ── Pivoting / tunneling ──
-        # chisel: HTTP-only tunnel for restricted egress paths. ligolo-ng's
-        # apt package landed in kali-rolling 2026.1; if unavailable on an
-        # older snapshot the operator falls back to the GitHub release.
-        chisel \
-        # ── Fuzzing harnesses (binary RE / Reverser agent) ──
-        # AFL++ and Honggfuzz are the two general-purpose fuzzers that
-        # complement libFuzzer's in-tree harness. Kept lean: no compiler
-        # toolchain extras beyond what Kali already ships.
-        afl++ \
-        honggfuzz \
-        # ── Memory forensics + DFIR validation (Forensicator agent) ──
-        # plaso (log2timeline + psort) and yara-x give the DFIR catalog
-        # the artifact-validation surface it needs. volatility3 is
-        # already in operator's host toolchain (uv tool); the sandbox
-        # uses the apt package for self-contained engagements.
-        plaso \
-        volatility3 \
-        yara \
         # ── Mobile triage host-side (Mobile agent) ──
-        # MobSF runs in its own container, but adb / apktool / jadx-cli
-        # let the agent do quick triage in the sandbox without leaving
-        # the bash tool.
-        android-tools-adb \
-        apktool
+        # adb + apktool are in kali-rolling apt and let the agent do quick
+        # APK / device triage from the bash tool without leaving the sandbox.
+        adb \
+        apktool \
+        # ── YARA (DFIR validation; complements yara-x on the host) ──
+        yara
+
+# ── Tools NOT yet wired into apt-install ──
+# Deliberately deferred to follow-up PRs because they need either a
+# GitHub-release pull (no apt package) or a pip install:
+#   chisel       (GitHub release: jpillora/chisel)
+#   ligolo-ng    (GitHub release: nicocha30/ligolo-ng)
+#   afl++ / aflplusplus / honggfuzz (apt names + dep weight uncertain)
+#   plaso        (pip: ``plaso``; pulls in pyparsing + heavy deps)
+#   volatility3  (pip: ``volatility3``; same as operator's host install)
+# Operators who need these today can ``pip install volatility3 plaso``
+# inside the sandbox via the agent's bash tool. A follow-up PR will add
+# them to the image once the right install paths are verified.
 
 # Configure tmux: 20K line scrollback buffer. The Python-side output
 # truncation (MAX_OUTPUT_CHARS = 30_000 chars) means the agent reads at

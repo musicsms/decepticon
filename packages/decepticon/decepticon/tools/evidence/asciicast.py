@@ -161,9 +161,7 @@ def export_asciicast(
         "bytes_in_log": len(content),
         "bytes_in_cast": out_p.stat().st_size,
     }
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     return manifest
 
 

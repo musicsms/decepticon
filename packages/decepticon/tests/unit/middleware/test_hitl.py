@@ -105,9 +105,7 @@ def test_inprocess_transport_times_out_when_no_decision():
 def test_filebacked_transport_roundtrip(tmp_path: Path):
     requests = tmp_path / "requests.jsonl"
     decisions = tmp_path / "decisions.jsonl"
-    transport = FileBackedApprovalTransport(
-        requests, decisions, poll_interval=0.05
-    )
+    transport = FileBackedApprovalTransport(requests, decisions, poll_interval=0.05)
     req = ApprovalRequest(
         request_id="r3",
         engagement_name="eng",
@@ -183,9 +181,7 @@ def test_middleware_blocks_matched_tool_until_decision():
         time.sleep(0.1)
         pending = t.pending()
         assert len(pending) == 1
-        t.provide_decision(
-            ApprovalDecision(request_id=pending[0].request_id, action="allow")
-        )
+        t.provide_decision(ApprovalDecision(request_id=pending[0].request_id, action="allow"))
 
     threading.Thread(target=_approve, daemon=True).start()
     result = mw.wrap_tool_call(request, _allow_handler)
@@ -214,9 +210,7 @@ def test_middleware_denies_on_timeout_by_default():
 def test_middleware_matches_by_technique_tag():
     t = InProcessApprovalTransport()
     mw = HITLApprovalMiddleware(
-        policy=[
-            ApprovalPolicyRule(technique_tag="T1003", timeout_seconds=0.2)
-        ],
+        policy=[ApprovalPolicyRule(technique_tag="T1003", timeout_seconds=0.2)],
         transport=t,
     )
     state = {"current_objective": {"technique_id": "T1003"}}
@@ -226,9 +220,7 @@ def test_middleware_matches_by_technique_tag():
         target=lambda: (
             time.sleep(0.05),
             t.provide_decision(
-                ApprovalDecision(
-                    request_id=t.pending()[0].request_id, action="allow"
-                )
+                ApprovalDecision(request_id=t.pending()[0].request_id, action="allow")
             ),
         ),
         daemon=True,
@@ -266,9 +258,7 @@ async def test_middleware_async_path_blocks_and_allows():
 
     def _approve():
         time.sleep(0.05)
-        t.provide_decision(
-            ApprovalDecision(request_id=t.pending()[0].request_id, action="allow")
-        )
+        t.provide_decision(ApprovalDecision(request_id=t.pending()[0].request_id, action="allow"))
 
     threading.Thread(target=_approve, daemon=True).start()
     result = await mw.awrap_tool_call(request, _async_handler)
@@ -280,8 +270,7 @@ def test_default_high_impact_policy_includes_t1003_and_c2_deploy():
 
     has_t1003 = any(r.technique_tag == "T1003" for r in DEFAULT_HIGH_IMPACT_POLICY)
     has_c2 = any(
-        r.tool_pattern and "sliver_implant" in r.tool_pattern
-        for r in DEFAULT_HIGH_IMPACT_POLICY
+        r.tool_pattern and "sliver_implant" in r.tool_pattern for r in DEFAULT_HIGH_IMPACT_POLICY
     )
     assert has_t1003
     assert has_c2

@@ -81,9 +81,7 @@ def test_export_includes_security_severity_property():
 
 
 def test_export_locations_from_file_and_line():
-    graph = _FakeGraph(
-        [_finding("f", file="src/auth.py", start_line=42, end_line=44)]
-    )
+    graph = _FakeGraph([_finding("f", file="src/auth.py", start_line=42, end_line=44)])
     doc = export_findings_to_sarif(graph)
     loc = doc["runs"][0]["results"][0]["locations"][0]["physicalLocation"]
     assert loc["artifactLocation"]["uri"] == "src/auth.py"
@@ -98,9 +96,7 @@ def test_export_no_locations_when_file_absent():
 
 
 def test_export_rule_id_prefers_cve_over_cwe():
-    graph = _FakeGraph(
-        [_finding("f", cve="CVE-2024-12345", cwe="89", vuln_class="sqli")]
-    )
+    graph = _FakeGraph([_finding("f", cve="CVE-2024-12345", cwe="89", vuln_class="sqli")])
     doc = export_findings_to_sarif(graph)
     assert doc["runs"][0]["results"][0]["ruleId"] == "decepticon/CVE-2024-12345"
 
@@ -118,9 +114,7 @@ def test_export_rule_id_falls_back_to_technique_then_label():
 
 
 def test_severity_threshold_breach_passes_below_threshold():
-    graph = _FakeGraph(
-        [_finding("low", severity="low"), _finding("med", severity="medium")]
-    )
+    graph = _FakeGraph([_finding("low", severity="low"), _finding("med", severity="medium")])
     doc = export_findings_to_sarif(graph)
     assert not severity_threshold_breach(doc, fail_on="high")
 

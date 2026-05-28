@@ -117,9 +117,7 @@ class SkillRegistry:
             start = 0
         page = filtered[start : start + page_size]
         next_token = str(start + page_size) if (start + page_size) < len(filtered) else ""
-        return SkillListResponse(
-            skills=page, next_page_token=next_token, total_count=len(filtered)
-        )
+        return SkillListResponse(skills=page, next_page_token=next_token, total_count=len(filtered))
 
     @staticmethod
     def _filter(metas: Iterable[SkillMeta], req: SkillListRequest):

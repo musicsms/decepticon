@@ -33,8 +33,12 @@ def _envelope_to_payload(env: SkillEnvelope, include_refs: bool, include_scripts
     return {
         "meta": asdict(env.meta),
         "body": env.body,
-        "references": {k: v.decode("utf-8", errors="replace") for k, v in env.references.items()} if include_refs else {},
-        "scripts": {k: v.decode("utf-8", errors="replace") for k, v in env.scripts.items()} if include_scripts else {},
+        "references": {k: v.decode("utf-8", errors="replace") for k, v in env.references.items()}
+        if include_refs
+        else {},
+        "scripts": {k: v.decode("utf-8", errors="replace") for k, v in env.scripts.items()}
+        if include_scripts
+        else {},
     }
 
 

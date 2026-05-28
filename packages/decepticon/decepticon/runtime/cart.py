@@ -149,7 +149,9 @@ class SnapshotDelta:
 def _hash_snapshot(nodes: dict, edges: dict) -> str:
     payload = json.dumps(
         {
-            "nodes": [(k.kind, k.label) for k in sorted(nodes.keys(), key=lambda x: (x.kind, x.label))],
+            "nodes": [
+                (k.kind, k.label) for k in sorted(nodes.keys(), key=lambda x: (x.kind, x.label))
+            ],
             "edges": [
                 (s.kind, s.label, d.kind, d.label, k)
                 for (s, d, k) in sorted(
@@ -318,7 +320,9 @@ class ReplayRunner:
 
     def execute(self, plan: ReplayPlan) -> dict[str, Any]:
         if plan.dry_run:
-            log.info("dry-run replay: plan=%s objectives=%s", plan.plan_id, plan.selected_objectives)
+            log.info(
+                "dry-run replay: plan=%s objectives=%s", plan.plan_id, plan.selected_objectives
+            )
             return {
                 "status": "dry_run",
                 "plan_id": plan.plan_id,
@@ -330,8 +334,8 @@ class ReplayRunner:
             "plan_id": plan.plan_id,
             "objectives": plan.selected_objectives,
             "reason": "Live execution requires the engagement orchestrator "
-                     "to accept a SubAgentTaskSpec with replay_record_path. "
-                     "Tracked under PR #301 (SubAgentTaskSpec data contract).",
+            "to accept a SubAgentTaskSpec with replay_record_path. "
+            "Tracked under PR #301 (SubAgentTaskSpec data contract).",
         }
 
 

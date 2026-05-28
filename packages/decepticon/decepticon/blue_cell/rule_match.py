@@ -124,7 +124,7 @@ def _evaluate_condition(condition: str, selection_results: dict[str, bool]) -> b
             return False
     expr = " ".join(eval_expr_parts)
     try:
-        return bool(eval(expr, {"__builtins__": {}}, {}))
+        return bool(eval(expr, {"__builtins__": {}}, {}))  # nosec B307 - sandboxed: empty __builtins__ + empty locals, only ``True``/``False``/``and``/``or``/``not``/``(``/``)`` reach the eval per the token whitelist above
     except Exception:
         log.warning("rule_match: bad condition %r", condition)
         return False

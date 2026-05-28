@@ -146,9 +146,7 @@ class _Graph:
 
 
 def test_write_sarif_and_gate_with_high_finding_returns_findings_exit(tmp_path: Path):
-    graph = _Graph(
-        [_Node("f1", "finding", "f1", {"severity": "high", "vuln_class": "sqli"})]
-    )
+    graph = _Graph([_Node("f1", "finding", "f1", {"severity": "high", "vuln_class": "sqli"})])
     out = tmp_path / "scan.sarif"
     code = _write_sarif_and_gate(
         graph=graph,

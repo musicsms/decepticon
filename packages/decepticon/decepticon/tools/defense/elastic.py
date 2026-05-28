@@ -28,11 +28,11 @@ def _field_clause_lucene(field: str, modifier: str, value: Any) -> str:
     if isinstance(value, str):
         escaped = value.replace('"', '\\"')
         if modifier == "contains":
-            return f'{field}: *{escaped}*'
+            return f"{field}: *{escaped}*"
         if modifier == "startswith":
-            return f'{field}: {escaped}*'
+            return f"{field}: {escaped}*"
         if modifier == "endswith":
-            return f'{field}: *{escaped}'
+            return f"{field}: *{escaped}"
         if modifier in ("", "equals"):
             return f'{field}: "{escaped}"'
     else:
@@ -160,9 +160,7 @@ def push_detection_rule(
     if resp.status_code == 409:
         endpoint_put = endpoint + f"?rule_id={tagged_id}"
         try:
-            resp = requests.put(
-                endpoint_put, headers=headers, data=json.dumps(body), timeout=15
-            )
+            resp = requests.put(endpoint_put, headers=headers, data=json.dumps(body), timeout=15)
         except Exception as exc:  # noqa: BLE001
             return {"error": f"Elastic PUT (replace) failed: {exc!r}"}
 

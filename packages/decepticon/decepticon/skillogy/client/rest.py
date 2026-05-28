@@ -42,8 +42,14 @@ def _envelope_from_dict(d: dict) -> SkillEnvelope:
     return SkillEnvelope(
         meta=_meta_from_dict(d.get("meta") or {}),
         body=d.get("body") or "",
-        references={k: (v.encode("utf-8") if isinstance(v, str) else v) for k, v in (d.get("references") or {}).items()},
-        scripts={k: (v.encode("utf-8") if isinstance(v, str) else v) for k, v in (d.get("scripts") or {}).items()},
+        references={
+            k: (v.encode("utf-8") if isinstance(v, str) else v)
+            for k, v in (d.get("references") or {}).items()
+        },
+        scripts={
+            k: (v.encode("utf-8") if isinstance(v, str) else v)
+            for k, v in (d.get("scripts") or {}).items()
+        },
     )
 
 

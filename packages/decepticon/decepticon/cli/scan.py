@@ -354,9 +354,7 @@ def _write_sarif_and_gate(
     doc = export_findings_to_sarif(graph, engagement_name=engagement_name)
     if sarif_output:
         sarif_output.parent.mkdir(parents=True, exist_ok=True)
-        sarif_output.write_text(
-            json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        sarif_output.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
     return EXIT_FINDINGS if severity_threshold_breach(doc, fail_on=fail_on) else EXIT_OK
 
 

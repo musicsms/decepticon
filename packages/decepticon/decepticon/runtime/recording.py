@@ -123,9 +123,7 @@ def _serialize_model_request(request: Any) -> dict[str, Any]:
         "model": getattr(getattr(request, "model", None), "name", "") or "",
         "system": getattr(system, "content", "") if system is not None else "",
         "messages": _serialize_messages(getattr(request, "messages", []) or []),
-        "tools": [
-            getattr(t, "name", "") for t in (getattr(request, "tools", []) or [])
-        ],
+        "tools": [getattr(t, "name", "") for t in (getattr(request, "tools", []) or [])],
     }
 
 

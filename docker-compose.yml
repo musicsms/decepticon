@@ -137,7 +137,7 @@ services:
         apoc.node.*,apoc.nodes.*,apoc.rel.*,apoc.util.*
       # Strict config validation - refuse to boot on unknown / misspelled
       # config keys so accidental re-introduction of `_unrestricted`
-      # under a typo (e.g. `unrestriced`) cannot silently re-open the
+      # under a typo (e.g. `unrestricted`) cannot silently re-open the
       # sandbox→management bridge.
       NEO4J_server_config_strict__validation_enabled: "true"
       # Lock HTTP API access to localhost (the orchestrator talks to

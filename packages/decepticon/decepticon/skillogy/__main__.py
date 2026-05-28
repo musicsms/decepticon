@@ -60,7 +60,7 @@ def _start_rest(registry: SkillRegistry, port: int, started_at: float) -> None:
             "Skillogy REST requires uvicorn. Install with: pip install uvicorn"
         ) from exc
     app = build_app(registry, started_at=started_at)
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=port, log_level="info")
+    config = uvicorn.Config(app=app, host="0.0.0.0", port=port, log_level="info")  # nosec B104 - Skillogy container is published only via decepticon-net; the Docker compose binding pins the host port to 127.0.0.1 (see containers/skillogy.Dockerfile + docker-compose.yml)
     uvicorn.Server(config).run()
 
 

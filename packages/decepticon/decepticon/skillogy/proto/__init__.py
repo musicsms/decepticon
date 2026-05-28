@@ -43,7 +43,9 @@ class SkillEnvelope:
         return {
             "meta": self.meta.to_dict(),
             "body": self.body,
-            "references": {k: v.decode("utf-8", errors="replace") for k, v in self.references.items()},
+            "references": {
+                k: v.decode("utf-8", errors="replace") for k, v in self.references.items()
+            },
             "scripts": {k: v.decode("utf-8", errors="replace") for k, v in self.scripts.items()},
         }
 

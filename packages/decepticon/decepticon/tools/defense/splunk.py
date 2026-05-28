@@ -53,11 +53,11 @@ def _selection_to_spl(selection: dict[str, Any]) -> str:
 def _field_clause(field: str, modifier: str, value: Any) -> str:
     quoted = _quote_spl(value)
     if modifier == "contains":
-        return f'{field}=*{value}*' if isinstance(value, str) else f"{field}={quoted}"
+        return f"{field}=*{value}*" if isinstance(value, str) else f"{field}={quoted}"
     if modifier == "startswith":
-        return f'{field}={value}*' if isinstance(value, str) else f"{field}={quoted}"
+        return f"{field}={value}*" if isinstance(value, str) else f"{field}={quoted}"
     if modifier == "endswith":
-        return f'{field}=*{value}' if isinstance(value, str) else f"{field}={quoted}"
+        return f"{field}=*{value}" if isinstance(value, str) else f"{field}={quoted}"
     if modifier in ("", "equals"):
         return f"{field}={quoted}"
     raise SigmaConversionError(f"unsupported Sigma modifier ``{modifier}``")
@@ -163,9 +163,7 @@ def push_savedsearch(
 
     endpoint = url.rstrip("/") + "/services/saved/searches"
     try:
-        resp = requests.post(
-            endpoint, headers=headers, data=payload, timeout=15, verify=True
-        )
+        resp = requests.post(endpoint, headers=headers, data=payload, timeout=15, verify=True)
     except Exception as exc:  # noqa: BLE001
         return {"error": f"Splunk POST failed: {exc!r}"}
 

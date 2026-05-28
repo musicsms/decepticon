@@ -146,30 +146,24 @@ def test_extract_yara_metadata_pulls_meta_kvs():
 
 
 def test_extract_yara_metadata_empty_when_no_meta_block():
-    yara = "rule bar { strings: $a = \"x\" condition: $a }"
+    yara = 'rule bar { strings: $a = "x" condition: $a }'
     assert _extract_yara_metadata(yara) == {}
 
 
-def test_resolve_siem_target_missing_conops_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_resolve_siem_target_missing_conops_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DECEPTICON_ENGAGEMENT_WORKSPACE", str(tmp_path))
     with pytest.raises(conops_mod.ConOpsLookupError):
         conops_mod.resolve_siem_target("splunk")
 
 
-def test_resolve_siem_target_missing_target_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_resolve_siem_target_missing_target_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (tmp_path / "conops.json").write_text(json.dumps({"blue_team": {}}))
     monkeypatch.setenv("DECEPTICON_ENGAGEMENT_WORKSPACE", str(tmp_path))
     with pytest.raises(conops_mod.ConOpsLookupError):
         conops_mod.resolve_siem_target("splunk")
 
 
-def test_resolve_siem_target_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_resolve_siem_target_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (tmp_path / "conops.json").write_text(
         json.dumps(
             {

@@ -81,7 +81,13 @@ runs:
       run: |
         set -euo pipefail
         python3 -m pip install --upgrade pip
-        python3 -m pip install "decepticon" "decepticon-core" "langgraph-sdk"
+        if [ -d packages/decepticon ] && [ -d packages/decepticon-core ]; then
+          python3 -m pip install -e ./packages/decepticon-core
+          python3 -m pip install -e ./packages/decepticon
+          python3 -m pip install langgraph-sdk
+        else
+          python3 -m pip install "decepticon" "decepticon-core" "langgraph-sdk"
+        fi
 
     - name: Start local Decepticon stack (when no remote URL supplied)
       if: ${{ inputs.langgraph-url == '' }}

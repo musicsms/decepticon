@@ -44,9 +44,7 @@ def _load_conops() -> dict[str, Any]:
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
-                raise ConOpsLookupError(
-                    f"ConOps at {path} is not valid JSON: {exc.msg}"
-                ) from exc
+                raise ConOpsLookupError(f"ConOps at {path} is not valid JSON: {exc.msg}") from exc
     raise ConOpsLookupError(
         f"No conops.json found under {workspace}. Soundwave must generate the "
         "engagement package before defense tools can push to a SIEM."

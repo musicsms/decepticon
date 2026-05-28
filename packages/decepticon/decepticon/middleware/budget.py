@@ -271,9 +271,7 @@ def _default_litellm_spend_provider(scope_key: str) -> float:
     try:
         import psycopg2  # noqa: PLC0415
     except ImportError:
-        log.warning(
-            "psycopg2 unavailable — install psycopg2-binary to enable budget enforcement"
-        )
+        log.warning("psycopg2 unavailable — install psycopg2-binary to enable budget enforcement")
         return 0.0
     try:
         with psycopg2.connect(db_url) as conn, conn.cursor() as cur:

@@ -49,11 +49,7 @@ def test_ingest_pulls_in_references_and_scripts(tmp_path: Path):
 def test_full_decepticon_corpus_ingests_cleanly():
     """Real migration test: all 193+ skills under the in-tree skills/ tree
     must ingest without errors and end up indexable."""
-    skills_root = (
-        Path(__file__).resolve().parent.parent.parent.parent
-        / "decepticon"
-        / "skills"
-    )
+    skills_root = Path(__file__).resolve().parent.parent.parent.parent / "decepticon" / "skills"
     if not skills_root.exists():
         return
     reg = SkillRegistry()

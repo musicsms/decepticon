@@ -76,9 +76,7 @@ def test_diff_snapshots_detects_removed_nodes():
 
 
 def test_diff_snapshots_detects_changed_nodes():
-    s1 = EngagementSnapshot.from_graph(
-        _Graph([_Node("a", "host", "10.0.0.1", {"state": "up"})])
-    )
+    s1 = EngagementSnapshot.from_graph(_Graph([_Node("a", "host", "10.0.0.1", {"state": "up"})]))
     s2 = EngagementSnapshot.from_graph(
         _Graph([_Node("a", "host", "10.0.0.1", {"state": "compromised"})])
     )

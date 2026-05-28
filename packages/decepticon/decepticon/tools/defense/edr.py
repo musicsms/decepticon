@@ -24,9 +24,7 @@ from decepticon.tools.defense.conops import (
     resolve_siem_target,
 )
 
-_YARA_META_PATTERN = re.compile(
-    r"meta\s*:\s*((?:[^{}]|\{[^{}]*\})*)", re.DOTALL
-)
+_YARA_META_PATTERN = re.compile(r"meta\s*:\s*((?:[^{}]|\{[^{}]*\})*)", re.DOTALL)
 _YARA_KV_PATTERN = re.compile(r"(\w+)\s*=\s*\"([^\"]*)\"")
 
 

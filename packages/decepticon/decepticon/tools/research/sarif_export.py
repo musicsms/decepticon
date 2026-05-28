@@ -64,7 +64,11 @@ def _finding_rule_id(node: Any, props: dict[str, Any]) -> str:
     if cve:
         return f"decepticon/{cve}"
     if cwe:
-        return f"decepticon/CWE-{cwe}" if not str(cwe).upper().startswith("CWE-") else f"decepticon/{cwe}"
+        return (
+            f"decepticon/CWE-{cwe}"
+            if not str(cwe).upper().startswith("CWE-")
+            else f"decepticon/{cwe}"
+        )
     if klass:
         return f"decepticon/{klass}"
     if technique:
@@ -102,11 +106,7 @@ def _result_locations(props: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _build_rule(rule_id: str, finding_props: dict[str, Any]) -> dict[str, Any]:
-    description = (
-        finding_props.get("description")
-        or finding_props.get("title")
-        or rule_id
-    )
+    description = finding_props.get("description") or finding_props.get("title") or rule_id
     _, security_severity = _severity_to_sarif(finding_props.get("severity"))
     rule: dict[str, Any] = {
         "id": rule_id,
@@ -151,7 +151,7 @@ def _iter_findings(graph: Any):
     nodes = getattr(graph, "nodes", None)
     if nodes is None:
         return
-    for node in (nodes.values() if hasattr(nodes, "values") else nodes):
+    for node in nodes.values() if hasattr(nodes, "values") else nodes:
         if _kind_label(getattr(node, "kind", None)) not in _FINDING_KINDS:
             continue
         props = dict(getattr(node, "properties", {}) or {})
@@ -238,15 +238,11 @@ def write_sarif(
     )
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(
-        json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    out.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
     return out
 
 
-def severity_threshold_breach(
-    document: dict[str, Any], *, fail_on: str = "high"
-) -> bool:
+def severity_threshold_breach(document: dict[str, Any], *, fail_on: str = "high") -> bool:
     """Return True when the SARIF doc contains a result at or above ``fail_on``.
 
     Used by CI gates: ``decepticon scan ... --fail-on high`` → exit non-zero
