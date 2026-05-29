@@ -23,6 +23,7 @@ import asyncio
 import json
 import os
 from collections.abc import Awaitable
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -396,6 +397,34 @@ def _parse_auth_priority() -> tuple[list[AuthMethod], bool]:
     return priority, priority_explicit
 
 
+def _method_is_configured(method: AuthMethod) -> bool:
+    """Return True if ``method``'s credential-detection rule passes.
+
+    Single source of truth shared by ``_detect_available_methods`` (which
+    builds the runtime fallback chain) and ``auth_inventory`` (which reports
+    per-method status to the CLI / SDK / dashboard).
+    """
+    if method in _API_METHOD_ENV:
+        return _is_real_key(os.getenv(_API_METHOD_ENV[method], ""), method)
+    if method in _OAUTH_METHOD_ENV:
+        # OAuth methods need BOTH the boolean intent and the actual
+        # credential file (see ``_oauth_credentials_present`` for why).
+        return _is_truthy(os.getenv(_OAUTH_METHOD_ENV[method], "")) and _oauth_credentials_present(
+            method
+        )
+    if method == AuthMethod.OLLAMA_LOCAL:
+        return _ollama_local_configured()
+    if method == AuthMethod.OLLAMA_CLOUD:
+        return _ollama_cloud_configured()
+    if method == AuthMethod.LMSTUDIO_LOCAL:
+        return _lmstudio_local_configured()
+    if method == AuthMethod.LLAMACPP_LOCAL:
+        return _llamacpp_local_configured()
+    if method == AuthMethod.CUSTOM_OPENAI_API:
+        return _custom_openai_configured()
+    return False
+
+
 def _detect_available_methods(priority: list[AuthMethod]) -> list[AuthMethod]:
     """Return the subset of ``priority`` whose credential-detection rule passes.
 
@@ -404,37 +433,7 @@ def _detect_available_methods(priority: list[AuthMethod]) -> list[AuthMethod]:
       file is present
     - Local methods: their own env signal is configured
     """
-    methods: list[AuthMethod] = []
-    for method in priority:
-        if method in _API_METHOD_ENV:
-            if _is_real_key(os.getenv(_API_METHOD_ENV[method], ""), method):
-                methods.append(method)
-        elif method in _OAUTH_METHOD_ENV:
-            # OAuth methods need BOTH the boolean intent and the actual
-            # credential file. Without the file check a stale flag (e.g.
-            # ``codex logout`` after onboard) generates a 401-fallback
-            # storm — see ``_oauth_credentials_present`` for the full
-            # rationale.
-            if _is_truthy(os.getenv(_OAUTH_METHOD_ENV[method], "")) and _oauth_credentials_present(
-                method
-            ):
-                methods.append(method)
-        elif method == AuthMethod.OLLAMA_LOCAL:
-            if _ollama_local_configured():
-                methods.append(method)
-        elif method == AuthMethod.OLLAMA_CLOUD:
-            if _ollama_cloud_configured():
-                methods.append(method)
-        elif method == AuthMethod.LMSTUDIO_LOCAL:
-            if _lmstudio_local_configured():
-                methods.append(method)
-        elif method == AuthMethod.LLAMACPP_LOCAL:
-            if _llamacpp_local_configured():
-                methods.append(method)
-        elif method == AuthMethod.CUSTOM_OPENAI_API:
-            if _custom_openai_configured():
-                methods.append(method)
-    return methods
+    return [method for method in priority if _method_is_configured(method)]
 
 
 def _fallback_credentials(*, priority_explicit: bool) -> Credentials:
@@ -525,6 +524,174 @@ def _resolve_credentials() -> Credentials:
         return _fallback_credentials(priority_explicit=priority_explicit)
 
     return Credentials(methods=methods)
+
+
+# ── Auth inventory (headless introspection for CLI / SDK / dashboard) ─────
+
+_SUBSCRIPTION_METHODS: frozenset[AuthMethod] = frozenset(_OAUTH_METHOD_ENV)
+_LOCAL_METHODS: frozenset[AuthMethod] = frozenset(
+    {
+        AuthMethod.OLLAMA_LOCAL,
+        AuthMethod.LMSTUDIO_LOCAL,
+        AuthMethod.LLAMACPP_LOCAL,
+        AuthMethod.CUSTOM_OPENAI_API,
+    }
+)
+
+# Signal env var for local/cloud endpoints (API + OAuth methods get theirs
+# from _API_METHOD_ENV / _OAUTH_METHOD_ENV).
+_LOCAL_METHOD_ENV: dict[AuthMethod, str] = {
+    AuthMethod.OLLAMA_LOCAL: "OLLAMA_API_BASE",
+    AuthMethod.OLLAMA_CLOUD: "OLLAMA_CLOUD_API_BASE",
+    AuthMethod.LMSTUDIO_LOCAL: "LMSTUDIO_API_BASE",
+    AuthMethod.LLAMACPP_LOCAL: "LLAMACPP_API_BASE",
+    AuthMethod.CUSTOM_OPENAI_API: "CUSTOM_OPENAI_API_BASE",
+}
+
+_METHOD_LABEL: dict[AuthMethod, str] = {
+    AuthMethod.ANTHROPIC_API: "Anthropic — API key",
+    AuthMethod.ANTHROPIC_OAUTH: "Anthropic — Claude Code (Max/Pro/Team)",
+    AuthMethod.OPENAI_API: "OpenAI — API key",
+    AuthMethod.OPENAI_OAUTH: "OpenAI — ChatGPT (Pro/Plus/Team)",
+    AuthMethod.GOOGLE_API: "Google — Gemini API key",
+    AuthMethod.GOOGLE_OAUTH: "Google — Gemini Advanced (Google One)",
+    AuthMethod.MINIMAX_API: "MiniMax — API key",
+    AuthMethod.DEEPSEEK_API: "DeepSeek — API key",
+    AuthMethod.XAI_API: "xAI — API key",
+    AuthMethod.MISTRAL_API: "Mistral — API key",
+    AuthMethod.OPENROUTER_API: "OpenRouter — API key",
+    AuthMethod.NVIDIA_API: "NVIDIA NIM — API key",
+    AuthMethod.GROQ_API: "Groq — API key",
+    AuthMethod.TOGETHER_API: "Together AI — API key",
+    AuthMethod.FIREWORKS_API: "Fireworks AI — API key",
+    AuthMethod.COHERE_API: "Cohere — API key",
+    AuthMethod.MOONSHOT_API: "Moonshot (Kimi) — API key",
+    AuthMethod.ZAI_API: "Z.ai (GLM) — API key",
+    AuthMethod.DASHSCOPE_API: "Alibaba DashScope (Qwen) — API key",
+    AuthMethod.GITHUB_MODELS_API: "GitHub Models — PAT",
+    AuthMethod.BEDROCK_API: "AWS Bedrock — AWS credentials",
+    AuthMethod.VERTEX_API: "GCP Vertex AI — service account",
+    AuthMethod.AZURE_API: "Azure OpenAI — API key",
+    AuthMethod.CEREBRAS_API: "Cerebras — API key",
+    AuthMethod.XIAOMI_MIMO_API: "Xiaomi MiMo — API key",
+    AuthMethod.COPILOT_OAUTH: "GitHub Copilot — Pro subscription",
+    AuthMethod.GROK_OAUTH: "xAI SuperGrok — X Premium+",
+    AuthMethod.PERPLEXITY_OAUTH: "Perplexity — Pro subscription",
+    AuthMethod.OLLAMA_LOCAL: "Ollama — local",
+    AuthMethod.OLLAMA_CLOUD: "Ollama Cloud — API key",
+    AuthMethod.LMSTUDIO_LOCAL: "LM Studio — local",
+    AuthMethod.LLAMACPP_LOCAL: "llama.cpp — local",
+    AuthMethod.CUSTOM_OPENAI_API: "Custom OpenAI-compatible endpoint",
+}
+
+
+def _method_kind(method: AuthMethod) -> str:
+    if method in _SUBSCRIPTION_METHODS:
+        return "subscription"
+    if method in _LOCAL_METHODS:
+        return "local"
+    return "api"
+
+
+def _method_env_var(method: AuthMethod) -> str:
+    if method in _API_METHOD_ENV:
+        return _API_METHOD_ENV[method]
+    if method in _OAUTH_METHOD_ENV:
+        return _OAUTH_METHOD_ENV[method]
+    return _LOCAL_METHOD_ENV.get(method, "")
+
+
+def _method_detail(method: AuthMethod, *, configured: bool) -> str:
+    """One-line hint: confirmation when configured, remediation otherwise."""
+    env = _method_env_var(method)
+    if method in _OAUTH_METHOD_ENV:
+        flag = _OAUTH_METHOD_ENV[method]
+        if configured:
+            return f"{flag}=true and credential file present"
+        if not _is_truthy(os.getenv(flag, "")):
+            return f"set {flag}=true and provide the subscription credential"
+        paths = ", ".join(default for _env, default in _OAUTH_CREDENTIAL_PATHS.get(method, ()))
+        return f"{flag}=true but no credential file ({paths or 'token'})"
+    if method in _LOCAL_METHODS or method == AuthMethod.OLLAMA_CLOUD:
+        return f"{env} set" if configured else f"set {env} (and the matching *_MODEL)"
+    if configured:
+        return f"{env} set"
+    prefixes = _KEY_PREFIX_HINTS.get(method)
+    hint = f" (starts with {prefixes[0]!r})" if prefixes else ""
+    return f"set {env}{hint}"
+
+
+@dataclass(frozen=True, slots=True)
+class AuthMethodStatus:
+    """Configuration status of one :class:`AuthMethod`."""
+
+    method: AuthMethod
+    kind: str  # "api" | "subscription" | "local"
+    label: str
+    env_var: str
+    configured: bool
+    in_priority: bool
+    active: bool  # configured AND on the resolved fallback chain
+    detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class AuthInventory:
+    """Snapshot of every auth method's status + the resolved fallback chain."""
+
+    statuses: tuple[AuthMethodStatus, ...]
+    resolved_chain: tuple[AuthMethod, ...]
+    priority_explicit: bool
+
+    @property
+    def configured(self) -> tuple[AuthMethodStatus, ...]:
+        return tuple(s for s in self.statuses if s.configured)
+
+    @property
+    def any_active(self) -> bool:
+        return bool(self.resolved_chain)
+
+    @property
+    def configured_but_idle(self) -> tuple[AuthMethodStatus, ...]:
+        """Configured methods NOT on the resolved chain — almost always
+        because the method is missing from ``DECEPTICON_AUTH_PRIORITY``
+        (google_oauth / copilot_oauth / grok_oauth / perplexity_oauth are
+        not in the default priority), so the credential is wired but the
+        runtime will never route to it."""
+        return tuple(s for s in self.statuses if s.configured and not s.active)
+
+
+def auth_inventory() -> AuthInventory:
+    """Introspect provider/auth configuration from the environment.
+
+    Pure env + credential-file inspection (no network, no model
+    construction), safe to call from the CLI, SDK, web dashboard, or a CI
+    preflight. Reuses the same detection rules the runtime factory uses, so
+    what this reports is exactly what the agent will route to.
+    """
+    priority, priority_explicit = _parse_auth_priority()
+    priority_set = set(priority)
+    resolved = _detect_available_methods(priority)
+    resolved_set = set(resolved)
+
+    statuses = [
+        AuthMethodStatus(
+            method=method,
+            kind=_method_kind(method),
+            label=_METHOD_LABEL.get(method, method.value),
+            env_var=_method_env_var(method),
+            configured=_method_is_configured(method),
+            in_priority=method in priority_set,
+            active=method in resolved_set,
+            detail=_method_detail(method, configured=_method_is_configured(method)),
+        )
+        for method in AuthMethod
+    ]
+    return AuthInventory(
+        statuses=tuple(statuses),
+        resolved_chain=tuple(resolved),
+        priority_explicit=priority_explicit,
+    )
 
 
 class _ProxiedChatOpenAI(ChatOpenAI):
