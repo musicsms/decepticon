@@ -482,35 +482,7 @@ func PromptIfUpdateAvailable(currentVersion string) (bool, error) {
 		return false, nil
 	}
 
-	// Determine the ref — same logic as ``decepticon update``: prefer
-	// the explicit branch override in .env, fall back to the release tag.
-	ref := release.TagName
-	if config.EnvExists() {
-		if env, lerr := config.LoadEnv(config.EnvPath()); lerr == nil {
-			if branch := strings.TrimSpace(env["DECEPTICON_BRANCH"]); branch != "" {
-				ref = branch
-			}
-		}
-	}
-
-	if err := ApplyUpdate(release, ref); err != nil {
-		ui.Warning("Update failed: " + err.Error())
-		ui.DimText("Continuing with " + displayVersion(currentVersion) + ".")
-		return false, nil
-	}
-
-	ui.Success("Update complete — restarting with " + release.TagName + "...")
-	if err := reexecSelf(); err != nil {
-		// Re-exec failed: tell the user to restart manually rather than
-		// silently keep running the old in-memory image.
-		ui.Warning("Re-exec failed: " + err.Error())
-		ui.DimText("Run `decepticon` again to use the new version.")
-		os.Exit(0)
-	}
-	// POSIX exec replaces the process — control never reaches here. The
-	// Windows path inside reexecSelf calls os.Exit after spawning the
-	// child, so this is also unreachable on Windows. Kept for symmetry.
-	return true, nil
+	return applyAndReexec(release, currentVersion)
 }
 
 // isInteractiveStdin returns true when the launcher's stdin is connected
@@ -528,4 +500,65 @@ func displayVersion(version string) string {
 		return version
 	}
 	return "v" + version
+}
+
+// resolveUpdateRef picks the git ref for SyncConfigFiles: an explicit
+// DECEPTICON_BRANCH override in .env, otherwise the release tag.
+func resolveUpdateRef(release *Release) string {
+	ref := release.TagName
+	if config.EnvExists() {
+		if env, lerr := config.LoadEnv(config.EnvPath()); lerr == nil {
+			if branch := strings.TrimSpace(env["DECEPTICON_BRANCH"]); branch != "" {
+				ref = branch
+			}
+		}
+	}
+	return ref
+}
+
+// applyAndReexec runs the full upgrade (config sync + image pull + binary
+// self-update + .version stamp) then re-execs into the freshly installed
+// binary. Shared by the interactive prompt (after confirmation) and the
+// unattended AUTO_UPDATE path so both behave identically.
+func applyAndReexec(release *Release, currentVersion string) (bool, error) {
+	if err := ApplyUpdate(release, resolveUpdateRef(release)); err != nil {
+		ui.Warning("Update failed: " + err.Error())
+		ui.DimText("Continuing with " + displayVersion(currentVersion) + ".")
+		return false, nil
+	}
+	ui.Success("Update complete — restarting with " + release.TagName + "...")
+	if err := reexecSelf(); err != nil {
+		// Re-exec failed: tell the user to restart manually rather than
+		// silently keep running the old in-memory image.
+		ui.Warning("Re-exec failed: " + err.Error())
+		ui.DimText("Run `decepticon` again to use the new version.")
+		os.Exit(0)
+	}
+	// POSIX exec replaces the process — control never reaches here. The
+	// Windows path inside reexecSelf calls os.Exit after spawning the
+	// child, so this is also unreachable on Windows. Kept for symmetry.
+	return true, nil
+}
+
+// AutoUpdateIfAvailable applies a newer release WITHOUT prompting. Wired to
+// the AUTO_UPDATE=true launch path for fully-unattended self-update (servers,
+// CI runners, kiosk deployments). Skips silently on dev builds, when offline,
+// or when already current — a self-update must never block or break a launch.
+func AutoUpdateIfAvailable(currentVersion string) (bool, error) {
+	if currentVersion == "" || currentVersion == "dev" {
+		return false, nil
+	}
+	release, err := FetchLatestRelease()
+	if err != nil {
+		return false, nil // offline / GitHub down — never block launch
+	}
+	if !CompareVersions(currentVersion, release.TagName) {
+		return false, nil
+	}
+	ui.Info(fmt.Sprintf(
+		"Auto-updating: %s → %s (AUTO_UPDATE enabled)",
+		displayVersion(currentVersion),
+		release.TagName,
+	))
+	return applyAndReexec(release, currentVersion)
 }

@@ -34,6 +34,31 @@ Docker images. There is no version-bump commit to make before tagging.
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml`.
 
+## Automated releases (auto-tag on merge)
+
+You usually don't tag by hand. `.github/workflows/auto-tag.yml` runs on every
+push to `main` and, when the [Conventional Commits](https://www.conventionalcommits.org/)
+since the last tag warrant it, computes the next version
+(`scripts/next_version.py`) and pushes the `vX.Y.Z` tag for you:
+
+| Commits since last tag | Bump |
+|------------------------|------|
+| `feat:` / `feat(scope):` | minor |
+| `fix:` / `perf:` / `revert:` | patch |
+| `type!:` or a `BREAKING CHANGE:` footer | major |
+| only `docs` / `chore` / `ci` / `test` / `refactor` | no release |
+
+The pushed tag then drives the same `release.yml` pipeline below — auto-tag
+never builds or publishes, so release atomicity is unchanged.
+
+**One-time setup for fully-automatic releases:** GitHub suppresses workflow
+triggers from tags pushed with the default `GITHUB_TOKEN`. Add a repo secret
+**`RELEASE_PLEASE_TOKEN`** (a fine-grained PAT with `contents: write`) so the
+auto-tag's tag triggers `release.yml`. Without it the tag is still created
+correctly — build it via `release-recover.yml` (`workflow_dispatch`), or it
+builds on the next tag once the PAT is configured. The manual `git tag` flow
+above also still works for out-of-band releases.
+
 ## What the release workflow does
 
 | Job | Output |
