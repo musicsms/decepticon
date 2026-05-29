@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any, cast
 
@@ -52,6 +53,9 @@ from decepticon.middleware._injection_detector import (
 )
 
 log = logging.getLogger(__name__)
+
+
+_MARKER_RE = re.compile(r"UNTRUSTED_TOOL_OUTPUT", re.IGNORECASE)
 
 
 UNTRUSTED_TOOL_NAMES: frozenset[str] = frozenset(
@@ -119,10 +123,13 @@ def _format_envelope(
     body: str,
 ) -> str:
     cats_attr = f' categories="{",".join(categories)}"' if categories else ""
+    # Neutralize any envelope marker embedded in attacker-controlled tool
+    # output so it cannot forge or close the quarantine boundary and break out.
+    safe_body = _MARKER_RE.sub("UNTRUSTED_TOOL\u200bOUTPUT", body)
     return (
         f'<UNTRUSTED_TOOL_OUTPUT origin="{origin}" '
         f'tool_call_id="{tool_call_id}" risk="{risk}"{cats_attr}>\n'
-        f"{body}\n"
+        f"{safe_body}\n"
         f"</UNTRUSTED_TOOL_OUTPUT>"
     )
 

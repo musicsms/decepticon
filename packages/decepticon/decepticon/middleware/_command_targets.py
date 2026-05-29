@@ -47,6 +47,63 @@ _HOSTNAME_AFTER_VERB_RE = re.compile(
 )
 
 
+# Final labels that mark a token as a local file argument, never a network
+# target. No public DNS TLD collides with any of these, so excluding them is
+# safe and prevents RoE ENFORCE mode from refusing legitimate commands whose
+# option values (``-i key.pem``, ``-oA scan.txt``) look hostname-shaped.
+_NON_TARGET_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        "pem",
+        "key",
+        "crt",
+        "csr",
+        "cer",
+        "der",
+        "p12",
+        "pfx",
+        "pub",
+        "txt",
+        "log",
+        "json",
+        "yaml",
+        "yml",
+        "conf",
+        "cfg",
+        "ini",
+        "toml",
+        "csv",
+        "tsv",
+        "xml",
+        "html",
+        "htm",
+        "md",
+        "rst",
+        "sh",
+        "py",
+        "rb",
+        "pl",
+        "ps1",
+        "bat",
+        "pcap",
+        "pcapng",
+        "bin",
+        "out",
+        "tmp",
+        "bak",
+        "lst",
+        "db",
+        "sqlite",
+        "sqlite3",
+        "gz",
+        "zip",
+        "tar",
+        "tgz",
+        "7z",
+        "rar",
+    }
+)
+
+
 def _is_valid_target(token: str) -> bool:
     if not token or len(token) < 3 or len(token) > 253:
         return False
@@ -65,6 +122,11 @@ def _is_valid_target(token: str) -> bool:
         ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-:"
         for ch in token
     ):
+        return False
+    if token.rsplit(".", 1)[-1].lower() in _NON_TARGET_EXTENSIONS:
+        # A token whose last label is a common file extension is a local file
+        # argument (e.g. ``-i key.pem``, ``-oA scan.txt``), not a network
+        # target — exclude it so RoE ENFORCE mode does not refuse the command.
         return False
     return True
 

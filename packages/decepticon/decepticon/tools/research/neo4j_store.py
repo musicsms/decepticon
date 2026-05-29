@@ -410,8 +410,13 @@ class Neo4jStore:
             pattern = "(src {id: $node_id})-[r]-(nbr)"
 
         where_clause = ""
+        params: dict[str, Any] = {"node_id": node_id}
         if edge_kind:
-            where_clause = f"WHERE type(r) = '{edge_kind.upper()}'"
+            # Parameter-bind the relationship type instead of interpolating it
+            # into a Cypher string literal (Cypher does allow $-params in
+            # ``type(r) = $x``), closing a Cypher-injection vector.
+            where_clause = "WHERE type(r) = $edge_kind"
+            params["edge_kind"] = edge_kind.upper()
 
         query = f"""
         MATCH {pattern}
@@ -430,7 +435,7 @@ class Neo4jStore:
         """
         results: list[dict[str, Any]] = []
         with self._driver.session(database=self._database) as session:
-            for row in session.run(query, node_id=node_id):
+            for row in session.run(query, **params):
                 results.append(
                     {
                         "node": {

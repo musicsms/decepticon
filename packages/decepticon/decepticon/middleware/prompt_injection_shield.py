@@ -196,7 +196,12 @@ def _build_warning_banner(detections: list[tuple[str, str, str]]) -> str:
 
 def _wrap_untrusted(content: str, banner: str | None) -> str:
     """Wrap content in ``<untrusted_tool_output>…</untrusted_tool_output>`` markers."""
-    body = f"<untrusted_tool_output>\n{content}\n</untrusted_tool_output>"
+    # Neutralize any marker embedded in attacker-controlled tool output so it
+    # cannot forge or close the quarantine boundary and break out of the wrap.
+    safe = re.sub(
+        r"untrusted_tool_output", "untrusted_tool\u200boutput", content, flags=re.IGNORECASE
+    )
+    body = f"<untrusted_tool_output>\n{safe}\n</untrusted_tool_output>"
     if banner:
         return f"{banner}\n\n{body}"
     return body

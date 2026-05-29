@@ -153,6 +153,30 @@ class TestExtractTargets:
         targets = extract_targets(cmd)
         assert "10.0.0.10" in targets
 
+    def test_ssh_keyfile_not_a_target(self) -> None:
+        # Regression: ``-i key.pem`` is a local keyfile, not a network target.
+        # Extracting it made RoE ENFORCE mode refuse a legitimate in-scope ssh
+        # because the keyfile evaluated NOT_IN_SCOPE.
+        targets = extract_targets("ssh -i key.pem user@10.0.0.5")
+        assert "10.0.0.5" in targets
+        assert "key.pem" not in targets
+
+    def test_scp_local_files_not_targets(self) -> None:
+        targets = extract_targets("scp -P 2222 -i id_rsa report.txt user@10.0.0.5:/tmp")
+        assert "10.0.0.5" in targets
+        assert "report.txt" not in targets
+
+    def test_nmap_output_file_not_a_target(self) -> None:
+        targets = extract_targets("nmap -oA scan.txt 10.0.0.5")
+        assert "10.0.0.5" in targets
+        assert "scan.txt" not in targets
+
+    def test_real_domains_still_extracted(self) -> None:
+        # Guard against over-correction: real hostnames whose final label is
+        # not a file extension must still extract.
+        assert "api.acme.com" in extract_targets("curl https://api.acme.com/x")
+        assert "target.example" in extract_targets("nmap target.example")
+
 
 class TestAuditSink:
     def test_append_creates_file(self, tmp_path: Path) -> None:
