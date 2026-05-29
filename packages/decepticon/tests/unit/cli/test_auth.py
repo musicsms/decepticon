@@ -72,10 +72,10 @@ def test_placeholder_key_is_not_configured(clean_env):
     assert not inv.any_active
 
 
-def test_subscription_configured_but_idle(clean_env, tmp_path):
-    # google_oauth is NOT in the default priority chain, so a fully-wired
-    # Gemini Advanced subscription is configured yet never routed — exactly
-    # the silent footgun this command exists to surface.
+def test_subscription_auto_routes_by_default(clean_env, tmp_path):
+    # A fully-wired Gemini Advanced subscription is now in the DEFAULT priority
+    # chain, so it is routed without the user authoring DECEPTICON_AUTH_PRIORITY
+    # (the footgun the earlier release left for google/copilot/grok/perplexity).
     cred = tmp_path / "gemini.json"
     cred.write_text(json.dumps({"access_token": "x"}))
     clean_env.setenv("DECEPTICON_AUTH_GEMINI", "true")
@@ -84,9 +84,24 @@ def test_subscription_configured_but_idle(clean_env, tmp_path):
     gem = next(s for s in inv.statuses if s.method == AuthMethod.GOOGLE_OAUTH)
     assert gem.configured
     assert gem.kind == "subscription"
-    assert not gem.in_priority
-    assert not gem.active
-    assert AuthMethod.GOOGLE_OAUTH in {s.method for s in inv.configured_but_idle}
+    assert gem.in_priority
+    assert gem.active
+    assert AuthMethod.GOOGLE_OAUTH in inv.resolved_chain
+    assert AuthMethod.GOOGLE_OAUTH not in {s.method for s in inv.configured_but_idle}
+
+
+def test_configured_but_idle_when_priority_omits(clean_env):
+    # configured_but_idle still flags a credential the user excluded via an
+    # explicit priority list — wired but deliberately not routed.
+    clean_env.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-" + "x" * 40)
+    clean_env.setenv("OPENAI_API_KEY", "sk-" + "y" * 48)
+    clean_env.setenv("DECEPTICON_AUTH_PRIORITY", "openai_api")
+    inv = factory.auth_inventory()
+    anthropic = next(s for s in inv.statuses if s.method == AuthMethod.ANTHROPIC_API)
+    assert anthropic.configured
+    assert not anthropic.in_priority
+    assert not anthropic.active
+    assert AuthMethod.ANTHROPIC_API in {s.method for s in inv.configured_but_idle}
 
 
 def test_explicit_priority_routes_subscription(clean_env, tmp_path):
