@@ -1,0 +1,175 @@
+name: Security
+
+# Consolidated security workflow. Replaces the standalone CodeQL workflow and
+# the 18-tool "comprehensive" arsenal with a focused, high-signal set whose
+# findings all land in the Security tab as SARIF:
+#
+#   * CodeQL            deep SAST (Python + JS/TS), security-and-quality queries
+#   * Semgrep           repo-specific invariants (.semgrep/decepticon-rules.yml),
+#                       hard gate on ERROR-severity findings
+#   * Trivy             dependency CVEs (fs) + IaC/Dockerfile misconfig (config)
+#   * TruffleHog        verified-secret detection across the PR diff
+#   * Dependency review flags vulnerable / disallowed-license new deps on PRs
+#
+# Style / format / lint (ruff, shellcheck, hadolint, typos, gitleaks) run in
+# pre-commit (.pre-commit-config.yaml), with ruff additionally enforced by the
+# CI `python` job. They are intentionally NOT duplicated here — this workflow
+# is for security signal, not style.
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "*.md"
+      - LICENSE
+      - docs/**
+      - assets/**
+      - .gitignore
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "*.md"
+      - LICENSE
+      - docs/**
+      - assets/**
+      - .gitignore
+  schedule:
+    # Weekly re-scan so newly-disclosed CVEs surface on an unchanged tree.
+    - cron: "27 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  semgrep:
+    name: Semgrep (repo rules — hard gate)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      # Blocks the run on ERROR-severity findings from the repo's own rules
+      # (e.g. no hardcoded default LiteLLM key). Public rule packs are covered
+      # by CodeQL's security-and-quality suite and are not re-run here.
+      - name: Custom Decepticon rules (blocking on ERROR)
+        run: |
+          semgrep scan \
+            --error \
+            --metrics=off \
+            --severity=ERROR \
+            --sarif --sarif-output=semgrep.sarif \
+            --config=.semgrep/decepticon-rules.yml \
+            --exclude=node_modules --exclude=.venv --exclude=dist --exclude=build \
+            --exclude=benchmark/xbow-validation-benchmarks \
+            --exclude=benchmark/MHBench
+      - name: Upload Semgrep SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  trivy:
+    name: Trivy (deps + IaC config)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan (dependency CVEs)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: true
+          exit-code: "0"
+      - name: Trivy config scan (Dockerfile / compose misconfig)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "0"
+      - name: Upload Trivy fs SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+      - name: Upload Trivy config SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+  secrets:
+    name: Secret scan (TruffleHog)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: TruffleHog OSS (verified secrets)
+        uses: trufflesecurity/trufflehog@v3.82.13
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          head: ${{ github.event.pull_request.head.sha || github.sha }}
+          extra_args: --only-verified
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      # Advisory until the repo's dependency graph is confirmed enabled; flip
+      # off continue-on-error to hard-gate vulnerable / bad-license new deps.
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        continue-on-error: true
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+          retry-on-snapshot-warnings: true

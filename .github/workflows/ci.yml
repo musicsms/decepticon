@@ -491,3 +491,17 @@ jobs:
         env:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Validate every GitHub Actions workflow + composite action. Cheap (~15s)
+  # and catches expression/shell/schema errors before they ship — exactly the
+  # class of bug that historically blocked PRs here. Bundles shellcheck
+  # (pre-installed on the runner) for the embedded ``run:`` scripts.
+  actionlint:
+    name: actionlint (workflows)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
