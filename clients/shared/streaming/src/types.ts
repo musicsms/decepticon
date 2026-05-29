@@ -59,4 +59,14 @@ export interface StreamEvent {
   content?: string;
   subagent?: string;
   timestamp: number;
+  /**
+   * Terminal status for `subagent_end` events. The CLI normalizes the
+   * backend's `error` boolean into `"error" | "success"` before events reach
+   * the shared utilities; consumers that forward the raw backend event leave
+   * this unset and set `error` instead (see {@link SubagentCustomEvent}).
+   * `deriveSubAgentSessions` honors either signal.
+   */
+  status?: string;
+  /** Raw backend error flag on `subagent_end` (the SubagentCustomEvent contract). */
+  error?: boolean;
 }
