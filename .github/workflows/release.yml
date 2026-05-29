@@ -179,7 +179,6 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          target: ${{ matrix.target }}
           platforms: ${{ matrix.platforms }}
           push: true
           provenance: mode=max
@@ -378,6 +377,7 @@ jobs:
         id: manifest
         working-directory: ${{ runner.temp }}/digests
         run: |
+          # shellcheck disable=SC2046  # intentional word-split: one image ref arg per digest file
           docker buildx imagetools create \
             --tag ghcr.io/purpleailab/${{ matrix.image }}:${{ steps.version.outputs.version }} \
             $(printf 'ghcr.io/purpleailab/${{ matrix.image }}@sha256:%s ' *)
@@ -534,6 +534,7 @@ jobs:
         run: |
           # Same rule as the docker matrix: only the version tag here.
           # `:latest` is promoted by publish-release after verification.
+          # shellcheck disable=SC2046  # intentional word-split: one image ref arg per digest file
           docker buildx imagetools create \
             --tag ghcr.io/purpleailab/decepticon-web:${{ steps.version.outputs.version }} \
             $(printf 'ghcr.io/purpleailab/decepticon-web@sha256:%s ' *)

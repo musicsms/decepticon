@@ -235,4 +235,4 @@ class TestScripts:
     def test_r2_template_non_empty(self) -> None:
         src = r2_recon_script("/workspace/target")
         assert "aaa" in src
-        assert "iz" in src
+        assert "iz~" in src

@@ -57,7 +57,32 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=sandbox-apt-cache
         nodejs \
         npm \
         # ── C2 client (connects to the separate c2-sliver server container) ──
-        sliver
+        sliver \
+        # ── AD attack chain — Responder → ntlmrelayx → secretsdump ──
+        # responder + python3-impacket are both in kali-rolling apt; they
+        # chain together for the canonical internal-network AD attack
+        # documented in docs/red-team/tools-techniques.md.
+        responder \
+        python3-impacket \
+        # ── Mobile triage host-side (Mobile agent) ──
+        # adb + apktool are in kali-rolling apt and let the agent do quick
+        # APK / device triage from the bash tool without leaving the sandbox.
+        adb \
+        apktool \
+        # ── YARA (DFIR validation; complements yara-x on the host) ──
+        yara
+
+# ── Tools NOT yet wired into apt-install ──
+# Deliberately deferred to follow-up PRs because they need either a
+# GitHub-release pull (no apt package) or a pip install:
+#   chisel       (GitHub release: jpillora/chisel)
+#   ligolo-ng    (GitHub release: nicocha30/ligolo-ng)
+#   afl++ / aflplusplus / honggfuzz (apt names + dep weight uncertain)
+#   plaso        (pip: ``plaso``; pulls in pyparsing + heavy deps)
+#   volatility3  (pip: ``volatility3``; same as operator's host install)
+# Operators who need these today can ``pip install volatility3 plaso``
+# inside the sandbox via the agent's bash tool. A follow-up PR will add
+# them to the image once the right install paths are verified.
 
 # Configure tmux: 20K line scrollback buffer. The Python-side output
 # truncation (MAX_OUTPUT_CHARS = 30_000 chars) means the agent reads at

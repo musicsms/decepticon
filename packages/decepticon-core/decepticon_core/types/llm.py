@@ -416,10 +416,13 @@ AGENT_TIERS: dict[str, Tier] = {
     "ad_operator": Tier.MID,
     "cloud_hunter": Tier.MID,
     "reverser": Tier.MID,
+    "phisher": Tier.MID,
+    "mobile_operator": Tier.MID,
     # LOW — high-throughput, low reasoning depth. Recon / triage / docs.
     "soundwave": Tier.LOW,
     "recon": Tier.LOW,
     "scanner": Tier.LOW,
+    "wireless_operator": Tier.LOW,
 }
 
 AGENT_TEMPERATURES: dict[str, float] = {
@@ -439,6 +442,9 @@ AGENT_TEMPERATURES: dict[str, float] = {
     "scanner": 0.2,
     "vulnresearch": 0.4,
     "recon": 0.3,
+    "phisher": 0.4,
+    "mobile_operator": 0.2,
+    "wireless_operator": 0.2,
 }
 
 
@@ -667,11 +673,23 @@ def resolve_chain(tier: Tier, credentials: Credentials) -> list[str]:
 # ── Configuration models ────────────────────────────────────────────────
 
 
+_PROXY_DEFAULT_LOCAL_KEY = "sk-decepticon-master"  # nosemgrep: decepticon-no-hardcoded-default-key
+
+
 class ProxyConfig(BaseModel):
-    """LiteLLM proxy connection settings."""
+    """LiteLLM proxy connection settings.
+
+    The ``api_key`` default is the well-known local-dev placeholder
+    documented in .env.example. Production deployments MUST override it
+    via DECEPTICON_LLM__PROXY_API_KEY. The placeholder exists so
+    module-level agent constructors (Decepticon imports its agents at
+    package init time for the ``decepticon.agents.plugins.*`` entry
+    points to register) can build a ChatOpenAI instance against the
+    LiteLLM proxy without credentials in the local-dev path.
+    """
 
     url: str = "http://localhost:4000"
-    api_key: str = "sk-decepticon-master"
+    api_key: str = _PROXY_DEFAULT_LOCAL_KEY
     timeout: int = 120
     max_retries: int = 2
 

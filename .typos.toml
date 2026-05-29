@@ -21,17 +21,29 @@ extend-ignore-re = [
     # is correct (mis-fire, mis-split, mis-configure, mis-allocation).
     "mis-[a-z]+",
     # "ICS-OT" / "ICS/OT" (Industrial Control Systems / Operational
-    # Technology) — typos splits on the separator and flags the bare "OT"
+    # Technology) - typos splits on the separator and flags the bare "OT"
     # token. Ignore only this exact compound so we don't globally
     # allow-list "OT" (the rest of the tree keeps full coverage; the
     # ics-ot skill bodies are handled by the files exclude below).
     "ICS[-/]OT",
+    # radare2 ``iz~`` command (list strings filtered by regex). Quoted
+    # verbatim in tool docs and string-packer tests. Allow only when
+    # followed by ``~`` (the r2 grep operator) so the bare "iz" token
+    # would still be flagged elsewhere.
+    "iz~",
+    # Neo4j error message ``dbms.security.procedures.unrestriced`` --
+    # the real Neo4j daemon emits this with the typo; quoted in
+    # docs/security/neo4j-hardening.md.
+    "procedures\\.unrestriced",
 ]
 
 [default.extend-words]
 # Offensive-security tool names that look like typos
 "hcxdumptool" = "hcxdumptool"
 "hcxpcapngtool" = "hcxpcapngtool"
+"alikes" = "alikes"
+"writeable" = "writeable"
+"criticals" = "criticals"
 "kerberoast" = "kerberoast"
 "kerberoasting" = "kerberoasting"
 "asreproast" = "asreproast"
@@ -116,6 +128,16 @@ extend-ignore-re = [
 "NDAs" = "NDAs"      # Non-Disclosure Agreements (plural)
 "AKS" = "AKS"        # Azure Kubernetes Service
 "RTO" = "RTO"        # Red Team Operator (also Recovery Time Objective)
+# Async variants of LangChain agent middleware hooks. Decepticon names
+# them ``a<sync-name>`` (``aafter_model``, ``abefore_model``, ``aafter_agent``)
+# to mirror the langchain.agents.middleware convention. typos misreads
+# the leading ``a`` as a typo of the base name.
+"aafter_model" = "aafter_model"
+"aafter_agent" = "aafter_agent"
+"abefore_model" = "abefore_model"
+"abefore_agent" = "abefore_agent"
+"awrap_model_call" = "awrap_model_call"
+"awrap_tool_call" = "awrap_tool_call"
 
 [files]
 # Skip vendored / generated content from typos
@@ -135,4 +157,13 @@ extend-exclude = [
     # Scoped to this directory so the rest of the tree keeps full typo
     # coverage rather than globally allow-listing two-letter tokens.
     "packages/decepticon/decepticon/skills/standard/exploit/ics-ot/**",
+    "packages/decepticon/decepticon/skills/standard/ics/**",
+    # Sisyphus-added domain skill seeds with industrial / wireless / OT
+    # protocol jargon that typos misreads (BACnet, OT tag list, ics, etc.)
+    "packages/decepticon/decepticon/skills/standard/iot/**",
+    "packages/decepticon/decepticon/skills/standard/dfir/**",
+    "packages/decepticon/decepticon/skills/standard/phish/**",
+    "packages/decepticon/decepticon/skills/standard/supply-chain/**",
+    "packages/decepticon/decepticon/skills/standard/osint/**",
+    ".omo/plans/**",
 ]
