@@ -215,13 +215,12 @@ def maybe_install_skillogy(middleware_stack: list[Any]) -> list[Any]:
     except ImportError:
         return middleware_stack
     out: list[Any] = []
-    swapped = False
     for mw in middleware_stack:
         if isinstance(mw, SkillsMiddleware):
             out.append(SkillogyMiddleware.from_env())
-            swapped = True
         else:
             out.append(mw)
-    if not swapped:
-        out.append(SkillogyMiddleware.from_env())
+    # Swap-only: when no SkillsMiddleware is present (SKILLS intentionally
+    # disabled/replaced), do NOT append a fresh layer — that would inject
+    # an unexpected skill surface the stack opted out of.
     return out

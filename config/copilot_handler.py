@@ -43,6 +43,7 @@ name.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections.abc import AsyncIterator, Iterator
@@ -364,51 +365,118 @@ class CopilotHandler(CustomLLM):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, functools.partial(self.completion, *args, **kwargs))
 
-    def streaming(self, *args: Any, **kwargs: Any) -> Iterator[dict[str, Any]]:
-        response = self.completion(*args, **kwargs)
+    def _response_to_chunks(self, response: ModelResponse) -> list[dict[str, Any]]:
+        """Convert a ModelResponse into GenericStreamingChunk dicts.
+
+        Mirrors ``claude_code_handler`` / ``codex_chatgpt_handler``: any
+        streamed ``tool_calls`` are emitted as their own chunks and the
+        upstream ``finish_reason`` is preserved instead of being hardcoded to
+        ``"stop"`` (which previously dropped every tool call).
+        """
         text = ""
+        tool_calls_list: list[dict[str, Any]] = []
+        finish_reason = "stop"
+
         if response.choices:
-            c = response.choices[0]
-            msg = c.get("message", {}) if isinstance(c, dict) else getattr(c, "message", {})
-            text = (
-                msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", "")
-            ) or ""
+            choice = response.choices[0]
+            msg = choice.message if hasattr(choice, "message") else choice.get("message", {})
+
+            if isinstance(msg, dict):
+                content = msg.get("content")
+                raw_tool_calls = msg.get("tool_calls", []) or []
+            else:
+                content = getattr(msg, "content", None)
+                raw_tool_calls = getattr(msg, "tool_calls", []) or []
+
+            finish_reason = (
+                choice.get("finish_reason", "stop")
+                if isinstance(choice, dict)
+                else getattr(choice, "finish_reason", "stop")
+            )
+
+            if content and isinstance(content, str):
+                text = content
+
+            for i, tc in enumerate(raw_tool_calls):
+                if isinstance(tc, dict):
+                    func = tc.get("function", {})
+                    tc_id = tc.get("id", f"call_{i}")
+                    tc_name = func.get("name", "")
+                    tc_args = func.get("arguments", "{}")
+                else:
+                    tc_id = getattr(tc, "id", f"call_{i}")
+                    func = getattr(tc, "function", None)
+                    tc_name = getattr(func, "name", "") if func else ""
+                    tc_args = getattr(func, "arguments", "{}") if func else "{}"
+
+                tool_calls_list.append(
+                    {
+                        "id": tc_id,
+                        "type": "function",
+                        "function": {
+                            "name": tc_name,
+                            "arguments": tc_args
+                            if isinstance(tc_args, str)
+                            else json.dumps(tc_args),
+                        },
+                        "index": i,
+                    }
+                )
+
         usage = {
             "completion_tokens": response.usage.completion_tokens if response.usage else 0,
             "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
             "total_tokens": response.usage.total_tokens if response.usage else 0,
         }
-        yield {
-            "text": text,
-            "is_finished": True,
-            "finish_reason": "stop",
-            "index": 0,
-            "tool_use": None,
-            "usage": usage,
-        }
+
+        chunks: list[dict[str, Any]] = []
+
+        if tool_calls_list:
+            if text:
+                chunks.append(
+                    {
+                        "text": text,
+                        "is_finished": False,
+                        "finish_reason": "",
+                        "index": 0,
+                        "tool_use": None,
+                        "usage": None,
+                    }
+                )
+            for i, tc in enumerate(tool_calls_list):
+                is_last = i == len(tool_calls_list) - 1
+                chunks.append(
+                    {
+                        "text": "",
+                        "is_finished": is_last,
+                        "finish_reason": "tool_calls" if is_last else "",
+                        "index": 0,
+                        "tool_use": tc,
+                        "usage": usage if is_last else None,
+                    }
+                )
+        else:
+            chunks.append(
+                {
+                    "text": text,
+                    "is_finished": True,
+                    "finish_reason": finish_reason or "stop",
+                    "index": 0,
+                    "tool_use": None,
+                    "usage": usage,
+                }
+            )
+
+        return chunks
+
+    def streaming(self, *args: Any, **kwargs: Any) -> Iterator[dict[str, Any]]:
+        response = self.completion(*args, **kwargs)
+        yield from self._response_to_chunks(response)
 
     async def astreaming(self, *args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
         response = await self.acompletion(*args, **kwargs)
-        text = ""
-        if response.choices:
-            c = response.choices[0]
-            msg = c.get("message", {}) if isinstance(c, dict) else getattr(c, "message", {})
-            text = (
-                msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", "")
-            ) or ""
-        usage = {
-            "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-            "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-            "total_tokens": response.usage.total_tokens if response.usage else 0,
-        }
-        yield {
-            "text": text,
-            "is_finished": True,
-            "finish_reason": "stop",
-            "index": 0,
-            "tool_use": None,
-            "usage": usage,
-        }
+        for chunk in self._response_to_chunks(response):
+            yield chunk
 
 
 copilot_handler_instance = CopilotHandler()

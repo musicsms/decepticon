@@ -47,6 +47,13 @@ from decepticon.middleware import (
 from decepticon.middleware.model_override import ModelOverrideMiddleware
 from decepticon.middleware.notifications import SandboxNotificationMiddleware
 from decepticon.middleware.roe import build_default_sink
+from decepticon.middleware.budget import BudgetEnforcementMiddleware
+from decepticon.middleware.event_logging import EventLogMiddleware
+from decepticon.middleware.hitl import (
+    DEFAULT_HIGH_IMPACT_POLICY,
+    HITLApprovalMiddleware,
+)
+from decepticon.middleware.prompt_injection_shield import PromptInjectionShieldMiddleware
 
 # Slot enum + per-role applicability mapping + safety-critical set
 # all live in the contract layer now (decepticon_core.contracts.slots).
@@ -193,18 +200,68 @@ def _make_patch_tool_calls(**_: Any):
     return PatchToolCallsMiddleware()
 
 
+def _make_event_log(**_: Any):
+    return EventLogMiddleware()
+
+
+def _make_budget(**_: Any):
+    return BudgetEnforcementMiddleware()
+
+
+def _make_prompt_injection_shield(**_: Any):
+    # UNTRUSTED_OUTPUT already injects its own quarantine system policy;
+    # appending the shield's policy too would double-inject. The shield
+    # still wraps deny-listed tool output and dedups against
+    # UNTRUSTED_TOOL_NAMES (see prompt_injection_shield._maybe_wrap).
+    return PromptInjectionShieldMiddleware(append_policy_to_system=False)
+
+
+# Falsy spellings of DECEPTICON_HITL__ENABLED — anything else enables HITL.
+_HITL_FALSY: frozenset[str] = frozenset({"", "0", "false", "no", "off"})
+
+
+def _make_hitl(*, role: str, **_: Any):
+    """Operator-approval gate — opt-in via ``DECEPTICON_HITL__ENABLED``.
+
+    Returns None (slot skipped) unless the env flag is truthy, so default
+    engagements never freeze waiting on a human. The transport is left
+    unset (``transport=None``) so HITLApprovalMiddleware resolves it
+    per request from ``request.state['workspace_path']`` — standard graphs
+    are built once at import but a long-lived server serves many
+    engagements, so the workspace can't be bound at build time. The
+    resolved transport writes ``<workspace>/approvals/{requests,
+    decisions}.jsonl`` — a contract shared with the web bridge.
+    """
+    import os
+
+    if os.environ.get("DECEPTICON_HITL__ENABLED", "").strip().lower() in _HITL_FALSY:
+        return None
+
+    eid = os.environ.get("DECEPTICON_ENGAGEMENT_ID", "default-engagement")
+    return HITLApprovalMiddleware(
+        DEFAULT_HIGH_IMPACT_POLICY,
+        transport=None,
+        engagement_name=eid,
+        agent_name=role,
+    )
+
+
 SlotFactory = Callable[..., Any]
 
 
 DEFAULT_SLOT_FACTORIES: dict[MiddlewareSlot, SlotFactory] = {
     MiddlewareSlot.ENGAGEMENT_CONTEXT: _make_engagement_context,
     MiddlewareSlot.ROE_ENFORCEMENT: _make_roe_enforcement,
+    MiddlewareSlot.HITL_APPROVAL: _make_hitl,
     MiddlewareSlot.UNTRUSTED_OUTPUT: _make_untrusted_output,
+    MiddlewareSlot.PROMPT_INJECTION_SHIELD: _make_prompt_injection_shield,
     MiddlewareSlot.SKILLS: _make_skills,
     MiddlewareSlot.FILESYSTEM: _make_filesystem,
     MiddlewareSlot.SUBAGENT: _make_subagent,
     MiddlewareSlot.OPPLAN: _make_opplan,
+    MiddlewareSlot.EVENT_LOG: _make_event_log,
     MiddlewareSlot.SANDBOX_NOTIFICATION: _make_sandbox_notification,
+    MiddlewareSlot.BUDGET: _make_budget,
     MiddlewareSlot.MODEL_OVERRIDE: _make_model_override,
     MiddlewareSlot.MODEL_FALLBACK: _make_model_fallback,
     MiddlewareSlot.SUMMARIZATION: _make_summarization,

@@ -135,3 +135,22 @@ def test_event_log_appends_to_existing_file(tmp_path: Path) -> None:
     assert events[1].payload["turn"] == 1
     assert events[2].payload["turn"] == 2
     assert events[3].type == "engagement.end"
+
+
+def test_for_workspace_writes_at_workspace_root(tmp_path: Path) -> None:
+    log = EventLog.for_workspace(tmp_path, engagement_id="eng-root")
+    assert log.path == tmp_path / "events.jsonl"
+    assert log.engagement_id == "eng-root"
+
+    log.append(EventType.ENGAGEMENT_START, {"name": "demo"})
+    log.append(EventType.AGENT_TURN, {"turn": 1}, agent="decepticon")
+
+    events = list(read_events(tmp_path / "events.jsonl"))
+    assert [e.type for e in events] == ["engagement.start", "agent.turn"]
+    assert events[1].agent == "decepticon"
+
+
+def test_for_workspace_defaults_engagement_id_to_empty(tmp_path: Path) -> None:
+    log = EventLog.for_workspace(tmp_path)
+    assert log.engagement_id == ""
+    assert log.path == tmp_path / "events.jsonl"

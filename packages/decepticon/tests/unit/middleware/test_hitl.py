@@ -274,3 +274,96 @@ def test_default_high_impact_policy_includes_t1003_and_c2_deploy():
     )
     assert has_t1003
     assert has_c2
+
+
+class _SleepingTransport:
+    """Fake transport whose ``wait_for_decision`` blocks on ``time.sleep``
+    before returning a decision — used to prove ``awrap_tool_call`` offloads
+    the wait to a thread instead of freezing the event loop."""
+
+    def __init__(self, sleep_for: float = 0.3) -> None:
+        self._sleep_for = sleep_for
+        self.submitted: list[ApprovalRequest] = []
+
+    def submit(self, request: ApprovalRequest) -> None:
+        self.submitted.append(request)
+
+    def wait_for_decision(self, request_id: str, timeout: float) -> ApprovalDecision | None:
+        time.sleep(self._sleep_for)  # blocking, like FileBackedApprovalTransport
+        return ApprovalDecision(request_id=request_id, action="allow")
+
+
+@pytest.mark.asyncio
+async def test_awrap_does_not_block_event_loop():
+    """``awrap_tool_call`` must offload the blocking ``wait_for_decision``
+    to a worker thread (asyncio.to_thread) so the event loop keeps running."""
+    import asyncio
+
+    transport = _SleepingTransport(sleep_for=0.3)
+    mw = HITLApprovalMiddleware(
+        policy=[ApprovalPolicyRule(tool_pattern=r"^dangerous$", timeout_seconds=2.0)],
+        transport=transport,
+    )
+    request = _Req("dangerous", {})
+
+    async def _async_handler(req):
+        return ToolMessage(content="async-ok", tool_call_id=req.tool_call_id, name=req.tool.name)
+
+    ticks = 0
+
+    async def _ticker():
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.02)
+            ticks += 1
+
+    ticker = asyncio.create_task(_ticker())
+    result = await mw.awrap_tool_call(request, _async_handler)
+    ticker.cancel()
+
+    assert result.content == "async-ok"
+    # If the loop had been frozen during the 0.3s blocking wait, the ticker
+    # could not have advanced. Several ticks prove the loop stayed live.
+    assert ticks >= 3
+
+
+def test_resolve_transport_uses_static_when_set():
+    t = InProcessApprovalTransport()
+    mw = HITLApprovalMiddleware(policy=[], transport=t)
+    assert mw._resolve_transport(_Req("x", {})) is t
+
+
+def test_resolve_transport_from_request_workspace(tmp_path: Path):
+    """With no static transport, the workspace is resolved PER REQUEST from
+    ``request.state['workspace_path']`` — not from build-time env."""
+    mw = HITLApprovalMiddleware(policy=[], transport=None)
+    req = _Req("x", {}, state={"workspace_path": str(tmp_path)})
+    transport = mw._resolve_transport(req)
+    approvals = tmp_path / "approvals"
+    assert approvals.is_dir()
+    assert transport._requests_path == approvals / "requests.jsonl"
+    assert transport._decisions_path == approvals / "decisions.jsonl"
+    # Cached by workspace: same request workspace -> same transport object.
+    assert mw._resolve_transport(req) is transport
+
+
+def test_resolve_transport_distinct_per_workspace(tmp_path: Path):
+    """A long-lived server serving many engagements gets a distinct transport
+    per workspace, so approvals land in the correct workspace."""
+    mw = HITLApprovalMiddleware(policy=[], transport=None)
+    ws_a = tmp_path / "eng-a"
+    ws_b = tmp_path / "eng-b"
+    ta = mw._resolve_transport(_Req("x", {}, state={"workspace_path": str(ws_a)}))
+    tb = mw._resolve_transport(_Req("x", {}, state={"workspace_path": str(ws_b)}))
+    assert ta is not tb
+    assert ta._requests_path == ws_a / "approvals" / "requests.jsonl"
+    assert tb._requests_path == ws_b / "approvals" / "requests.jsonl"
+
+
+def test_resolve_transport_falls_back_to_env(tmp_path: Path, monkeypatch):
+    """When the request carries no ``workspace_path``, fall back to
+    ``DECEPTICON_WORKSPACE_PATH``."""
+    monkeypatch.setenv("DECEPTICON_WORKSPACE_PATH", str(tmp_path))
+    mw = HITLApprovalMiddleware(policy=[], transport=None)
+    transport = mw._resolve_transport(_Req("x", {}))
+    assert transport._requests_path == tmp_path / "approvals" / "requests.jsonl"

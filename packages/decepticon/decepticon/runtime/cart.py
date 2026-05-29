@@ -49,8 +49,12 @@ import hashlib
 import json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
+
+from decepticon.runtime.recording import ReplayMiddleware
+from decepticon.runtime.task_spec import Dispatcher, SubAgentTaskSpec
 
 log = logging.getLogger(__name__)
 
@@ -288,11 +292,13 @@ class ReplayRunner:
         snapshot_provider,
         record_path: str | None = None,
         dry_run: bool = True,
+        dispatcher: Dispatcher | None = None,
     ) -> None:
         self._opplan = opplan_adapter
         self._snapshot_provider = snapshot_provider
         self._record_path = record_path
         self._dry_run = dry_run
+        self._dispatcher = dispatcher
 
     def plan(
         self,
@@ -328,15 +334,89 @@ class ReplayRunner:
                 "plan_id": plan.plan_id,
                 "objectives": plan.selected_objectives,
             }
-        log.info("live replay not yet wired: plan=%s", plan.plan_id)
+
+        # Live mode: hand the orchestrator one SubAgentTaskSpec per selected
+        # objective. agent_name is the orchestrator role ("decepticon"); it
+        # re-dispatches the appropriate specialists per objective at runtime.
+        event = plan.triggered_by_event
+        technique_tags = tuple(event.technique_tags)
+        specs: list[SubAgentTaskSpec] = [
+            SubAgentTaskSpec(
+                agent_name="decepticon",
+                prompt=(
+                    f"CART replay: re-execute objective {oid} "
+                    f"after change {event.resource_id}"
+                ),
+                objective_ids=(oid,),
+                technique_tags=technique_tags,
+                replay_record_path=plan.replay_record_path,
+                dry_run=False,
+            )
+            for oid in plan.selected_objectives
+        ]
+        if not specs:
+            # A delta with no mapped objectives still replays the recorded
+            # chain via a single orchestrator-level dispatch.
+            specs.append(
+                SubAgentTaskSpec(
+                    agent_name="decepticon",
+                    prompt=(
+                        "CART replay: re-execute recorded chain "
+                        f"after change {event.resource_id}"
+                    ),
+                    objective_ids=(),
+                    technique_tags=technique_tags,
+                    replay_record_path=plan.replay_record_path,
+                    dry_run=False,
+                )
+            )
+        if self._dispatcher is None:
+            raise ValueError(
+                "ReplayRunner.execute live mode requires a dispatcher; "
+                "pass dispatcher= to __init__ or use make_replay_dispatcher(...)"
+            )
+        log.info(
+            "live replay: plan=%s dispatching %d spec(s)", plan.plan_id, len(specs)
+        )
+        results = [self._dispatcher(spec) for spec in specs]
         return {
-            "status": "live_unwired",
+            "status": "completed",
             "plan_id": plan.plan_id,
             "objectives": plan.selected_objectives,
-            "reason": "Live execution requires the engagement orchestrator "
-            "to accept a SubAgentTaskSpec with replay_record_path. "
-            "Tracked under PR #301 (SubAgentTaskSpec data contract).",
+            "results": results,
         }
+
+
+def make_replay_dispatcher(
+    invoke_agent: Callable[[str, str, list[Any]], dict[str, Any]],
+) -> Dispatcher:
+    """Build a :class:`Dispatcher` that wires CART replay middleware.
+
+    This is the seam between CART's replay wiring (owned here) and the
+    orchestrator-invocation primitive (owned by whoever holds the compiled
+    graph / webhook receiver — explicitly out of ``cart.py`` scope; see this
+    module's docstring). ``invoke_agent(agent_name, prompt, middleware)`` is
+    that injected primitive: it runs one sub-agent with the supplied
+    middleware stack and returns its result dict.
+
+    The returned dispatcher, per :class:`SubAgentTaskSpec`, installs a single
+    ``ReplayMiddleware(path=spec.replay_record_path, strict=False)`` when the
+    spec carries a record path, or no middleware when it runs live, then
+    delegates to ``invoke_agent``. Replay is partial/best-effort: recorded
+    hashes are replayed deterministically, but misses (e.g. the synthetic CART
+    re-prompt that was never recorded) fall through to the real handler and run
+    live rather than raising — exactly CART's intent.
+    """
+
+    def dispatch(spec: SubAgentTaskSpec) -> dict[str, Any]:
+        middleware: list[Any] = (
+            [ReplayMiddleware(path=spec.replay_record_path, strict=False)]
+            if spec.replay_record_path
+            else []
+        )
+        return invoke_agent(spec.agent_name, spec.prompt, middleware)
+
+    return dispatch
 
 
 class Watcher:
