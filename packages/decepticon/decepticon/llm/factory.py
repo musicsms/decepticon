@@ -92,21 +92,30 @@ async def call_with_timeout(coro: Awaitable[Any], timeout: float) -> Any:
         raise LLMTimeoutError(f"LLM request timed out after {timeout:g} seconds") from exc
 
 
-# Default ordering when DECEPTICON_AUTH_PRIORITY is not set. OAuth methods
-# precede the matching API method so a subscription primary falls back to
-# the paid API only when the subscription quota hits — not the other way.
-# OLLAMA_LOCAL sits at the end: cloud providers are usually preferred
-# (faster, smarter) when both are available; Ollama still gets picked up
-# as a last-resort fallback when its env vars are wired but no priority
-# list was authored.
+# Default ordering when DECEPTICON_AUTH_PRIORITY is not set. Every OAuth
+# (subscription) method precedes its closest paid-API peer so a subscription
+# is spent first and only falls back to the metered API when its quota hits —
+# never the other way. Copilot (broad multi-model subscription) sits just
+# after the OpenAI slot; Perplexity (search-augmented, niche for general
+# agent work) sits low. Local/cloud-local methods sit at the end: hosted
+# providers are usually preferred when both are available; locals are the
+# last-resort fallback.
+#
+# NOTE: all six subscription methods are listed here so a credential wired
+# without an explicit DECEPTICON_AUTH_PRIORITY is actually routed. Before,
+# google/copilot/grok/perplexity OAuth were absent — a configured
+# subscription was silently never used (surfaced by `decepticon-cli auth`).
 _DEFAULT_AUTH_PRIORITY: tuple[AuthMethod, ...] = (
     AuthMethod.ANTHROPIC_OAUTH,
     AuthMethod.ANTHROPIC_API,
     AuthMethod.OPENAI_OAUTH,
     AuthMethod.OPENAI_API,
+    AuthMethod.COPILOT_OAUTH,
+    AuthMethod.GOOGLE_OAUTH,
     AuthMethod.GOOGLE_API,
     AuthMethod.MINIMAX_API,
     AuthMethod.DEEPSEEK_API,
+    AuthMethod.GROK_OAUTH,
     AuthMethod.XAI_API,
     AuthMethod.MISTRAL_API,
     AuthMethod.OPENROUTER_API,
@@ -122,6 +131,7 @@ _DEFAULT_AUTH_PRIORITY: tuple[AuthMethod, ...] = (
     AuthMethod.BEDROCK_API,
     AuthMethod.VERTEX_API,
     AuthMethod.AZURE_API,
+    AuthMethod.PERPLEXITY_OAUTH,
     AuthMethod.LMSTUDIO_LOCAL,
     AuthMethod.LLAMACPP_LOCAL,
     AuthMethod.CUSTOM_OPENAI_API,
