@@ -34,6 +34,42 @@ Docker images. There is no version-bump commit to make before tagging.
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml`.
 
+## Automated releases (auto-tag on merge)
+
+You usually don't tag by hand. `.github/workflows/auto-tag.yml` runs on every
+push to `main` and, when the [Conventional Commits](https://www.conventionalcommits.org/)
+since the last tag warrant it, computes the next version
+(`scripts/next_version.py`) and pushes the `vX.Y.Z` tag for you:
+
+| Commits since last tag | Bump |
+|------------------------|------|
+| `feat:` / `feat(scope):` | minor |
+| `fix:` / `perf:` / `revert:` | patch |
+| `type!:` or a `BREAKING CHANGE:` footer | major |
+| only `docs` / `chore` / `ci` / `test` / `refactor` | no release |
+
+The pushed tag then drives the same `release.yml` pipeline below — auto-tag
+never builds or publishes, so release atomicity is unchanged.
+
+**One-time setup for fully-automatic releases:** GitHub suppresses workflow
+triggers from tags pushed with the default `GITHUB_TOKEN`. Add a repo secret
+**`RELEASE_PLEASE_TOKEN`** (a fine-grained PAT with `contents: write`) so the
+auto-tag's tag triggers `release.yml`. Without the PAT the tag is still created
+correctly, but `release.yml` will **not** build it on its own — a
+`GITHUB_TOKEN`-pushed tag does not trigger workflows. To build such a tag,
+re-push it from a credential that does (a maintainer's manual push):
+
+```bash
+git push origin :refs/tags/vX.Y.Z   # delete the remote tag
+git push origin vX.Y.Z              # re-push → triggers release.yml
+```
+
+`release-recover.yml` does **not** help here — it only verifies already-built
+images and finalizes the release, it never builds one (see
+[Recovering a failed release](#recovering-a-failed-release)). Once the PAT is
+configured, every future auto-tag builds automatically. The manual `git tag`
+flow above also still works for out-of-band releases.
+
 ## What the release workflow does
 
 | Job | Output |
