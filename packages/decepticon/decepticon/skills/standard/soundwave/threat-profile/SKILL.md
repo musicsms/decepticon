@@ -34,7 +34,7 @@ Ask the user which tier fits. If they're unsure, recommend based on engagement t
 
 ### Step 2: Build the Profile
 
-Gather or derive these fields — see `references/adversary-archetypes.md` for pre-built profiles and `references/apt-groups.md` for known APT group details:
+Gather or derive these fields — see `references/adversary-archetypes.md` for pre-built tier profiles and `references/apt-groups.md` for known APT/eCrime group cards (now 19 actors + a MITRE Group-ID crosswalk). For a **named actor**, load the matching emulation playbook (`emulation/<actor>/SKILL.md`, indexed by `emulation/SKILL.md`) — it ships a ready-to-edit `ThreatProfile` seed **and** the full kill chain mapped to Decepticon skills:
 
 1. **Name/Alias** — Known group or custom archetype
 2. **Sophistication** — low / medium / high / nation-state
@@ -81,3 +81,19 @@ Generate **two** payloads:
 `tier` is the StrEnum value: `"tier-1"` (opportunistic), `"tier-2"` (targeted cybercrime), `"tier-3"` (APT / nation-state), `"tier-4"` (insider). Map to `sophistication` informally — `tier-3` ↔ "nation-state", `tier-2` ↔ "high", `tier-1` ↔ "low/medium".
 
 **(b) Embedded summary** — one-entry `threat_actors` list inside `conops.json` for backward-compat (the legacy `ThreatActor` shape: `name` + `sophistication` + `motivation` + `initial_access` + `ttps`). Skip `tier`/`group_id`/`tools`/`infrastructure` here — those live only in the standalone profile.
+
+### Step 5: Named-actor kill chain (optional but recommended)
+
+When the operator picked a known actor, don't hand-build the TTP sequence — load the
+emulation catalog and copy the per-actor plan:
+
+```text
+load_skill("/skills/standard/soundwave/threat-profile/emulation/SKILL.md")   # routing table
+load_skill("/skills/standard/soundwave/threat-profile/emulation/apt29/SKILL.md")  # e.g. APT29
+```
+
+Each playbook gives you (a) the `ThreatProfile` seed for `plan/threat-profile.json`, (b) the
+ordered `kill_chain` to copy into `conops.json` (mapped to the 5 `ObjectivePhase` buckets),
+and (c) the actor-specific RoE/safety gates to carry into `abort.json` + `deconfliction.json`.
+Prune any technique the RoE forbids (Step 3) before writing. Available: `apt29`, `sandworm`,
+`scattered-spider`, `volt-typhoon`, `lazarus`, `fin7`, `lockbit`.

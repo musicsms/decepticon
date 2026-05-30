@@ -166,4 +166,11 @@ extend-exclude = [
     "packages/decepticon/decepticon/skills/standard/supply-chain/**",
     "packages/decepticon/decepticon/skills/standard/osint/**",
     ".omo/plans/**",
+    # Adversary-emulation playbooks + APT/CTI reference cards: dense with
+    # threat-intel jargon typos misreads — "OT" (Operational Technology),
+    # "HPE" (Hewlett Packard Enterprise), product names like "MOVEit".
+    # Scoped to these dirs to match the ics-ot/iot exclusion pattern rather
+    # than globally allow-listing two-letter tokens.
+    "packages/decepticon/decepticon/skills/standard/soundwave/threat-profile/emulation/**",
+    "packages/decepticon/decepticon/skills/standard/soundwave/threat-profile/references/**",
 ]
