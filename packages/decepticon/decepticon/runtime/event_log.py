@@ -112,6 +112,7 @@ def _acquire_lock(fd: int) -> None:
     if sys.platform == "win32":
         import msvcrt
 
+        os.lseek(fd, 0, os.SEEK_SET)
         while True:
             try:
                 msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
@@ -128,10 +129,11 @@ def _release_lock(fd: int) -> None:
     if sys.platform == "win32":
         import msvcrt
 
+        os.lseek(fd, 0, os.SEEK_SET)
         try:
             msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
         except OSError:
-            pass
+            log.warning("event-log lock release failed", exc_info=True)
     else:
         import fcntl
 
