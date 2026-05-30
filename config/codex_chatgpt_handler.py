@@ -145,8 +145,16 @@ def _refresh_tokens(auth: dict[str, Any]) -> dict[str, Any]:
     access_token = data.get("access_token")
     id_token = data.get("id_token")
     if not access_token or not id_token:
+        # Do NOT interpolate the raw refresh response: on a partial-but-
+        # successful refresh it contains the freshly-minted access / refresh /
+        # id tokens, which would then leak into logs and the caller-visible
+        # AuthenticationError. Report only the (non-sensitive) field names.
+        present = sorted(data.keys()) if isinstance(data, dict) else type(data).__name__
         raise litellm.AuthenticationError(
-            message=f"Codex ChatGPT refresh response missing fields: {data}",
+            message=(
+                "Codex ChatGPT refresh response missing required fields "
+                f"(need access_token + id_token); present fields: {present}"
+            ),
             model="auth",
             llm_provider="auth",
         )
