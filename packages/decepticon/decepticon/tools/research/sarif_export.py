@@ -154,7 +154,7 @@ def _iter_findings(graph: Any):
     for node in nodes.values() if hasattr(nodes, "values") else nodes:
         if _kind_label(getattr(node, "kind", None)) not in _FINDING_KINDS:
             continue
-        props = dict(getattr(node, "properties", {}) or {})
+        props = dict(getattr(node, "props", None) or getattr(node, "properties", {}) or {})
         if not props.get("severity"):
             props["severity"] = "medium"
         yield node, props
