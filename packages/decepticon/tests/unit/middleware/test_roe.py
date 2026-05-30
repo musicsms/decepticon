@@ -388,3 +388,47 @@ class TestSlotRegistration:
         factory = DEFAULT_SLOT_FACTORIES[MiddlewareSlot.ROE_ENFORCEMENT]
         mw = factory(role="recon")
         assert isinstance(mw, RoEEnforcementMiddleware)
+
+
+class TestFqdnTrailingDotNormalization:
+    """Regression: a trailing dot is DNS-equivalent, so the FQDN form of a host
+    must not bypass any scope check. Previously ``metadata.google.internal.``
+    and the IMDS IP ``169.254.169.254.`` slipped past the forbidden-destination
+    and out-of-scope deny rules (the IP form also failed ``ip_address()``
+    parsing and fell through to default-allow)."""
+
+    def test_trailing_dot_does_not_bypass_forbidden_destination(self) -> None:
+        rules = MachineEnforcement.from_dict({"mode": "enforce"})
+        for host in (
+            "metadata.google.internal",
+            "metadata.google.internal.",
+            "169.254.169.254",
+            "169.254.169.254.",
+        ):
+            decision = evaluate_target(host, rules)
+            assert decision.allow is False, host
+            assert decision.reason_code == "FORBIDDEN_DESTINATION", host
+
+    def test_trailing_dot_does_not_bypass_out_of_scope(self) -> None:
+        rules = MachineEnforcement.from_dict(
+            {"mode": "enforce", "in_scope": ["*.acme.com"], "out_of_scope": ["billing.acme.com"]}
+        )
+        for host in ("billing.acme.com", "billing.acme.com."):
+            decision = evaluate_target(host, rules)
+            assert decision.allow is False, host
+            assert decision.reason_code == "OUT_OF_SCOPE", host
+
+    def test_trailing_dot_still_matches_in_scope_glob(self) -> None:
+        rules = MachineEnforcement.from_dict({"mode": "enforce", "in_scope": ["*.acme.com"]})
+        for host in ("app.acme.com", "app.acme.com."):
+            decision = evaluate_target(host, rules)
+            assert decision.allow is True, host
+            assert decision.reason_code == "IN_SCOPE", host
+
+    def test_trailing_dot_on_exact_in_scope_host(self) -> None:
+        rules = MachineEnforcement.from_dict(
+            {"mode": "enforce", "in_scope": ["single-host.example"]}
+        )
+        assert evaluate_target("single-host.example.", rules).allow is True
+        # An unrelated FQDN-form host is still refused (not in scope).
+        assert evaluate_target("other.example.", rules).allow is False
