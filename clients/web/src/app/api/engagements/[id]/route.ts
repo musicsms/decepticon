@@ -1,5 +1,6 @@
 import { requireAuth, AuthError } from "@/lib/auth-bridge";
 import { prisma } from "@/lib/prisma";
+import { isValidEngagementSlug } from "@/lib/engagement-slug";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -54,6 +55,20 @@ export async function PATCH(
     }
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+
+    // The name doubles as the workspace directory slug used by every route that
+    // joins WORKSPACE/<name>/... — reject anything that isn't a safe slug here
+    // (e.g. "../../tmp/pwn", absolute paths) so a rename can never enable path
+    // traversal downstream. Same rule the CREATE route enforces.
+    if ("name" in data && !isValidEngagementSlug(data.name)) {
+      return NextResponse.json(
+        {
+          error:
+            "Invalid engagement name — must be 3-64 chars, lowercase letters / digits / internal hyphens",
+        },
+        { status: 400 }
+      );
     }
 
     const engagement = await prisma.engagement.update({

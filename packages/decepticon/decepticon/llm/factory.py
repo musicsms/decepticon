@@ -243,6 +243,21 @@ _OAUTH_CREDENTIAL_PATHS: dict[AuthMethod, tuple[tuple[str, str], ...]] = {
     AuthMethod.PERPLEXITY_OAUTH: (("PERPLEXITY_TOKENS_PATH", "~/.config/perplexity/tokens.json"),),
 }
 
+# Env vars each LiteLLM OAuth handler accepts as a credential *in place of*
+# its on-disk token file (see config/*_handler.py ``_load_tokens`` /
+# ``_env_override_tokens`` / ``_resolve_source_token``). A non-empty value in
+# any of these means the handler can authenticate without a file, so the
+# method must still count as configured. Codex (OPENAI_OAUTH) exposes no
+# env-token override — only the file-path env vars already covered by
+# ``_OAUTH_CREDENTIAL_PATHS`` — so it is intentionally absent here.
+_OAUTH_ENV_CREDENTIALS: dict[AuthMethod, tuple[str, ...]] = {
+    AuthMethod.ANTHROPIC_OAUTH: ("ANTHROPIC_OAUTH_TOKEN",),
+    AuthMethod.GOOGLE_OAUTH: ("GEMINI_ACCESS_TOKEN", "GEMINI_SESSION_COOKIES"),
+    AuthMethod.COPILOT_OAUTH: ("COPILOT_ACCESS_TOKEN", "COPILOT_REFRESH_TOKEN"),
+    AuthMethod.GROK_OAUTH: ("GROK_ACCESS_TOKEN", "GROK_SESSION_TOKEN"),
+    AuthMethod.PERPLEXITY_OAUTH: ("PERPLEXITY_ACCESS_TOKEN", "PERPLEXITY_SESSION_TOKEN"),
+}
+
 
 def _ollama_cloud_configured() -> bool:
     """Return True when the user has wired up Ollama Cloud.
@@ -378,6 +393,17 @@ def _oauth_credentials_present(method: AuthMethod) -> bool:
     return False
 
 
+def _oauth_env_credentials_present(method: AuthMethod) -> bool:
+    """Return True if any env var the handler accepts as a credential is set.
+
+    Env-only OAuth setups (e.g. ``GEMINI_ACCESS_TOKEN`` with no token file)
+    are valid: the LiteLLM handler authenticates straight from the env. Such
+    a method must not be dropped from the fallback chain just because no file
+    exists on disk.
+    """
+    return any(os.getenv(env_var, "").strip() for env_var in _OAUTH_ENV_CREDENTIALS.get(method, ()))
+
+
 def _is_truthy(value: str) -> bool:
     return value.strip().lower() in ("true", "1", "yes", "on")
 
@@ -417,11 +443,12 @@ def _method_is_configured(method: AuthMethod) -> bool:
     if method in _API_METHOD_ENV:
         return _is_real_key(os.getenv(_API_METHOD_ENV[method], ""), method)
     if method in _OAUTH_METHOD_ENV:
-        # OAuth methods need BOTH the boolean intent and the actual
-        # credential file (see ``_oauth_credentials_present`` for why).
-        return _is_truthy(os.getenv(_OAUTH_METHOD_ENV[method], "")) and _oauth_credentials_present(
-            method
-        )
+        # OAuth methods need the boolean intent AND a usable credential. The
+        # credential may live in a token file OR in the handler's env-var
+        # override — env-only setups are valid and must not be dropped.
+        if not _is_truthy(os.getenv(_OAUTH_METHOD_ENV[method], "")):
+            return False
+        return _oauth_credentials_present(method) or _oauth_env_credentials_present(method)
     if method == AuthMethod.OLLAMA_LOCAL:
         return _ollama_local_configured()
     if method == AuthMethod.OLLAMA_CLOUD:
@@ -617,11 +644,17 @@ def _method_detail(method: AuthMethod, *, configured: bool) -> str:
     if method in _OAUTH_METHOD_ENV:
         flag = _OAUTH_METHOD_ENV[method]
         if configured:
+            if _oauth_env_credentials_present(method):
+                return f"{flag}=true and credential present (env)"
             return f"{flag}=true and credential file present"
         if not _is_truthy(os.getenv(flag, "")):
             return f"set {flag}=true and provide the subscription credential"
         paths = ", ".join(default for _env, default in _OAUTH_CREDENTIAL_PATHS.get(method, ()))
-        return f"{flag}=true but no credential file ({paths or 'token'})"
+        env_vars = ", ".join(_OAUTH_ENV_CREDENTIALS.get(method, ()))
+        sources = paths or "token"
+        if env_vars:
+            sources = f"{sources} or {env_vars}"
+        return f"{flag}=true but no credential ({sources})"
     if method in _LOCAL_METHODS or method == AuthMethod.OLLAMA_CLOUD:
         return f"{env} set" if configured else f"set {env} (and the matching *_MODEL)"
     if configured:

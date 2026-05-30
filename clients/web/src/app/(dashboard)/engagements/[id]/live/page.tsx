@@ -9,6 +9,7 @@ import { useAgents } from "@/hooks/useAgents";
 import { LiveActivityFeed } from "@/components/streaming/live-activity-feed";
 import { OpplanLiveOverlay } from "@/components/streaming/opplan-live-overlay";
 import { AgentDetailPanel } from "@/components/streaming/agent-detail-panel";
+import { ApprovalGate } from "@/components/streaming/approval-gate";
 
 export default function LivePage() {
   const params = useParams();
@@ -53,6 +54,10 @@ export default function LivePage() {
         />
         <div className="absolute right-4 top-4 z-10">
           <OpplanLiveOverlay engagementId={engagementId} />
+        </div>
+        {/* HITL approval gates — surface prominently during a run */}
+        <div className="absolute left-4 top-4 z-30 w-[360px] max-w-[calc(100%-2rem)]">
+          <ApprovalGate engagementId={engagementId} />
         </div>
       </div>
 

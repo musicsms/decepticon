@@ -108,9 +108,35 @@ def test_write_json_atomic_uses_atomic_temp_then_rename(tmp_path: Path) -> None:
     path = tmp_path / "tokens.json"
     write_json_atomic(path, {"v": "first"})
     write_json_atomic(path, {"v": "second"})
-    # Temp sibling must be cleaned up after the rename.
-    assert not (tmp_path / f".{path.name}.decepticon.tmp").exists()
+    # Every temp sibling must be cleaned up after the rename.
+    assert list(tmp_path.glob(f".{path.name}.*.tmp")) == []
     assert json.loads(path.read_text()) == {"v": "second"}
+
+
+def test_write_json_atomic_uses_unique_temp_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # B8: two LiteLLM workers refreshing the same OAuth file must NOT share a
+    # temp path, or their writes collide and corrupt the token. Each call must
+    # allocate a process-unique temp file (tempfile.mkstemp) before renaming.
+    path = tmp_path / "tokens.json"
+    seen: list[str] = []
+    real_replace = os.replace
+
+    def spy_replace(src: Any, dst: Any) -> None:
+        seen.append(Path(src).name)
+        real_replace(src, dst)
+
+    monkeypatch.setattr(_module.os, "replace", spy_replace)
+    assert write_json_atomic(path, {"v": 1}) is True
+    assert write_json_atomic(path, {"v": 2}) is True
+
+    assert len(seen) == 2
+    assert seen[0] != seen[1]  # unique temp per write — no shared-path collision
+    for name in seen:
+        assert name.startswith(f".{path.name}.")
+        assert name.endswith(".tmp")
+    assert json.loads(path.read_text()) == {"v": 2}
 
 
 @pytest.mark.skipif(os.name == "nt", reason="chmod-based directory locking is a no-op on Windows")

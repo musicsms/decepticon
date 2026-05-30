@@ -29,6 +29,7 @@ import base64
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -97,33 +98,37 @@ def write_json_atomic(
     except OSError as exc:
         log.warning("oauth_token_store: mkdir failed for %s: %s", path.parent, exc)
         return False
-    tmp = path.with_name(f".{path.name}.decepticon.tmp")
     payload = (json.dumps(data, indent=2) + "\n").encode("utf-8")
-    open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    if hasattr(os, "O_NOFOLLOW"):
-        # POSIX: refuse to follow symlinks at the temp path. Closes a
-        # symlink-replacement TOCTOU window where a hostile process on the
-        # same UID could redirect the write to an attacker-owned file.
-        open_flags |= os.O_NOFOLLOW
-    fd: int | None = None
+    # Unique temp file in the same directory. Two LiteLLM workers may refresh
+    # the same OAuth credential file concurrently; a SHARED temp path makes
+    # their writes collide and corrupt / lose a token. ``mkstemp`` allocates a
+    # process-unique name and opens it with ``O_CREAT | O_EXCL``, which also
+    # closes the symlink-replacement TOCTOU window (no need for O_NOFOLLOW).
     try:
-        fd = os.open(tmp, open_flags, mode)
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
+        )
+    except OSError as exc:
+        log.warning("oauth_token_store: mkstemp failed for %s: %s", path, exc)
+        return False
+    tmp = Path(tmp_name)
+    try:
+        # mkstemp creates with 0o600; widen/narrow only to honor ``mode``.
+        os.chmod(tmp, mode)
         os.write(fd, payload)
+        os.fsync(fd)
     except OSError as exc:
         log.warning("oauth_token_store: write failed for %s: %s", path, exc)
-        if fd is not None:
-            try:
-                os.close(fd)
-            except OSError:
-                # Already closed or invalid descriptor — nothing actionable.
-                pass
+        try:
+            os.close(fd)
+        except OSError:
+            # Already closed or invalid descriptor — nothing actionable.
+            pass
         try:
             tmp.unlink()
         except OSError:
-            # Cleanup is best-effort: if the temp file already vanished
-            # (concurrent reaper, tmpfs eviction) or sits on a read-only
-            # mount, there's nothing actionable left to do — the outer
-            # ``except`` already logged the originating write failure.
+            # Cleanup is best-effort: the temp file may already be gone
+            # (concurrent reaper, tmpfs eviction) or sit on a read-only mount.
             pass
         return False
     try:

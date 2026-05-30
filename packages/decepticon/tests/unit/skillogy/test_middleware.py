@@ -128,8 +128,24 @@ def test_maybe_install_skillogy_no_op_when_disabled(monkeypatch):
     assert not any(isinstance(mw, SkillogyMiddleware) for mw in out)
 
 
-def test_maybe_install_skillogy_appends_when_no_skills_present(monkeypatch):
+def test_maybe_install_skillogy_noop_when_no_skills_present(monkeypatch):
+    """Swap-only: with SKILLS intentionally absent (disabled/replaced), an
+    enabled flag must NOT inject a fresh SkillogyMiddleware — that would add
+    a skill surface the stack opted out of."""
+    monkeypatch.setenv("DECEPTICON_USE_SKILLOGY", "1")
+    monkeypatch.setenv("DECEPTICON_SKILLOGY_URL", "http://fake")
+    from langchain.agents.middleware import AgentMiddleware
+
+    other = AgentMiddleware()
+    base_stack = [other]
+    out = maybe_install_skillogy(base_stack)
+    assert not any(isinstance(mw, SkillogyMiddleware) for mw in out)
+    assert out == [other]
+
+
+def test_maybe_install_skillogy_noop_on_empty_stack(monkeypatch):
+    """No SkillsMiddleware to replace -> no-op even on an empty stack."""
     monkeypatch.setenv("DECEPTICON_USE_SKILLOGY", "1")
     monkeypatch.setenv("DECEPTICON_SKILLOGY_URL", "http://fake")
     out = maybe_install_skillogy([])
-    assert any(isinstance(mw, SkillogyMiddleware) for mw in out)
+    assert out == []

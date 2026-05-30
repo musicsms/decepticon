@@ -29,12 +29,16 @@ class MiddlewareSlot(StrEnum):
 
     ENGAGEMENT_CONTEXT = "engagement-context"
     ROE_ENFORCEMENT = "roe-enforcement"
+    HITL_APPROVAL = "hitl-approval"
     UNTRUSTED_OUTPUT = "untrusted-output"
+    PROMPT_INJECTION_SHIELD = "prompt-injection-shield"
     SKILLS = "skills"
     FILESYSTEM = "filesystem"
     SUBAGENT = "subagent"
     OPPLAN = "opplan"
+    EVENT_LOG = "event-log"
     SANDBOX_NOTIFICATION = "sandbox-notification"
+    BUDGET = "budget"
     MODEL_OVERRIDE = "model-override"
     MODEL_FALLBACK = "model-fallback"
     SUMMARIZATION = "summarization"
@@ -65,10 +69,24 @@ SAFETY_CRITICAL_SLOTS: frozenset[MiddlewareSlot] = frozenset(
         # downstream model call. Replacement is fine if the new
         # middleware honours the same contract.
         MiddlewareSlot.UNTRUSTED_OUTPUT,
+        # PromptInjectionShieldMiddleware is a deny-list defense that
+        # wraps attacker-controlled tool output (HTTP bodies, banners,
+        # file reads) before it reaches a downstream model call. Like
+        # UNTRUSTED_OUTPUT it is in every role's baseline; disabling it
+        # lets hostile tool output re-author the agent's instructions
+        # with no guard rail. Replacement is fine if the new middleware
+        # honours the same contract; full disable is the actual hazard.
+        MiddlewareSlot.PROMPT_INJECTION_SHIELD,
         # SandboxNotification tracks background-job completion + emits
         # the CLI's ``? Background command`` event. Disabling it leaves
         # operator visibility broken on every background tool call.
         MiddlewareSlot.SANDBOX_NOTIFICATION,
+        # HITLApprovalMiddleware is the operator-approval gate for
+        # high-impact actions (credential dumping, destructive ops).
+        # Disabling it lets an agent execute gated tools without any
+        # human in the loop. Replacement is fine if the new middleware
+        # honours the same approval contract; full disable is the hazard.
+        MiddlewareSlot.HITL_APPROVAL,
     }
 )
 """Slots a plugin can only replace/disable when
@@ -105,6 +123,13 @@ _BASE_SLOTS: frozenset[MiddlewareSlot] = _TAIL_SLOTS | {
     MiddlewareSlot.FILESYSTEM,
     MiddlewareSlot.UNTRUSTED_OUTPUT,
     MiddlewareSlot.ROE_ENFORCEMENT,
+    # Additive / no-op-safe slots every agent gets: structured event
+    # logging, the prompt-injection shield (deny-list wrap; coexists
+    # with UNTRUSTED_OUTPUT's allow-list via dedup in the shield), and
+    # budget enforcement (no-op when caps<=0).
+    MiddlewareSlot.EVENT_LOG,
+    MiddlewareSlot.PROMPT_INJECTION_SHIELD,
+    MiddlewareSlot.BUDGET,
 }
 
 # Standard bash-executing agents (recon/exploit/postexploit/analyst/
@@ -114,6 +139,7 @@ _BASE_SLOTS: frozenset[MiddlewareSlot] = _TAIL_SLOTS | {
 _BASH_AGENT_SLOTS: frozenset[MiddlewareSlot] = _BASE_SLOTS | {
     MiddlewareSlot.ENGAGEMENT_CONTEXT,
     MiddlewareSlot.SANDBOX_NOTIFICATION,
+    MiddlewareSlot.HITL_APPROVAL,
 }
 
 
@@ -125,6 +151,7 @@ SLOTS_PER_ROLE: dict[str, frozenset[MiddlewareSlot]] = {
         MiddlewareSlot.SUBAGENT,
         MiddlewareSlot.OPPLAN,
         MiddlewareSlot.MODEL_OVERRIDE,
+        MiddlewareSlot.HITL_APPROVAL,
     },
     # ── Standard non-bash agent (planning + interview) ──
     "soundwave": _BASE_SLOTS | {MiddlewareSlot.ENGAGEMENT_CONTEXT},

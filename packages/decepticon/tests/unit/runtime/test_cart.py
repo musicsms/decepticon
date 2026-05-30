@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
+from decepticon.runtime import cart, recording
 from decepticon.runtime.cart import (
     ChangeEvent,
     EngagementSnapshot,
@@ -13,7 +16,9 @@ from decepticon.runtime.cart import (
     SnapshotNodeKey,
     Watcher,
     diff_snapshots,
+    make_replay_dispatcher,
 )
+from decepticon.runtime.task_spec import SubAgentTaskSpec
 
 
 class _Node:
@@ -143,7 +148,7 @@ def test_linear_adapter_returns_all_when_techniques_empty():
     assert sorted(adapter.objectives_for_techniques([])) == ["a", "b"]
 
 
-def _build_runner(record_path=None, dry_run=True):
+def _build_runner(record_path=None, dry_run=True, dispatcher=None):
     opplan = _OPPLAN([_Obj("scan", mitre="T1190"), _Obj("dump", mitre="T1003")])
     adapter = LinearOPPLANAdapter(opplan)
     base_snapshot = EngagementSnapshot.from_graph(_Graph([]))
@@ -155,6 +160,7 @@ def _build_runner(record_path=None, dry_run=True):
         snapshot_provider=snapshot_provider,
         record_path=record_path,
         dry_run=dry_run,
+        dispatcher=dispatcher,
     )
     return runner, base_snapshot
 
@@ -189,19 +195,162 @@ def test_replay_runner_execute_dry_run_returns_status():
     assert result["plan_id"] == plan.plan_id
 
 
-def test_replay_runner_execute_live_reports_unwired():
-    runner, base = _build_runner(dry_run=False)
+class _FakeDispatcher:
+    """Captures every dispatched spec and returns a per-spec result dict."""
+
+    def __init__(self):
+        self.specs: list[SubAgentTaskSpec] = []
+
+    def __call__(self, spec):
+        self.specs.append(spec)
+        return {"ran": spec.objective_ids}
+
+
+def test_replay_runner_execute_live_dispatches_one_spec_per_objective():
+    fake = _FakeDispatcher()
+    runner, base = _build_runner(record_path="/tmp/rec.jsonl", dry_run=False, dispatcher=fake)
     event = ChangeEvent(
         source="cloudtrail",
         event_type="x",
-        resource_id="r",
+        resource_id="i-xyz",
         resource_kind="k",
         technique_tags=["T1190"],
     )
     plan = runner.plan(event, base)
+    assert plan.selected_objectives == ["scan"]
     result = runner.execute(plan)
-    assert result["status"] == "live_unwired"
-    assert "SubAgentTaskSpec" in result["reason"]
+
+    assert len(fake.specs) == 1
+    spec = fake.specs[0]
+    assert isinstance(spec, SubAgentTaskSpec)
+    assert spec.agent_name == "decepticon"
+    assert spec.objective_ids == ("scan",)
+    assert spec.technique_tags == ("T1190",)
+    assert spec.replay_record_path == "/tmp/rec.jsonl"
+    assert spec.dry_run is False
+    assert "scan" in spec.prompt and "i-xyz" in spec.prompt
+
+    assert result["status"] == "completed"
+    assert result["plan_id"] == plan.plan_id
+    assert result["objectives"] == ["scan"]
+    assert len(result["results"]) == 1
+    assert result["results"][0] == {"ran": ("scan",)}
+
+
+def test_replay_runner_execute_live_multiple_objectives_aggregates():
+    fake = _FakeDispatcher()
+    runner, base = _build_runner(dry_run=False, dispatcher=fake)
+    plan = ReplayPlan(
+        plan_id="p1",
+        triggered_by_event=ChangeEvent(
+            source="s",
+            event_type="x",
+            resource_id="r",
+            resource_kind="k",
+            technique_tags=["T1190", "T1003"],
+        ),
+        delta_summary={},
+        selected_objectives=["scan", "dump"],
+        replay_record_path=None,
+        dry_run=False,
+    )
+    result = runner.execute(plan)
+    assert [s.objective_ids for s in fake.specs] == [("scan",), ("dump",)]
+    assert all(s.technique_tags == ("T1190", "T1003") for s in fake.specs)
+    assert len(result["results"]) == 2
+
+
+def test_replay_runner_execute_live_empty_objectives_dispatches_orchestrator_spec():
+    fake = _FakeDispatcher()
+    runner, base = _build_runner(dry_run=False, dispatcher=fake)
+    plan = ReplayPlan(
+        plan_id="p-empty",
+        triggered_by_event=ChangeEvent(
+            source="s",
+            event_type="x",
+            resource_id="r-empty",
+            resource_kind="k",
+            technique_tags=["T1190"],
+        ),
+        delta_summary={},
+        selected_objectives=[],
+        replay_record_path="/tmp/rec.jsonl",
+        dry_run=False,
+    )
+    result = runner.execute(plan)
+    assert len(fake.specs) == 1
+    spec = fake.specs[0]
+    assert spec.objective_ids == ()
+    assert spec.agent_name == "decepticon"
+    assert spec.replay_record_path == "/tmp/rec.jsonl"
+    assert result["status"] == "completed"
+    assert len(result["results"]) == 1
+
+
+def test_replay_runner_execute_live_without_dispatcher_raises():
+    runner, base = _build_runner(dry_run=False, dispatcher=None)
+    plan = ReplayPlan(
+        plan_id="p",
+        triggered_by_event=ChangeEvent(
+            source="s",
+            event_type="x",
+            resource_id="r",
+            resource_kind="k",
+            technique_tags=["T1190"],
+        ),
+        delta_summary={},
+        selected_objectives=["scan"],
+        replay_record_path=None,
+        dry_run=False,
+    )
+    with pytest.raises(ValueError, match="dispatcher"):
+        runner.execute(plan)
+
+
+def test_make_replay_dispatcher_installs_replay_middleware(monkeypatch):
+    # ReplayMiddleware(path=...) calls recording.open_replay() in its ctor,
+    # which does real file IO; stub it so the test stays hermetic.
+    sentinel_replay = object()
+    monkeypatch.setattr(recording, "open_replay", lambda path: sentinel_replay)
+    captured = {}
+
+    def fake_invoke(agent_name, prompt, middleware):
+        captured["agent_name"] = agent_name
+        captured["prompt"] = prompt
+        captured["middleware"] = middleware
+        return {"ok": True}
+
+    dispatcher = make_replay_dispatcher(fake_invoke)
+    spec = SubAgentTaskSpec(
+        agent_name="decepticon",
+        prompt="replay",
+        objective_ids=("scan",),
+        replay_record_path="/tmp/rec.jsonl",
+    )
+    result = dispatcher(spec)
+    assert result == {"ok": True}
+    assert captured["agent_name"] == "decepticon"
+    assert captured["prompt"] == "replay"
+    assert len(captured["middleware"]) == 1
+    installed = captured["middleware"][0]
+    assert isinstance(installed, cart.ReplayMiddleware)
+    # B1: CART wants partial/best-effort replay — a synthetic re-prompt that
+    # misses the recording must fall through to the live handler, not raise.
+    assert installed._strict is False
+
+
+def test_make_replay_dispatcher_no_record_path_yields_empty_middleware():
+    captured = {}
+
+    def fake_invoke(agent_name, prompt, middleware):
+        captured["middleware"] = middleware
+        return {"ok": True}
+
+    dispatcher = make_replay_dispatcher(fake_invoke)
+    spec = SubAgentTaskSpec(agent_name="decepticon", prompt="live", replay_record_path=None)
+    result = dispatcher(spec)
+    assert result == {"ok": True}
+    assert captured["middleware"] == []
 
 
 def test_watcher_dispatches_plans_to_subscribers():

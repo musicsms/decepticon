@@ -2,6 +2,7 @@
 
 from decepticon.middleware.budget import BudgetEnforcementMiddleware
 from decepticon.middleware.engagement import EngagementContextMiddleware
+from decepticon.middleware.event_logging import EventLogMiddleware
 from decepticon.middleware.filesystem import FilesystemMiddleware
 from decepticon.middleware.hitl import (
     DEFAULT_HIGH_IMPACT_POLICY,
@@ -33,6 +34,7 @@ __all__ = [
     "BudgetEnforcementMiddleware",
     "DEFAULT_HIGH_IMPACT_POLICY",
     "EngagementContextMiddleware",
+    "EventLogMiddleware",
     "FileBackedApprovalTransport",
     "FilesystemMiddleware",
     "HITLApprovalMiddleware",

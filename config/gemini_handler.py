@@ -126,6 +126,21 @@ def get_gemini_access_token(force_refresh: bool = False) -> str:
     return tokens.get("accessToken", "")
 
 
+def _map_finish_reason(reason: str | None) -> str:
+    """Map a Gemini ``candidates[].finishReason`` to an OpenAI finish_reason.
+
+    Hardcoding ``"stop"`` masked truncation (MAX_TOKENS) and safety stops
+    (SAFETY / RECITATION), so callers could not tell a complete answer apart
+    from a cut-off one.
+    """
+    return {
+        "STOP": "stop",
+        "MAX_TOKENS": "length",
+        "SAFETY": "content_filter",
+        "RECITATION": "content_filter",
+    }.get(reason or "", "stop")
+
+
 class GeminiSubHandler(CustomLLM):
     """Routes through Google Gemini with subscription OAuth.
 
@@ -236,9 +251,11 @@ class GeminiSubHandler(CustomLLM):
         data = resp.json()
         candidates = data.get("candidates", [])
         text = ""
+        finish_reason = "stop"
         if candidates:
             parts = candidates[0].get("content", {}).get("parts", [])
             text = "".join(p.get("text", "") for p in parts)
+            finish_reason = _map_finish_reason(candidates[0].get("finishReason"))
 
         usage_meta = data.get("usageMetadata", {})
 
@@ -249,7 +266,7 @@ class GeminiSubHandler(CustomLLM):
                 {
                     "index": 0,
                     "message": {"role": "assistant", "content": text},
-                    "finish_reason": "stop",
+                    "finish_reason": finish_reason,
                 }
             ],
             usage={

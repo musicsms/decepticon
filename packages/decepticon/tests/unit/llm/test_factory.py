@@ -9,7 +9,9 @@ from decepticon.llm.factory import (
     LLMFactory,
     _is_real_key,
     _llamacpp_local_configured,
+    _method_is_configured,
     _oauth_credentials_present,
+    _oauth_env_credentials_present,
     _resolve_credentials,
 )
 from decepticon_core.types.llm import (
@@ -107,6 +109,58 @@ class TestOAuthCredentialsPresent:
         monkeypatch.setenv("HOME", str(tmp_path))
         monkeypatch.setenv("CODEX_AUTH_PATH", str(good))
         assert _oauth_credentials_present(AuthMethod.OPENAI_OAUTH) is True
+
+
+class TestOAuthEnvCredentials:
+    """B12: env-backed OAuth creds count as configured, not just on-disk files.
+    Before the fix, ``_method_is_configured`` required a credential *file* even
+    though the LiteLLM handlers also accept env-var tokens (GEMINI_ACCESS_TOKEN,
+    GROK_SESSION_TOKEN, COPILOT_REFRESH_TOKEN, …). Env-only setups were silently
+    dropped from the fallback chain.
+    """
+
+    def test_env_present_returns_true_for_each_method(self, monkeypatch) -> None:
+        cases = {
+            AuthMethod.GOOGLE_OAUTH: "GEMINI_ACCESS_TOKEN",
+            AuthMethod.COPILOT_OAUTH: "COPILOT_REFRESH_TOKEN",
+            AuthMethod.GROK_OAUTH: "GROK_SESSION_TOKEN",
+            AuthMethod.PERPLEXITY_OAUTH: "PERPLEXITY_SESSION_TOKEN",
+            AuthMethod.ANTHROPIC_OAUTH: "ANTHROPIC_OAUTH_TOKEN",
+        }
+        for method, env_var in cases.items():
+            monkeypatch.setenv(env_var, "tok-from-env")
+            assert _oauth_env_credentials_present(method) is True
+            monkeypatch.delenv(env_var, raising=False)
+
+    def test_env_only_method_is_configured_without_file(self, monkeypatch, tmp_path) -> None:
+        # Flag true + env token, but the credential file is absent.
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("GEMINI_TOKENS_PATH", str(tmp_path / "absent.json"))
+        monkeypatch.setenv("DECEPTICON_AUTH_GEMINI", "true")
+        monkeypatch.setenv("GEMINI_ACCESS_TOKEN", "ya29.env-token")
+        assert _oauth_credentials_present(AuthMethod.GOOGLE_OAUTH) is False
+        assert _method_is_configured(AuthMethod.GOOGLE_OAUTH) is True
+
+    def test_method_not_configured_without_file_or_env(self, monkeypatch, tmp_path) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("GEMINI_TOKENS_PATH", str(tmp_path / "absent.json"))
+        monkeypatch.setenv("DECEPTICON_AUTH_GEMINI", "true")
+        monkeypatch.delenv("GEMINI_ACCESS_TOKEN", raising=False)
+        monkeypatch.delenv("GEMINI_SESSION_COOKIES", raising=False)
+        assert _method_is_configured(AuthMethod.GOOGLE_OAUTH) is False
+
+    def test_env_creds_still_require_intent_flag(self, monkeypatch, tmp_path) -> None:
+        # Env token present but the boolean intent flag is off → not configured.
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("GEMINI_TOKENS_PATH", str(tmp_path / "absent.json"))
+        monkeypatch.delenv("DECEPTICON_AUTH_GEMINI", raising=False)
+        monkeypatch.setenv("GEMINI_ACCESS_TOKEN", "ya29.env-token")
+        assert _method_is_configured(AuthMethod.GOOGLE_OAUTH) is False
+
+    def test_codex_has_no_env_token_override(self, monkeypatch) -> None:
+        # Codex authenticates only from its file; no env-token override exists.
+        monkeypatch.setenv("CODEX_ACCESS_TOKEN", "should-not-count")
+        assert _oauth_env_credentials_present(AuthMethod.OPENAI_OAUTH) is False
 
 
 class TestLLMFactory:
