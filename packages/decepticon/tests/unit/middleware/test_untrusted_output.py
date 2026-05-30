@@ -124,6 +124,21 @@ class TestEnvelopeWrapping:
         assert "Hello, world!" in result.content
         assert "</UNTRUSTED_TOOL_OUTPUT>" in result.content
 
+    def test_scanner_tools_output_is_quarantined(self) -> None:
+        # Regression: scan_shard / rank_candidates surface raw bytes walked out
+        # of the (attacker-controlled) target tree, so their output must be
+        # enveloped — an injection payload planted in a scanned file must reach
+        # the model wrapped, not as trusted text.
+        mw = UntrustedOutputMiddleware()
+        for tool_name in ("scan_shard", "rank_candidates"):
+            request = _make_request(tool_name)
+            handler = MagicMock(return_value=_tool_message("candidate hit from target file"))
+            result = mw.wrap_tool_call(request, handler)
+            assert isinstance(result, ToolMessage)
+            assert "<UNTRUSTED_TOOL_OUTPUT" in result.content, tool_name
+            assert f'origin="{tool_name}"' in result.content, tool_name
+            assert "candidate hit from target file" in result.content, tool_name
+
     def test_embedded_marker_cannot_break_out_of_envelope(self) -> None:
         # Regression: attacker-controlled tool output containing the closing
         # envelope marker must not forge/close the quarantine and smuggle text
