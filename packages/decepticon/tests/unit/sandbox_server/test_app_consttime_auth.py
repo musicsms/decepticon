@@ -63,10 +63,8 @@ def test_verify_token_uses_compare_digest() -> None:
         return original(a, b)
 
     with patch.object(_hmac, "compare_digest", side_effect=spy):
-        try:
+        with contextlib.suppress(Exception):
             verify(f"Bearer {TOKEN}")
-        except Exception:
-            pass
 
     assert len(calls) == 1, "hmac.compare_digest must be called for token comparison"
     assert calls[0] == (TOKEN, TOKEN)
