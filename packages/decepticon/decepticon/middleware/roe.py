@@ -31,8 +31,9 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
@@ -47,6 +48,7 @@ from decepticon_core.types.roe import (
     MachineEnforcement,
     evaluate_command,
     evaluate_target,
+    evaluate_time_window,
 )
 
 log = logging.getLogger(__name__)
@@ -148,10 +150,12 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         *,
         sink: RoEAuditSink | None = None,
         gated_tools: frozenset[str] | None = None,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         super().__init__()
         self._sink = sink
         self._gated = gated_tools or GATED_TOOL_NAMES
+        self._now = now or (lambda: datetime.now(timezone.utc))
 
     @override
     def wrap_tool_call(self, request, handler) -> ToolMessage | Command:
@@ -198,6 +202,9 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         get = state.get if hasattr(state, "get") else (lambda _k, _d=None: None)
         workspace = get("workspace_path") or None
         rules = _load_rules_for_workspace(workspace)
+        time_decision = evaluate_time_window(self._now(), rules)
+        if not time_decision.allow:
+            return time_decision, rules, tool_name
         command = _command_from_tool_call(request)
         cmd_decision = evaluate_command(command, rules)
         if not cmd_decision.allow:
