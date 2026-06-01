@@ -15,6 +15,7 @@ membership / session edge uses the semantically correct relationship type.
 
 from __future__ import annotations
 
+import io
 import json
 import zipfile
 from dataclasses import dataclass
@@ -48,6 +49,15 @@ class ImportStats:
 #
 # BloodHound edge types mapped to our EdgeKind with semantically correct
 # relationship types. Lower weight = easier-to-abuse relationship.
+
+_BH_TYPE_SINGULAR: dict[str, str] = {
+    "users": "User",
+    "computers": "Computer",
+    "groups": "Group",
+    "domains": "Domain",
+    "gpos": "GPO",
+    "ous": "OU",
+}
 
 _BH_EDGE_MAP: dict[str, tuple[EdgeKind, float]] = {
     # Group membership
@@ -114,9 +124,75 @@ def _upsert_bh_object(graph: KnowledgeGraph, obj: dict[str, Any], type_name: str
         haslaps=props.get("haslaps"),
         hasspn=props.get("hasspn"),
         dontreqpreauth=props.get("dontreqpreauth"),
+        trustedfordelegation=props.get("trustedfordelegation"),
+        unconstraineddelegation=props.get("unconstraineddelegation"),
     )
     graph.upsert_node(node)
     return node
+
+
+def _ingest_delegation_edges(
+    graph: KnowledgeGraph,
+    src: Node,
+    obj: dict[str, Any],
+    stats: ImportStats,
+    bh_index: dict[str, Node],
+) -> None:
+    for entry in obj.get("AllowedToDelegate") or []:
+        sid = entry.get("ObjectIdentifier") if isinstance(entry, dict) else str(entry)
+        if not sid:
+            continue
+        dst = bh_index.get(sid)
+        if dst is None:
+            dst = Node.make(
+                NodeKind.HOST,
+                sid,
+                key=f"bh::Computer::{sid}",
+                bh_id=sid,
+                bh_type="Computer",
+            )
+            graph.upsert_node(dst)
+            bh_index[sid] = dst
+        spn = entry.get("Value", "") if isinstance(entry, dict) else ""
+        graph.upsert_edge(
+            Edge.make(
+                src.id,
+                dst.id,
+                EdgeKind.ENABLES,
+                weight=0.4,
+                key=f"bh-deleg::AllowedToDelegate::{sid}",
+                bh_right="AllowedToDelegate",
+                spn=spn,
+            )
+        )
+        stats.edges += 1
+
+    for entry in obj.get("AllowedToActOnBehalfOfOtherIdentity") or []:
+        sid = entry.get("ObjectIdentifier") if isinstance(entry, dict) else str(entry)
+        if not sid:
+            continue
+        actor = bh_index.get(sid)
+        if actor is None:
+            actor = Node.make(
+                NodeKind.HOST,
+                sid,
+                key=f"bh::Computer::{sid}",
+                bh_id=sid,
+                bh_type="Computer",
+            )
+            graph.upsert_node(actor)
+            bh_index[sid] = actor
+        graph.upsert_edge(
+            Edge.make(
+                actor.id,
+                src.id,
+                EdgeKind.ENABLES,
+                weight=0.4,
+                key=f"bh-deleg::AllowedToAct::{sid}",
+                bh_right="AllowedToAct",
+            )
+        )
+        stats.edges += 1
 
 
 def _build_bh_index(graph: KnowledgeGraph) -> dict[str, Node]:
@@ -228,6 +304,7 @@ def merge_bloodhound_json(
                 stats.users += inc.users
                 stats.computers += inc.computers
                 stats.groups += inc.groups
+                stats.domains += inc.domains
                 stats.gpos += inc.gpos
                 stats.ous += inc.ous
                 stats.edges += inc.edges
@@ -241,7 +318,7 @@ def merge_bloodhound_json(
     meta_raw = data.get("meta")
     meta = meta_raw if isinstance(meta_raw, dict) else {}
     object_type = type_hint or meta.get("type") or "Users"
-    type_singular = object_type.rstrip("s")
+    type_singular = _BH_TYPE_SINGULAR.get(object_type.lower(), object_type.rstrip("s"))
 
     items_raw = data.get("data") if "data" in data else data.get("items")
     if items_raw is None:
@@ -263,26 +340,39 @@ def merge_bloodhound_json(
         bh_index[node.props.get("bh_id", "")] = node
         _ingest_aces(graph, node, obj, stats, bh_index)
         _ingest_memberships(graph, node, obj, stats, bh_index)
+        _ingest_delegation_edges(graph, node, obj, stats, bh_index)
         if hasattr(stats, counter_attr):
             setattr(stats, counter_attr, getattr(stats, counter_attr) + 1)
     return stats
+
+
+_MAX_ENTRY_SIZE = 100_000_000  # per-entry decompressed-byte cap (zip-bomb defense)
 
 
 def ingest_bloodhound_zip(path: str | Path, graph: KnowledgeGraph) -> ImportStats:
     """Walk a BloodHound collector zip and merge every JSON file inside."""
     total = ImportStats()
     p = Path(path)
-    _MAX_ENTRY_SIZE = 100_000_000  # 100 MB cap per entry (zip bomb defense)
 
     with zipfile.ZipFile(p) as zf:
         for name in zf.namelist():
             if not name.lower().endswith(".json"):
                 continue
-            info = zf.getinfo(name)
-            if info.file_size > _MAX_ENTRY_SIZE:
-                continue
+            # Stream-read and enforce the cap on actual decompressed bytes.
+            # Trusting info.file_size is unsafe — an attacker controls the
+            # declared uncompressed size in the ZIP central directory.
             try:
-                raw = zf.read(name)
+                buf = io.BytesIO()
+                with zf.open(name) as entry:
+                    accumulated = 0
+                    for chunk in iter(lambda: entry.read(65536), b""):
+                        accumulated += len(chunk)
+                        if accumulated > _MAX_ENTRY_SIZE:
+                            break
+                        buf.write(chunk)
+                if accumulated > _MAX_ENTRY_SIZE:
+                    continue
+                raw = buf.getvalue()
                 data = json.loads(raw.decode("utf-8", errors="replace"))
             except (OSError, json.JSONDecodeError):
                 continue

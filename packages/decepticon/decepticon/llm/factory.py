@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from enum import Enum
@@ -137,6 +138,19 @@ _DEFAULT_AUTH_PRIORITY: tuple[AuthMethod, ...] = (
     AuthMethod.CUSTOM_OPENAI_API,
     AuthMethod.CEREBRAS_API,
     AuthMethod.XIAOMI_MIMO_API,
+    # OpenAI-compatible gateways / aggregators (oh-my-pi parity). Placed
+    # after the first-party API providers and before the local endpoints:
+    # a hosted gateway is a reasonable fallback but shouldn't preempt a
+    # direct vendor key the user also configured.
+    AuthMethod.OPENCODE_API,
+    AuthMethod.VERCEL_GATEWAY_API,
+    AuthMethod.ZENMUX_API,
+    AuthMethod.NANOGPT_API,
+    AuthMethod.VENICE_API,
+    AuthMethod.SYNTHETIC_API,
+    AuthMethod.HUGGINGFACE_API,
+    AuthMethod.QIANFAN_API,
+    AuthMethod.CLOUDFLARE_GATEWAY_API,
     AuthMethod.OLLAMA_LOCAL,
     AuthMethod.OLLAMA_CLOUD,
 )
@@ -174,6 +188,20 @@ _API_METHOD_ENV: dict[AuthMethod, str] = {
     AuthMethod.AZURE_API: "AZURE_API_KEY",
     AuthMethod.CEREBRAS_API: "CEREBRAS_API_KEY",
     AuthMethod.XIAOMI_MIMO_API: "XIAOMI_MIMO_API_KEY",
+    # OpenAI-compatible gateways / aggregators (oh-my-pi parity). Each is
+    # detected by the presence of a non-placeholder bearer key. The base
+    # URL is fixed per gateway (see config/litellm.yaml) except Cloudflare,
+    # whose per-account CLOUDFLARE_AI_GATEWAY_API_BASE must also be set —
+    # documented in .env.example; a key without the base 404s at call time.
+    AuthMethod.OPENCODE_API: "OPENCODE_API_KEY",
+    AuthMethod.VERCEL_GATEWAY_API: "VERCEL_AI_GATEWAY_API_KEY",
+    AuthMethod.HUGGINGFACE_API: "HF_TOKEN",
+    AuthMethod.VENICE_API: "VENICE_API_KEY",
+    AuthMethod.NANOGPT_API: "NANOGPT_API_KEY",
+    AuthMethod.SYNTHETIC_API: "SYNTHETIC_API_KEY",
+    AuthMethod.ZENMUX_API: "ZENMUX_API_KEY",
+    AuthMethod.QIANFAN_API: "QIANFAN_API_KEY",
+    AuthMethod.CLOUDFLARE_GATEWAY_API: "CLOUDFLARE_AI_GATEWAY_API_KEY",
 }
 
 _OAUTH_METHOD_ENV: dict[AuthMethod, str] = {
@@ -243,16 +271,37 @@ _OAUTH_CREDENTIAL_PATHS: dict[AuthMethod, tuple[tuple[str, str], ...]] = {
     AuthMethod.PERPLEXITY_OAUTH: (("PERPLEXITY_TOKENS_PATH", "~/.config/perplexity/tokens.json"),),
 }
 
+# Env vars each LiteLLM OAuth handler accepts as a credential *in place of*
+# its on-disk token file (see config/*_handler.py ``_load_tokens`` /
+# ``_env_override_tokens`` / ``_resolve_source_token``). A non-empty value in
+# any of these means the handler can authenticate without a file, so the
+# method must still count as configured. Codex (OPENAI_OAUTH) exposes no
+# env-token override — only the file-path env vars already covered by
+# ``_OAUTH_CREDENTIAL_PATHS`` — so it is intentionally absent here.
+_OAUTH_ENV_CREDENTIALS: dict[AuthMethod, tuple[str, ...]] = {
+    AuthMethod.ANTHROPIC_OAUTH: ("ANTHROPIC_OAUTH_TOKEN",),
+    AuthMethod.GOOGLE_OAUTH: ("GEMINI_ACCESS_TOKEN", "GEMINI_SESSION_COOKIES"),
+    AuthMethod.COPILOT_OAUTH: ("COPILOT_ACCESS_TOKEN", "COPILOT_REFRESH_TOKEN"),
+    AuthMethod.GROK_OAUTH: ("GROK_ACCESS_TOKEN", "GROK_SESSION_TOKEN"),
+    AuthMethod.PERPLEXITY_OAUTH: ("PERPLEXITY_ACCESS_TOKEN", "PERPLEXITY_SESSION_TOKEN"),
+}
+
 
 def _ollama_cloud_configured() -> bool:
     """Return True when the user has wired up Ollama Cloud.
 
-    Either ``OLLAMA_CLOUD_API_BASE`` (preferred — explicit endpoint) or
-    ``OLLAMA_CLOUD_MODEL`` is enough to opt in.
+    Any of ``OLLAMA_CLOUD_API_BASE`` (preferred — explicit endpoint),
+    ``OLLAMA_CLOUD_MODEL``, or a cloud API key
+    (``OLLAMA_CLOUD_API_KEY`` / ``OLLAMA_API_KEY``) is enough to opt in.
+    The key is included so a user who pasted only their key into
+    `decepticon onboard` (relying on the default base + model) is still
+    detected as a cloud user instead of silently falling through.
     """
     return bool(
         os.getenv("OLLAMA_CLOUD_API_BASE", "").strip()
         or os.getenv("OLLAMA_CLOUD_MODEL", "").strip()
+        or os.getenv("OLLAMA_CLOUD_API_KEY", "").strip()
+        or os.getenv("OLLAMA_API_KEY", "").strip()
     )
 
 
@@ -378,6 +427,17 @@ def _oauth_credentials_present(method: AuthMethod) -> bool:
     return False
 
 
+def _oauth_env_credentials_present(method: AuthMethod) -> bool:
+    """Return True if any env var the handler accepts as a credential is set.
+
+    Env-only OAuth setups (e.g. ``GEMINI_ACCESS_TOKEN`` with no token file)
+    are valid: the LiteLLM handler authenticates straight from the env. Such
+    a method must not be dropped from the fallback chain just because no file
+    exists on disk.
+    """
+    return any(os.getenv(env_var, "").strip() for env_var in _OAUTH_ENV_CREDENTIALS.get(method, ()))
+
+
 def _is_truthy(value: str) -> bool:
     return value.strip().lower() in ("true", "1", "yes", "on")
 
@@ -417,11 +477,12 @@ def _method_is_configured(method: AuthMethod) -> bool:
     if method in _API_METHOD_ENV:
         return _is_real_key(os.getenv(_API_METHOD_ENV[method], ""), method)
     if method in _OAUTH_METHOD_ENV:
-        # OAuth methods need BOTH the boolean intent and the actual
-        # credential file (see ``_oauth_credentials_present`` for why).
-        return _is_truthy(os.getenv(_OAUTH_METHOD_ENV[method], "")) and _oauth_credentials_present(
-            method
-        )
+        # OAuth methods need the boolean intent AND a usable credential. The
+        # credential may live in a token file OR in the handler's env-var
+        # override — env-only setups are valid and must not be dropped.
+        if not _is_truthy(os.getenv(_OAUTH_METHOD_ENV[method], "")):
+            return False
+        return _oauth_credentials_present(method) or _oauth_env_credentials_present(method)
     if method == AuthMethod.OLLAMA_LOCAL:
         return _ollama_local_configured()
     if method == AuthMethod.OLLAMA_CLOUD:
@@ -584,6 +645,15 @@ _METHOD_LABEL: dict[AuthMethod, str] = {
     AuthMethod.AZURE_API: "Azure OpenAI — API key",
     AuthMethod.CEREBRAS_API: "Cerebras — API key",
     AuthMethod.XIAOMI_MIMO_API: "Xiaomi MiMo — API key",
+    AuthMethod.OPENCODE_API: "OpenCode Zen — API key",
+    AuthMethod.VERCEL_GATEWAY_API: "Vercel AI Gateway — API key",
+    AuthMethod.HUGGINGFACE_API: "Hugging Face Router — token",
+    AuthMethod.VENICE_API: "Venice AI — API key",
+    AuthMethod.NANOGPT_API: "NanoGPT — API key",
+    AuthMethod.SYNTHETIC_API: "Synthetic — API key",
+    AuthMethod.ZENMUX_API: "ZenMux — API key",
+    AuthMethod.QIANFAN_API: "Baidu Qianfan (ERNIE) — API key",
+    AuthMethod.CLOUDFLARE_GATEWAY_API: "Cloudflare AI Gateway — API key + base URL",
     AuthMethod.COPILOT_OAUTH: "GitHub Copilot — Pro subscription",
     AuthMethod.GROK_OAUTH: "xAI SuperGrok — X Premium+",
     AuthMethod.PERPLEXITY_OAUTH: "Perplexity — Pro subscription",
@@ -617,11 +687,17 @@ def _method_detail(method: AuthMethod, *, configured: bool) -> str:
     if method in _OAUTH_METHOD_ENV:
         flag = _OAUTH_METHOD_ENV[method]
         if configured:
+            if _oauth_env_credentials_present(method):
+                return f"{flag}=true and credential present (env)"
             return f"{flag}=true and credential file present"
         if not _is_truthy(os.getenv(flag, "")):
             return f"set {flag}=true and provide the subscription credential"
         paths = ", ".join(default for _env, default in _OAUTH_CREDENTIAL_PATHS.get(method, ()))
-        return f"{flag}=true but no credential file ({paths or 'token'})"
+        env_vars = ", ".join(_OAUTH_ENV_CREDENTIALS.get(method, ()))
+        sources = paths or "token"
+        if env_vars:
+            sources = f"{sources} or {env_vars}"
+        return f"{flag}=true but no credential ({sources})"
     if method in _LOCAL_METHODS or method == AuthMethod.OLLAMA_CLOUD:
         return f"{env} set" if configured else f"set {env} (and the matching *_MODEL)"
     if configured:
@@ -1000,6 +1076,47 @@ class _NvidiaNIMChatOpenAI(_ProxiedChatOpenAI):
         return payload
 
 
+# Patterns matching secret-shaped substrings that providers may echo back
+# inside HTTP error bodies. ``str(exc)`` for LiteLLM/openai errors is built
+# from that body, so it can reflect the Authorization/x-api-key/Bearer
+# credential we sent. Each pattern below scrubs one shape before the text is
+# interpolated into a user-facing RuntimeError that lands in CLI output/logs.
+_SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # "Bearer <token>" auth scheme (RFC 6750), case-insensitive.
+    (re.compile(r"(?i)\bBearer\s+[\w.\-+/=]+"), "Bearer [REDACTED]"),
+    # Provider key prefixes: Anthropic sk-ant-* and OpenAI-style sk-* (any
+    # remaining long token after the prefix).
+    (re.compile(r"\bsk-(?:ant-)?[\w.\-]{8,}"), "[REDACTED]"),
+    # Header/field values for authorization / api_key / x-api-key, whether
+    # JSON ("authorization": "...") or kwarg (api_key=...). Keeps the key
+    # name so the guidance stays readable; only the value is scrubbed.
+    (
+        re.compile(
+            r"(?i)(['\"]?(?:authorization|x-api-key|api[_-]?key)['\"]?\s*[:=]\s*)"
+            r"(['\"]?)[^'\"\s,}]+\2"
+        ),
+        r"\1\2[REDACTED]\2",
+    ),
+    # Generic long opaque tokens (>=24 chars of key-ish alphabet) that survive
+    # the targeted passes above — e.g. provider keys without an sk- prefix.
+    (re.compile(r"\b[A-Za-z0-9_\-]{24,}\b"), "[REDACTED]"),
+)
+
+
+def _redact_secrets(text: str) -> str:
+    """Scrub credential-shaped substrings from upstream error text.
+
+    LiteLLM/openai surface the provider's raw HTTP response body via
+    ``str(exc)``; that body can echo the ``Authorization``/``x-api-key``/
+    ``Bearer`` value we sent. Redacting here keeps the actionable guidance
+    (status code, model id, human hint) intact while preventing the secret
+    from leaking into CLI output and logs.
+    """
+    for pattern, replacement in _SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def _reraise_if_connection_error(exc: Exception) -> None:
     err_type = type(exc).__name__
     if any(
@@ -1009,7 +1126,7 @@ def _reraise_if_connection_error(exc: Exception) -> None:
         for kw in ("connection refused", "connect error", "proxy", "unreachable")
     ):
         raise RuntimeError(
-            f"LLM proxy unreachable ({err_type}): {exc}. "
+            f"LLM proxy unreachable ({err_type}): {_redact_secrets(str(exc))}. "
             f"Check 'decepticon logs litellm' for details."
         ) from exc
 
@@ -1036,6 +1153,10 @@ def _reraise_with_actionable_message(exc: Exception, model_name: str) -> None:
     err_type = type(exc).__name__
     msg = str(exc)
     msg_lower = msg.lower()
+    # Match on the raw text (status codes / keywords are not secret-shaped),
+    # but interpolate the scrubbed copy so an echoed credential never reaches
+    # the user-facing message — see _redact_secrets.
+    safe_msg = _redact_secrets(msg)
 
     # LiteLLM puts a recognizable prefix in the inner message when the
     # proxy ran out of fallback options for a model_group — issue #107.
@@ -1046,14 +1167,14 @@ def _reraise_with_actionable_message(exc: Exception, model_name: str) -> None:
             f"Model '{model_name}' failed and no provider fallback was "
             f"available for it. Either configure another auth method in "
             f"DECEPTICON_AUTH_PRIORITY or fix the upstream error.\n"
-            f"Underlying: {msg}"
+            f"Underlying: {safe_msg}"
         ) from exc
 
     if "badrequest" in err_type.lower() or "code: 400" in msg_lower:
         raise RuntimeError(
             f"Model '{model_name}' rejected the request (400). "
             f"This usually means a parameter the model no longer supports "
-            f"(e.g. temperature on Claude Opus 4.7). Underlying: {msg}"
+            f"(e.g. temperature on Claude Opus 4.7). Underlying: {safe_msg}"
         ) from exc
 
     if (
@@ -1064,14 +1185,14 @@ def _reraise_with_actionable_message(exc: Exception, model_name: str) -> None:
         raise RuntimeError(
             f"Model '{model_name}' rejected your credentials (401). "
             f"Check the API key for that provider in ~/.decepticon/.env, "
-            f"or run 'decepticon onboard --reset'.\nUnderlying: {msg}"
+            f"or run 'decepticon onboard --reset'.\nUnderlying: {safe_msg}"
         ) from exc
 
     if "ratelimit" in err_type.lower() or "code: 429" in msg_lower:
         raise RuntimeError(
             f"Model '{model_name}' hit the provider's rate limit (429). "
             f"Add another method to DECEPTICON_AUTH_PRIORITY so the agent "
-            f"can fall back when this happens.\nUnderlying: {msg}"
+            f"can fall back when this happens.\nUnderlying: {safe_msg}"
         ) from exc
 
     if "notfound" in err_type.lower() or "code: 404" in msg_lower:
@@ -1080,7 +1201,7 @@ def _reraise_with_actionable_message(exc: Exception, model_name: str) -> None:
             f"(404). For local Ollama, set OLLAMA_MODEL to something you "
             f"actually pulled ('ollama list'). For cloud providers, check "
             f"that the model id matches config/litellm.yaml.\n"
-            f"Underlying: {msg}"
+            f"Underlying: {safe_msg}"
         ) from exc
 
 

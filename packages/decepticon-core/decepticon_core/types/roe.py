@@ -175,15 +175,23 @@ def _glob_match(pattern: str, candidate: str) -> bool:
 
 def _matches_rule(rule: ScopeRule, target: str) -> bool:
     kind = rule.resolved_kind()
+    # A trailing dot is DNS-equivalent ("host." resolves identically to
+    # "host"), so strip it on BOTH the rule pattern and the target before
+    # matching. Without this, the FQDN form (``metadata.google.internal.`` or
+    # the IMDS IP ``169.254.169.254.``) slips past the forbidden-destination
+    # and out-of-scope deny checks — a verified scope bypass that enabled
+    # cloud-credential exfil in enforce mode. The IP case also failed
+    # ``ip_address()`` parsing (ValueError -> no match) before the strip.
+    norm_target = target.rstrip(".")
     if kind == "cidr":
         try:
             network = ipaddress.ip_network(rule.pattern, strict=False)
-            return ipaddress.ip_address(target) in network
+            return ipaddress.ip_address(norm_target) in network
         except ValueError:
             return False
     if kind == "domain-glob":
-        return _glob_match(rule.pattern, target)
-    return rule.pattern.lower() == target.lower()
+        return _glob_match(rule.pattern.rstrip("."), norm_target)
+    return rule.pattern.rstrip(".").lower() == norm_target.lower()
 
 
 def evaluate_target(

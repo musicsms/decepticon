@@ -112,6 +112,7 @@ def _acquire_lock(fd: int) -> None:
     if sys.platform == "win32":
         import msvcrt
 
+        os.lseek(fd, 0, os.SEEK_SET)
         while True:
             try:
                 msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
@@ -128,10 +129,11 @@ def _release_lock(fd: int) -> None:
     if sys.platform == "win32":
         import msvcrt
 
+        os.lseek(fd, 0, os.SEEK_SET)
         try:
             msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
         except OSError:
-            pass
+            log.warning("event-log lock release failed", exc_info=True)
     else:
         import fcntl
 
@@ -151,8 +153,26 @@ class EventLog:
     """
 
     def __init__(self, workspace_root: str | os.PathLike[str], engagement_id: str) -> None:
+        self._init_at(_engagement_events_path(Path(workspace_root), engagement_id), engagement_id)
+
+    @classmethod
+    def for_workspace(
+        cls, workspace_dir: str | os.PathLike[str], engagement_id: str = ""
+    ) -> EventLog:
+        """Build a log writing directly to ``<workspace_dir>/events.jsonl``.
+
+        Unlike :meth:`__init__`, this skips the ``engagements/<id>`` nesting:
+        the engagement workspace root *is* the directory shutdown.py and the
+        web dashboard read from. ``engagement_id`` is retained only to tag
+        emitted events, never to shape the path.
+        """
+        self = cls.__new__(cls)
+        self._init_at(Path(workspace_dir) / "events.jsonl", engagement_id)
+        return self
+
+    def _init_at(self, path: Path, engagement_id: str) -> None:
         self._engagement_id = engagement_id
-        self._path = _engagement_events_path(Path(workspace_root), engagement_id)
+        self._path = path
         self._lock = threading.RLock()
         self._path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -69,6 +69,13 @@ UNTRUSTED_TOOL_NAMES: frozenset[str] = frozenset(
         "kg_neighbors",
         "kg_stats",
         "kg_backend_health",
+        # Scanner prefilter tools surface raw bytes from the (attacker-
+        # controlled) target tree: scan_shard returns code snippets walked
+        # out of /workspace/target, and rank_candidates re-emits those hits.
+        # Quarantine their output so an injection payload planted in a scanned
+        # file reaches the model wrapped + risk-scored, not as trusted text.
+        "scan_shard",
+        "rank_candidates",
     }
 )
 

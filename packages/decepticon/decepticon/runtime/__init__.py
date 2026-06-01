@@ -50,6 +50,16 @@ except ImportError:
     pass
 
 try:
+    from decepticon.runtime.task_spec import (  # noqa: F401
+        Dispatcher,
+        SubAgentTaskSpec,
+    )
+
+    _exports += ["Dispatcher", "SubAgentTaskSpec"]
+except ImportError:
+    pass
+
+try:
     from decepticon.runtime.cart import (  # noqa: F401
         ChangeEvent,
         EngagementSnapshot,

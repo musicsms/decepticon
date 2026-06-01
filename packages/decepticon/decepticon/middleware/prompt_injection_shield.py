@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import logging
 import re
+from functools import lru_cache
 from typing import Any, ClassVar, cast
 
 from langchain.agents.middleware import AgentMiddleware
@@ -264,29 +265,106 @@ _POLICY_TEXT = (
 )
 
 
+# ── Trusted internal tool resolution ─────────────────────────────────────────
+# The shield only wraps output an attacker could influence. The tools below are
+# framework/internal: objective management, the deepagents filesystem
+# primitives, and sub-agent dispatch. None of them surface network-controlled
+# bytes, so their output is trusted and left unwrapped. This set is stable and
+# safe to hardcode — unlike the skill-loader tool names, which are resolved
+# dynamically (see ``_skill_tool_names``) so the Skills->Skillogy migration is a
+# one-line rename there, never a sweep here.
+_FRAMEWORK_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "add_objective",
+        "get_objective",
+        "list_objectives",
+        "update_objective",
+        "objective_expand",
+        "read_file",
+        "write_file",
+        "list_directory",
+        "task",
+    }
+)
+
+# Last-known skill-loader/lister tool names. Used ONLY as a documented fallback
+# when neither skill registry can be imported (e.g. a minimal runtime); the live
+# names are resolved from the registry by ``_skill_tool_names``.
+_FALLBACK_SKILL_TOOL_NAMES: frozenset[str] = frozenset({"load_skill", "list_skills"})
+
+
+@lru_cache(maxsize=1)
+def _skill_tool_names() -> frozenset[str]:
+    """Resolve the skill-system loader/lister tool names from the registry.
+
+    Both ``SkillsMiddleware`` (filesystem-backed) and ``SkillogyMiddleware``
+    (service-backed) construct their loader tools as ``@tool``-decorated
+    closures whose ``.name`` is the single source of truth for the tool name the
+    model sees. The builders only close over their arguments — they do not touch
+    them at construction time — so throwaway instances built with no backend
+    expose the correct ``.name``. Reading it here keeps the trusted set correct
+    across a Skillogy rename without editing this module.
+
+    Returns the documented fallback when neither registry is importable.
+    """
+    names: set[str] = set()
+    try:
+        from decepticon.tools.skills import build_load_skill_tool
+
+        names.add(build_load_skill_tool(None, []).name)
+    except Exception as e:  # noqa: BLE001 - registry optional; fall back below
+        log.debug("skills registry unavailable for trusted-tool resolution: %s", e)
+    try:
+        from decepticon.middleware import skillogy
+
+        names.add(skillogy._make_list_skills_tool(None).name)
+        names.add(skillogy._make_load_skill_tool(None).name)
+    except Exception as e:  # noqa: BLE001 - skillogy optional; fall back below
+        log.debug("skillogy registry unavailable for trusted-tool resolution: %s", e)
+
+    return frozenset(names) if names else _FALLBACK_SKILL_TOOL_NAMES
+
+
+def _is_trusted_internal_tool(tool_name: str) -> bool:
+    """Return True when ``tool_name`` is a framework/internal tool whose output
+    is not attacker-influenceable and must therefore be left unwrapped.
+
+    Composes the stable framework set with the skill-loader names resolved from
+    the live registry (falling back to the last-known names when no registry is
+    available).
+    """
+    if not tool_name:
+        return False
+    if tool_name in _FRAMEWORK_TOOL_NAMES:
+        return True
+    return tool_name in _skill_tool_names()
+
+
+@lru_cache(maxsize=1)
+def _untrusted_tool_names() -> frozenset[str]:
+    """Tool names already enveloped by the UNTRUSTED_OUTPUT slot.
+
+    Imported lazily (not at module top) to avoid import-order fragility:
+    the ``decepticon.middleware`` package __init__ imports this module
+    before ``untrusted_output``, so a top-level import would reach into a
+    sibling that is still mid-initialization during package import.
+    """
+    from decepticon.middleware.untrusted_output import UNTRUSTED_TOOL_NAMES
+
+    return UNTRUSTED_TOOL_NAMES
+
+
 class PromptInjectionShieldMiddleware(AgentMiddleware):
     """Wrap tool output in untrusted markers; flag injection patterns; warn the model.
 
     See module docstring for threat model and stack-ordering guidance.
     """
 
-    # TODO(Skillogy migration): replace hardcoded ``load_skill``/``list_skills``
-    # entries with a registry-driven lookup once the Skillogy middleware lands.
-    _SAFE_TOOL_NAMES: ClassVar[frozenset[str]] = frozenset(
-        {
-            "add_objective",
-            "get_objective",
-            "list_objectives",
-            "update_objective",
-            "objective_expand",
-            "load_skill",
-            "list_skills",
-            "read_file",
-            "write_file",
-            "list_directory",
-            "task",
-        }
-    )
+    # Documented fallback: the historical trusted-tool set (framework tools plus
+    # the last-known skill-loader names). Default-runtime behavior is unchanged —
+    # ``_is_trusted_internal_tool`` resolves the skill-loader names from the live
+    # registry and only relies on this union when no registry can be imported.
+    _SAFE_TOOL_NAMES: ClassVar[frozenset[str]] = _FRAMEWORK_TOOL_NAMES | _FALLBACK_SKILL_TOOL_NAMES
 
     def __init__(self, *, append_policy_to_system: bool = True) -> None:
         super().__init__()
@@ -308,7 +386,10 @@ class PromptInjectionShieldMiddleware(AgentMiddleware):
 
         tool = getattr(request, "tool", None)
         tool_name = getattr(tool, "name", "") if tool else ""
-        if tool_name in self._SAFE_TOOL_NAMES:
+        if _is_trusted_internal_tool(tool_name):
+            return result
+        # UNTRUSTED_OUTPUT slot already envelopes these; avoid double-wrap.
+        if tool_name in _untrusted_tool_names():
             return result
 
         original = _extract_text(result.content)

@@ -223,9 +223,9 @@ ci-lint:
 ci-test:
 	uv run pytest -n auto -q -m "not slow"
 
-## main-push lane: slow included, coverage 35% gate.
+## main-push lane: slow included, coverage 60% gate (ratcheted from 35% in #380).
 ci-test-coverage:
-	uv run pytest -n auto --cov --cov-report=xml --cov-report=term --cov-fail-under=35
+	uv run pytest -n auto --cov --cov-report=xml --cov-report=term --cov-fail-under=60
 
 quality-cli: node-install
 	# streaming workspace must be built first — its package.json main

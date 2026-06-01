@@ -306,16 +306,41 @@ class HITLApprovalMiddleware(AgentMiddleware):
     def __init__(
         self,
         policy: list[ApprovalPolicyRule],
-        transport: ApprovalTransport,
+        transport: ApprovalTransport | None = None,
         *,
         engagement_name: str = "",
         agent_name: str = "",
     ) -> None:
         super().__init__()
         self._policy = policy
+        # Static transport (tests / single-process UIs). When None, the
+        # transport is resolved per request from the request's workspace
+        # so a long-lived server serving many engagements writes
+        # approvals to the correct workspace (see _resolve_transport).
         self._transport = transport
+        self._transport_cache: dict[str, ApprovalTransport] = {}
         self._engagement_name = engagement_name
         self._agent_name = agent_name
+
+    def _resolve_transport(self, request: Any) -> ApprovalTransport:
+        if self._transport is not None:
+            return self._transport
+        state = getattr(request, "state", None) or {}
+        get = state.get if hasattr(state, "get") else (lambda _k, _d=None: None)
+        workspace = get("workspace_path") or os.environ.get(
+            "DECEPTICON_WORKSPACE_PATH", "/workspace"
+        )
+        workspace = str(workspace)
+        cached = self._transport_cache.get(workspace)
+        if cached is not None:
+            return cached
+        approvals = Path(workspace) / "approvals"
+        transport = FileBackedApprovalTransport(
+            approvals / "requests.jsonl",
+            approvals / "decisions.jsonl",
+        )
+        self._transport_cache[workspace] = transport
+        return transport
 
     def _match_rule(self, tool_name: str, technique_tag: str | None) -> ApprovalPolicyRule | None:
         for rule in self._policy:
@@ -434,9 +459,10 @@ class HITLApprovalMiddleware(AgentMiddleware):
         rule = self._match_rule(tool_name, self._technique_tag(request))
         if rule is None:
             return handler(request)
+        transport = self._resolve_transport(request)
         appr = self._build_request(tool_name, tool_args, rule, request)
-        self._transport.submit(appr)
-        decision = self._transport.wait_for_decision(appr.request_id, rule.timeout_seconds)
+        transport.submit(appr)
+        decision = transport.wait_for_decision(appr.request_id, rule.timeout_seconds)
         return self._decision_to_response(decision, rule, request, handler)
 
     @override
@@ -447,9 +473,16 @@ class HITLApprovalMiddleware(AgentMiddleware):
         rule = self._match_rule(tool_name, self._technique_tag(request))
         if rule is None:
             return await handler(request)
+        import asyncio
+
+        transport = self._resolve_transport(request)
         appr = self._build_request(tool_name, tool_args, rule, request)
-        self._transport.submit(appr)
-        decision = self._transport.wait_for_decision(appr.request_id, rule.timeout_seconds)
+        transport.submit(appr)
+        # FileBackedApprovalTransport.wait_for_decision blocks on time.sleep;
+        # offload to a worker thread so the LangGraph event loop stays live.
+        decision = await asyncio.to_thread(
+            transport.wait_for_decision, appr.request_id, rule.timeout_seconds
+        )
         return await self._adecision_to_response(decision, rule, request, handler)
 
 

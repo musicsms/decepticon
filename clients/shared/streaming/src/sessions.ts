@@ -64,9 +64,11 @@ export function deriveSubAgentSessions(events: readonly StreamEvent[]): SubAgent
       if (session) {
         session.endEventId = event.id;
         session.endTime = event.timestamp;
-        session.status = event.type === "subagent_end" && (event as { status?: string }).status === "error"
-          ? "error"
-          : "completed";
+        // Detect failure from either the CLI-normalized `status` field or the
+        // raw backend `error` boolean (SubagentCustomEvent). The enclosing
+        // branch already guarantees this is a `subagent_end` event.
+        session.status =
+          event.status === "error" || event.error === true ? "error" : "completed";
         session.eventIds.push(event.id);
         openSessions.delete(event.subagent);
       }

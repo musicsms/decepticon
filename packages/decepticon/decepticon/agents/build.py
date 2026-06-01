@@ -42,6 +42,7 @@ from decepticon.agents.middleware_slots import (
     SLOTS_PER_ROLE,
     MiddlewareSlot,
 )
+from decepticon.middleware.skillogy import maybe_install_skillogy
 from decepticon_core.plugin_loader import (
     PluginBundle,
     is_bundle_enabled,
@@ -407,6 +408,10 @@ def build_middleware(
     # backward-compat escape hatch for plugins that just want to TACK
     # a middleware on the end without replacing anything.
     result.extend(load_plugin_middleware(role=role, backend=backend))
+
+    # Swap SkillsMiddleware -> SkillogyMiddleware when DECEPTICON_USE_SKILLOGY
+    # is set. No-op otherwise, so the default runtime is unchanged.
+    result = maybe_install_skillogy(result)
 
     return result
 

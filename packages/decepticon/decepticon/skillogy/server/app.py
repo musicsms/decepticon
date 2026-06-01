@@ -1,20 +1,24 @@
-"""FastAPI REST app + gRPC service for Skillogy.
+"""FastAPI REST app for Skillogy — the supported transport.
 
-REST endpoints (mirror gRPC methods 1:1):
+REST endpoints (named after the proto's RPC methods):
 - ``POST /v1/skills:list``        -> ListSkills
 - ``POST /v1/skills:load``        -> LoadSkill
 - ``POST /v1/skills:ingest``      -> IngestSkill
 - ``GET  /v1/health``             -> Health
 - ``GET  /openapi.json``          -> generated OpenAPI 3.1 schema
 
-The gRPC service is exposed when grpcio is installed; the REST app
-runs standalone without grpcio so the CLI / test paths don't require
-the heavier dependency. Both share the same SkillRegistry instance.
+A gRPC transport is sketched in ``skillogy.proto`` but is not yet wired
+(no protoc-generated bindings), so ``build_grpc_server`` raises and the
+service falls back to REST — see that function's docstring. The REST app
+runs standalone without grpcio so the CLI / test paths don't require the
+heavier dependency.
 """
 
 from __future__ import annotations
 
+import hmac
 import logging
+import os
 import time
 from dataclasses import asdict
 from typing import Any
@@ -22,7 +26,6 @@ from typing import Any
 from decepticon.skillogy.proto import (
     SkillEnvelope,
     SkillListRequest,
-    SkillMeta,
 )
 from decepticon.skillogy.server.registry import SkillRegistry
 
@@ -71,19 +74,32 @@ if BaseModel is not None:
         scripts: dict[str, str] = {}
 
 
-def build_app(registry: SkillRegistry, *, started_at: float | None = None):
-    """Construct the FastAPI app bound to ``registry``.
-
-    The FastAPI import is lazy so this module can be imported in
-    environments without FastAPI (test fixtures, CLI ingester).
-    """
+def build_app(
+    registry: SkillRegistry,
+    *,
+    started_at: float | None = None,
+    api_key: str | None = None,
+):
     try:
-        from fastapi import FastAPI, HTTPException  # noqa: PLC0415
+        from fastapi import Depends, FastAPI, Header, HTTPException  # noqa: PLC0415
     except ImportError as exc:
         raise RuntimeError(
             "Skillogy server requires FastAPI + Pydantic. Install with: "
             "pip install fastapi pydantic uvicorn"
         ) from exc
+
+    _expected_key: str | None = (
+        api_key if api_key is not None else os.environ.get("SKILLOGY_API_KEY")
+    )
+
+    async def _require_key(authorization: str | None = Header(default=None)) -> None:
+        if _expected_key is None:
+            return
+        token = (authorization or "").removeprefix("Bearer ").strip()
+        if not hmac.compare_digest(token, _expected_key):
+            raise HTTPException(status_code=401, detail="invalid or missing API key")
+
+    _protected = [Depends(_require_key)]
 
     app = FastAPI(
         title="Skillogy",
@@ -100,7 +116,7 @@ def build_app(registry: SkillRegistry, *, started_at: float | None = None):
             "uptime_seconds": int(time.time() - boot_time),
         }
 
-    @app.post("/v1/skills:list")
+    @app.post("/v1/skills:list", dependencies=_protected)
     async def list_skills(req: ListReq) -> dict[str, Any]:
         resp = registry.list(
             SkillListRequest(
@@ -119,14 +135,14 @@ def build_app(registry: SkillRegistry, *, started_at: float | None = None):
             "total_count": resp.total_count,
         }
 
-    @app.post("/v1/skills:load")
+    @app.post("/v1/skills:load", dependencies=_protected)
     async def load_skill(req: LoadReq) -> dict[str, Any]:
         env = registry.load(req.path)
         if env is None:
             raise HTTPException(status_code=404, detail=f"skill not found: {req.path}")
         return {"skill": _envelope_to_payload(env, req.include_references, req.include_scripts)}
 
-    @app.post("/v1/skills:ingest")
+    @app.post("/v1/skills:ingest", dependencies=_protected)
     async def ingest_skill(req: IngestReq) -> dict[str, Any]:
         refs = {k: v.encode("utf-8") for k, v in req.references.items()}
         scripts = {k: v.encode("utf-8") for k, v in req.scripts.items()}
@@ -137,63 +153,23 @@ def build_app(registry: SkillRegistry, *, started_at: float | None = None):
 
 
 def build_grpc_server(registry: SkillRegistry, *, port: int = 50051):
-    """Construct a grpcio Server bound to ``registry``. Lazy-imports grpcio.
+    """The gRPC transport is not wired yet — this always raises ``RuntimeError``.
 
-    Returns a ``grpc.Server`` instance the caller starts / waits / stops.
-    Falls back to ``RuntimeError`` if grpcio is unavailable.
+    Skillogy ships a hand-rolled ``skillogy.proto`` but no ``protoc``-generated
+    bindings, so there is no servicer registrar (``add_*Servicer_to_server``)
+    and no message (de)serializers. A ``grpc.Server`` constructed here would
+    bind ``port`` yet answer every RPC with ``UNIMPLEMENTED`` — a silent dead
+    port that *looks* healthy. Until codegen is wired into the build, **REST is
+    the only supported transport** (``build_app`` + ``RestSkillogyClient``);
+    ``decepticon.skillogy.__main__._start_grpc`` already catches this
+    ``RuntimeError`` and serves REST only.
+
+    ``registry`` and ``port`` are accepted so this stays signature-compatible
+    with its single call site and the future protoc-backed implementation.
     """
-    try:
-        import grpc  # noqa: PLC0415
-    except ImportError as exc:
-        raise RuntimeError(
-            "Skillogy gRPC requires grpcio. Install with: pip install grpcio grpcio-tools"
-        ) from exc
-
-    class _RawSkillogyServicer:
-        def ListSkills(self, request, _context):
-            return _RawResponse(
-                registry.list(
-                    SkillListRequest(
-                        subdomain_filter=list(getattr(request, "subdomain_filter", []) or []),
-                        tag_filter=list(getattr(request, "tag_filter", []) or []),
-                        mitre_filter=list(getattr(request, "mitre_filter", []) or []),
-                        include_safety_critical=getattr(request, "include_safety_critical", True),
-                        include_gated=getattr(request, "include_gated", True),
-                        page_size=getattr(request, "page_size", 100),
-                        page_token=getattr(request, "page_token", "") or "",
-                    )
-                )
-            )
-
-        def LoadSkill(self, request, _context):
-            return registry.load(getattr(request, "path", "")) or SkillEnvelope(meta=SkillMeta())
-
-        def IngestSkill(self, request, _context):
-            return registry.ingest(
-                getattr(request, "path", ""),
-                getattr(request, "body", ""),
-                references=dict(getattr(request, "references", {}) or {}),
-                scripts=dict(getattr(request, "scripts", {}) or {}),
-            )
-
-        def Health(self, _request, _context):
-            return _HealthResp(status="ok", skill_count=len(registry))
-
-    server = grpc.server(
-        thread_pool=__import__("concurrent.futures").futures.ThreadPoolExecutor(max_workers=10)
+    raise RuntimeError(
+        "Skillogy gRPC transport is not wired: skillogy.proto has no "
+        "protoc-generated bindings, so the server would register no servicer "
+        "and could not (de)serialize messages. Use the REST transport — "
+        "build_app(registry) served by uvicorn, with RestSkillogyClient."
     )
-    server.add_insecure_port(f"0.0.0.0:{port}")
-    return server, _RawSkillogyServicer()
-
-
-class _RawResponse:
-    def __init__(self, list_resp):
-        self.skills = list_resp.skills
-        self.next_page_token = list_resp.next_page_token
-        self.total_count = list_resp.total_count
-
-
-class _HealthResp:
-    def __init__(self, status, skill_count):
-        self.status = status
-        self.skill_count = skill_count

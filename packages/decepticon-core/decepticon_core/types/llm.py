@@ -47,6 +47,25 @@ Tier × AuthMethod matrix
   grok_oauth       grok-sub/grok-4.3             grok-sub/grok-4-1-fast-reasoning — (falls through)
   pplx_oauth       pplx-sub/sonar-pro            pplx-sub/sonar                 — (falls through)
 
+OpenAI-compatible gateways / aggregators (oh-my-pi parity)
+----------------------------------------------------------
+None ship a native LiteLLM provider, so each routes through ``openai/``
+with an api_base override (table-driven in
+``litellm_dynamic_config.OPENAI_COMPAT_GATEWAYS``). The model alias keeps
+the gateway prefix so two gateways exposing the same upstream slug never
+collide in the model_list.
+
+                    HIGH                          MID                            LOW
+  opencode_api     opencode/claude-opus-4-6      opencode/gpt-5.4               opencode/glm-5-free
+  vercel_gateway   vercel/anthropic/…opus-4.6    vercel/anthropic/…sonnet-4.6  vercel/anthropic/…haiku-4.5
+  huggingface_api  hf/…/DeepSeek-V3.1            hf/…/Llama-3.3-70B-…Turbo     hf/openai/gpt-oss-120b
+  venice_api       venice/claude-opus-4-6        venice/claude-sonnet-4-6      venice/deepseek-v4-flash
+  nanogpt_api      nanogpt/…/claude-opus-4.6     nanogpt/…/claude-sonnet-4.6   nanogpt/…/claude-3-5-haiku
+  synthetic_api    synthetic/hf:…/DeepSeek-V3.2  synthetic/hf:…/Llama-3.3-70B  synthetic/hf:openai/gpt-oss
+  zenmux_api       zenmux/anthropic/…opus-4.6    zenmux/anthropic/…sonnet-4.6  zenmux/anthropic/…haiku-4.5
+  qianfan_api      qianfan/ernie-4.5-turbo-128k  qianfan/ernie-4.5-turbo-32k   qianfan/ernie-speed-pro-128k
+  cloudflare_gw    cfgateway/anthropic/…opus     cfgateway/anthropic/…sonnet   cfgateway/anthropic/…haiku
+
 Code-heavy override
 -------------------
 For roles that benefit from OpenAI's agentic coding specialization (patcher,
@@ -129,6 +148,22 @@ class AuthMethod(StrEnum):
     CUSTOM_OPENAI_API = "custom_openai_api"  # Custom OpenAI-compatible endpoint
     CEREBRAS_API = "cerebras_api"  # Cerebras Inference (OpenAI-compatible)
     XIAOMI_MIMO_API = "xiaomi_mimo_api"  # Xiaomi MiMo (OpenAI-compatible)
+    # ── OpenAI-compatible gateways / aggregators (oh-my-pi parity) ──
+    # None ship a native LiteLLM provider, so each is reached through the
+    # ``openai/`` provider with an explicit api_base override — the same
+    # path xiaomi_mimo / custom already use, table-driven in
+    # ``litellm_dynamic_config.OPENAI_COMPAT_GATEWAYS``. The model alias
+    # keeps the gateway prefix (``opencode/claude-opus-4-6``) so routes
+    # never collide when two gateways expose the same upstream slug.
+    OPENCODE_API = "opencode_api"  # OpenCode Zen gateway (opencode.ai)
+    VERCEL_GATEWAY_API = "vercel_gateway_api"  # Vercel AI Gateway
+    HUGGINGFACE_API = "huggingface_api"  # Hugging Face Router (Inference Providers)
+    VENICE_API = "venice_api"  # Venice AI (privacy-first, no logs)
+    NANOGPT_API = "nanogpt_api"  # NanoGPT (pay-as-you-go aggregator)
+    SYNTHETIC_API = "synthetic_api"  # Synthetic (synthetic.new)
+    ZENMUX_API = "zenmux_api"  # ZenMux multi-vendor gateway
+    QIANFAN_API = "qianfan_api"  # Baidu Qianfan (ERNIE) v2 OpenAI-compatible
+    CLOUDFLARE_GATEWAY_API = "cloudflare_gateway_api"  # Cloudflare AI Gateway
 
 
 # ── Tier × AuthMethod → model_id matrix ─────────────────────────────────
@@ -391,6 +426,82 @@ METHOD_MODELS: dict[AuthMethod, dict[Tier, str]] = {
         Tier.MID: "openai/mimo-rl",
         Tier.LOW: "openai/mimo-7b",
     },
+    # ── OpenAI-compatible gateways / aggregators (oh-my-pi parity) ──
+    # Model slugs below are grounded in oh-my-pi's published provider
+    # catalog (packages/ai/src/models.json) as of 2026-06. Each route is
+    # rewritten to ``openai/<slug>`` + the gateway's api_base by
+    # ``litellm_dynamic_config.build_model_entry`` and mirrored as a
+    # static entry in ``config/litellm.yaml``.
+    AuthMethod.OPENCODE_API: {
+        # OpenCode Zen — https://opencode.ai/zen/v1. Catalog spans Claude,
+        # GPT-5.x, GLM, Kimi. LOW uses the free GLM tier.
+        Tier.HIGH: "opencode/claude-opus-4-6",
+        Tier.MID: "opencode/gpt-5.4",
+        Tier.LOW: "opencode/glm-5-free",
+    },
+    AuthMethod.VERCEL_GATEWAY_API: {
+        # Vercel AI Gateway — https://ai-gateway.vercel.sh/v1. Model ids
+        # are ``creator/model``; route the Anthropic family for tool-call
+        # reliability parity with the native anthropic path.
+        Tier.HIGH: "vercel/anthropic/claude-opus-4.6",
+        Tier.MID: "vercel/anthropic/claude-sonnet-4.6",
+        Tier.LOW: "vercel/anthropic/claude-haiku-4.5",
+    },
+    AuthMethod.HUGGINGFACE_API: {
+        # Hugging Face Router — https://router.huggingface.co/v1, HF_TOKEN
+        # bearer auth. gpt-oss-120b is the free serverless tier at LOW.
+        Tier.HIGH: "hf/deepseek-ai/DeepSeek-V3.1",
+        Tier.MID: "hf/meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        Tier.LOW: "hf/openai/gpt-oss-120b",
+    },
+    AuthMethod.VENICE_API: {
+        # Venice AI — https://api.venice.ai/api/v1. Subscription/credits
+        # model (per-token cost not published → model_info pinned to $0).
+        Tier.HIGH: "venice/claude-opus-4-6",
+        Tier.MID: "venice/claude-sonnet-4-6",
+        Tier.LOW: "venice/deepseek-v4-flash",
+    },
+    AuthMethod.NANOGPT_API: {
+        # NanoGPT — https://nano-gpt.com/api/v1, pay-as-you-go aggregator
+        # exposing ``creator/model`` slugs across most major vendors.
+        Tier.HIGH: "nanogpt/anthropic/claude-opus-4.6",
+        Tier.MID: "nanogpt/anthropic/claude-sonnet-4.6",
+        Tier.LOW: "nanogpt/anthropic/claude-3-5-haiku-20241022",
+    },
+    AuthMethod.SYNTHETIC_API: {
+        # Synthetic — https://api.synthetic.new/openai/v1. Open-weight
+        # models behind an ``hf:`` slug prefix; flat plan → cost $0.
+        Tier.HIGH: "synthetic/hf:deepseek-ai/DeepSeek-V3.2",
+        Tier.MID: "synthetic/hf:meta-llama/Llama-3.3-70B-Instruct",
+        Tier.LOW: "synthetic/hf:openai/gpt-oss-120b",
+    },
+    AuthMethod.ZENMUX_API: {
+        # ZenMux — https://zenmux.ai/api/v1. Multi-vendor gateway; route
+        # the Anthropic family for tool-call parity.
+        Tier.HIGH: "zenmux/anthropic/claude-opus-4.6",
+        Tier.MID: "zenmux/anthropic/claude-sonnet-4.6",
+        Tier.LOW: "zenmux/anthropic/claude-haiku-4.5",
+    },
+    AuthMethod.QIANFAN_API: {
+        # Baidu Qianfan v2 — https://qianfan.baidubce.com/v2, OpenAI-
+        # compatible. Model ids verified against the Qianfan platform doc
+        # (cloud.baidu.com/doc/qianfan/s/rmh4stp0j) which matches this base
+        # URL — note ERNIE Speed 128k is ``ernie-speed-pro-128k`` there.
+        # Pricing is region/currency-dependent → cost $0 (not per-token
+        # enforced). Ids drift; override per role via DECEPTICON_MODEL_<ROLE>.
+        Tier.HIGH: "qianfan/ernie-4.5-turbo-128k",
+        Tier.MID: "qianfan/ernie-4.5-turbo-32k",
+        Tier.LOW: "qianfan/ernie-speed-pro-128k",
+    },
+    AuthMethod.CLOUDFLARE_GATEWAY_API: {
+        # Cloudflare AI Gateway — per-account base URL, so the endpoint
+        # comes from CLOUDFLARE_AI_GATEWAY_API_BASE (the OpenAI-compat
+        # ``.../compat`` path). Model slugs are the gateway's
+        # ``provider/model`` form proxied to Anthropic.
+        Tier.HIGH: "cfgateway/anthropic/claude-opus-4-6",
+        Tier.MID: "cfgateway/anthropic/claude-sonnet-4-6",
+        Tier.LOW: "cfgateway/anthropic/claude-haiku-4-5",
+    },
 }
 
 
@@ -537,20 +648,24 @@ def _resolve_ollama_model() -> str | None:
 def _resolve_ollama_cloud_model() -> str | None:
     """Return the LiteLLM model id for the user's Ollama Cloud, or None.
 
-    Reads ``OLLAMA_CLOUD_API_BASE`` / ``OLLAMA_API_KEY`` (per Ollama Cloud
+    Reads ``OLLAMA_CLOUD_API_BASE`` / the cloud API key (per Ollama Cloud
     docs at https://docs.ollama.com/cloud) and ``OLLAMA_CLOUD_MODEL`` from
     the environment. Falls back to ``_OLLAMA_CLOUD_DEFAULT_MODEL`` when
     the base URL is set but no model is specified. Returns None when no
     cloud endpoint is configured at all.
 
+    The key is read from ``OLLAMA_CLOUD_API_KEY`` first (what the onboard
+    wizard and setup docs write), falling back to ``OLLAMA_API_KEY`` (the
+    official Ollama convention) — the dynamic-config builder applies the
+    same precedence when wiring Bearer auth.
+
     Uses a distinct ``ollama_cloud/`` provider prefix (not ``ollama_chat/``)
     so the dynamic-config builder can route to the cloud's OpenAI-
-    compatible endpoint (``https://ollama.com/v1``) with Bearer auth via
-    ``OLLAMA_API_KEY`` instead of pointing at the local Ollama instance's
-    ``OLLAMA_API_BASE``.
+    compatible endpoint (``https://ollama.com/v1``) with Bearer auth
+    instead of pointing at the local Ollama instance's ``OLLAMA_API_BASE``.
     """
     base = os.getenv("OLLAMA_CLOUD_API_BASE", "").strip()
-    key = os.getenv("OLLAMA_API_KEY", "").strip()
+    key = os.getenv("OLLAMA_CLOUD_API_KEY", "").strip() or os.getenv("OLLAMA_API_KEY", "").strip()
     model = os.getenv("OLLAMA_CLOUD_MODEL", "").strip()
     if not base and not key and not model:
         return None
