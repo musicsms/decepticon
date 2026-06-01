@@ -27,10 +27,13 @@ Reading the RoE:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import threading
 import time
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -152,6 +155,10 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         super().__init__()
         self._sink = sink
         self._gated = gated_tools or GATED_TOOL_NAMES
+        self._conc_lock = threading.Lock()
+        self._conc_limit: int | None = None
+        self._sync_sema: threading.Semaphore | None = None
+        self._async_sema: asyncio.Semaphore | None = None
 
     @override
     def wrap_tool_call(self, request, handler) -> ToolMessage | Command:
@@ -166,7 +173,9 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         self._record(request, tool_name, decision, rules.mode)
         if not decision.allow and rules.mode == EnforcementMode.ENFORCE:
             return _refused_message(decision, tool_name, _tcid(request))
-        result = handler(request)
+        gated = tool_name in self._gated
+        with self._sync_gate(rules, gated):
+            result = handler(request)
         if (
             not decision.allow
             and rules.mode == EnforcementMode.WARN
@@ -180,7 +189,9 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         self._record(request, tool_name, decision, rules.mode)
         if not decision.allow and rules.mode == EnforcementMode.ENFORCE:
             return _refused_message(decision, tool_name, _tcid(request))
-        result = await handler(request)
+        gated = tool_name in self._gated
+        async with self._async_gate(rules, gated):
+            result = await handler(request)
         if (
             not decision.allow
             and rules.mode == EnforcementMode.WARN
@@ -188,6 +199,44 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         ):
             return _warn_message(decision, result)
         return result
+
+    def _resolve_limit(self, rules: MachineEnforcement) -> int | None:
+        limit = rules.max_concurrent_connections
+        if limit is None or limit <= 0:
+            return None
+        with self._conc_lock:
+            if self._conc_limit is None:
+                self._conc_limit = limit
+            return self._conc_limit
+
+    @contextmanager
+    def _sync_gate(self, rules: MachineEnforcement, gated: bool):
+        limit = self._resolve_limit(rules) if gated else None
+        if limit is None:
+            yield
+            return
+        with self._conc_lock:
+            if self._sync_sema is None:
+                self._sync_sema = threading.Semaphore(limit)
+            sema = self._sync_sema
+        sema.acquire()
+        try:
+            yield
+        finally:
+            sema.release()
+
+    @asynccontextmanager
+    async def _async_gate(self, rules: MachineEnforcement, gated: bool):
+        limit = self._resolve_limit(rules) if gated else None
+        if limit is None:
+            yield
+            return
+        with self._conc_lock:
+            if self._async_sema is None:
+                self._async_sema = asyncio.Semaphore(limit)
+            sema = self._async_sema
+        async with sema:
+            yield
 
     def _evaluate(self, request) -> tuple[Decision, MachineEnforcement, str]:
         tool = getattr(request, "tool", None)
