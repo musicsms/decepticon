@@ -25,6 +25,7 @@ jobs:
   publish-pypi:
     name: Publish three workspace wheels to PyPI
     runs-on: ubuntu-latest
+    environment: pypi-release
     permissions:
       id-token: write   # PyPI Trusted Publishing (OIDC) — no API token
     steps:
@@ -80,6 +81,7 @@ jobs:
   launcher:
     name: Build Go launcher binaries
     runs-on: ubuntu-latest
+    environment: pypi-release
     steps:
       - uses: actions/checkout@v4
 
@@ -133,6 +135,7 @@ jobs:
   docker:
     name: Build & push ${{ matrix.image }}
     runs-on: ubuntu-latest
+    environment: pypi-release
     strategy:
       fail-fast: false
       matrix:
@@ -281,6 +284,7 @@ jobs:
   # docker-heavy-merge.
   docker-heavy:
     name: Build & push ${{ matrix.image }} (${{ matrix.platform }})
+    environment: pypi-release
     strategy:
       fail-fast: false
       matrix:
@@ -356,6 +360,7 @@ jobs:
       matrix:
         image: [decepticon-sandbox, decepticon-c2-sliver]
     runs-on: ubuntu-latest
+    environment: pypi-release
     steps:
       - uses: actions/checkout@v4
 
@@ -452,6 +457,7 @@ jobs:
   # Pattern: https://docs.docker.com/build/ci/github-actions/multi-platform/
   docker-web:
     name: Build & push decepticon-web (${{ matrix.platform }})
+    environment: pypi-release
     strategy:
       fail-fast: false
       matrix:
@@ -511,6 +517,7 @@ jobs:
     name: Merge web manifest + sign + SBOM
     needs: docker-web
     runs-on: ubuntu-latest
+    environment: pypi-release
     steps:
       - uses: actions/checkout@v4
 
@@ -611,6 +618,7 @@ jobs:
     name: Verify images & publish release
     needs: [launcher, docker, docker-heavy-merge, docker-web-merge]
     runs-on: ubuntu-latest
+    environment: pypi-release
     steps:
       - uses: actions/checkout@v4
 
