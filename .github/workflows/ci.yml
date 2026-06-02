@@ -197,6 +197,20 @@ jobs:
       # docs/skill-schema.md) or the lint stage blocks the merge.
       - name: Skill corpus audit (strict mode)
         run: make audit-skills-strict
+      # Phase 1a graph builder — assert the checked-in skills.cypher
+      # matches what the builder produces from the current SKILL.md +
+      # seed YAML + pinned MITRE STIX bundle. Authors who edit a
+      # SKILL.md must also commit the regenerated dump.
+      - name: Pre-warm MITRE STIX bundle (cached)
+        run: |
+          mkdir -p ~/.cache/skillogy/mitre
+          if [ ! -f ~/.cache/skillogy/mitre/enterprise-attack-19.1.json ]; then
+            curl -sSL \
+              https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack-19.1.json \
+              -o ~/.cache/skillogy/mitre/enterprise-attack-19.1.json
+          fi
+      - name: Skill graph build gate (Phase 1a)
+        run: make check-skill-graph
       # PRs run tests without coverage instrumentation — coverage adds ~3x
       # runtime and PR feedback latency matters more than coverage tracking
       # on every change. Coverage is enforced on main pushes (next step).
