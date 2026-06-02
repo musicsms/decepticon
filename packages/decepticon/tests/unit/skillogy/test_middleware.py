@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import json
 
 from decepticon.middleware.skillogy import (
     SkillogyMiddleware,
@@ -10,11 +10,6 @@ from decepticon.middleware.skillogy import (
     maybe_install_skillogy,
 )
 from decepticon.middleware.skills import SkillsMiddleware
-from decepticon.skillogy.proto import (
-    SkillEnvelope,
-    SkillListResponse,
-    SkillMeta,
-)
 
 
 class _FakeSkillsMiddleware(SkillsMiddleware):
@@ -28,72 +23,70 @@ class _FakeSkillsMiddleware(SkillsMiddleware):
         AgentMiddleware.__init__(self)
 
 
-class _FakeClient:
+class _FakeBackend:
+    """Stand-in for ``Neo4jBackend`` — records calls and returns canned dicts so
+    the middleware's tool closures can be exercised without a live graph."""
+
     def __init__(self):
-        self.list_calls = []
-        self.load_calls = []
+        self.load_calls: list[str] = []
+        self.find_calls: list[dict] = []
 
-    async def list_skills(self, **kwargs):
-        self.list_calls.append(kwargs)
-        return SkillListResponse(
-            skills=[SkillMeta(name="t1", path="/skills/t1", subdomain="test")],
-            next_page_token="",
-            total_count=1,
-        )
+    def load_skill(self, path):
+        self.load_calls.append(path)
+        return {
+            "name": "t1",
+            "path": path,
+            "subdomain": "test",
+            "body": "# Body of " + path,
+        }
 
-    async def load_skill(self, path, **kwargs):
-        self.load_calls.append({"path": path, **kwargs})
-        return SkillEnvelope(
-            meta=SkillMeta(name="t1", path=path, subdomain="test"),
-            body="# Body of " + path,
-        )
+    def find_skill(self, **kwargs):
+        self.find_calls.append(kwargs)
+        return [{"name": "t1", "path": "/skills/t1", "subdomain": "test"}]
 
 
-def test_middleware_constructs_with_injected_client():
-    client = _FakeClient()
-    mw = SkillogyMiddleware(client=client)
-    assert mw._client is client
-    assert len(mw.tools) == 2
+def _tools_by_name(mw):
+    return {t.name: t for t in mw.tools}
 
 
-def test_middleware_list_skills_tool_returns_json():
-    client = _FakeClient()
-    mw = SkillogyMiddleware(client=client, append_policy_to_system=False)
-    tool = mw.tools[0]
-    result = asyncio.run(tool.ainvoke({"subdomain_filter": ["test"]}))
-    import json
+def test_middleware_constructs_with_injected_backend():
+    backend = _FakeBackend()
+    mw = SkillogyMiddleware(backend=backend)
+    assert mw._backend is backend
+    # Amendment v0.2.2 trimmed the agent surface to three tools
+    # (run_cypher_read dropped).
+    assert {t.name for t in mw.tools} == {"load_skill", "find_skill", "traverse"}
 
+
+def test_middleware_find_skill_tool_returns_json():
+    backend = _FakeBackend()
+    mw = SkillogyMiddleware(backend=backend, append_policy_to_system=False)
+    result = _tools_by_name(mw)["find_skill"].invoke({"subdomain": "test"})
     payload = json.loads(result)
-    assert payload["total_count"] == 1
-    assert payload["skills"][0]["name"] == "t1"
-    assert client.list_calls[0]["subdomain_filter"] == ["test"]
+    assert payload["count"] == 1
+    assert payload["hits"][0]["name"] == "t1"
+    assert backend.find_calls[0]["subdomain"] == "test"
 
 
 def test_middleware_load_skill_tool_returns_body():
-    client = _FakeClient()
-    mw = SkillogyMiddleware(client=client, append_policy_to_system=False)
-    tool = mw.tools[1]
-    result = asyncio.run(tool.ainvoke({"path": "/skills/ad/k"}))
-    import json
-
+    backend = _FakeBackend()
+    mw = SkillogyMiddleware(backend=backend, append_policy_to_system=False)
+    result = _tools_by_name(mw)["load_skill"].invoke({"name_or_path": "/skills/ad/k"})
     payload = json.loads(result)
     assert "# Body of /skills/ad/k" in payload["body"]
-    assert client.load_calls[0]["path"] == "/skills/ad/k"
+    assert backend.load_calls[0] == "/skills/ad/k"
 
 
 def test_middleware_load_skill_tool_returns_error_on_exception():
-    class _BadClient:
-        async def load_skill(self, *args, **kwargs):
+    class _BadBackend:
+        def load_skill(self, *args, **kwargs):
             raise RuntimeError("network down")
 
-        async def list_skills(self, **kwargs):
-            return SkillListResponse()
+        def find_skill(self, **kwargs):
+            return []
 
-    mw = SkillogyMiddleware(client=_BadClient(), append_policy_to_system=False)
-    tool = mw.tools[1]
-    result = asyncio.run(tool.ainvoke({"path": "/skills/x"}))
-    import json
-
+    mw = SkillogyMiddleware(backend=_BadBackend(), append_policy_to_system=False)
+    result = _tools_by_name(mw)["load_skill"].invoke({"name_or_path": "/skills/x"})
     payload = json.loads(result)
     assert "error" in payload
     assert "network down" in payload["error"]
@@ -113,7 +106,9 @@ def test_env_flag_recognizes_falsy_values(monkeypatch):
 
 def test_maybe_install_skillogy_swaps_skills_middleware_when_enabled(monkeypatch):
     monkeypatch.setenv("DECEPTICON_USE_SKILLOGY", "1")
-    monkeypatch.setenv("DECEPTICON_SKILLOGY_URL", "http://fake")
+    # Exercise the swap logic, not a live graph: the neo4j driver is an optional
+    # extra, so stub the backend factory the constructed middleware would call.
+    monkeypatch.setattr("decepticon.middleware.skillogy._backend_factory", lambda: _FakeBackend())
     base_stack = [_FakeSkillsMiddleware()]
     out = maybe_install_skillogy(base_stack)
     assert any(isinstance(mw, SkillogyMiddleware) for mw in out)
@@ -133,7 +128,6 @@ def test_maybe_install_skillogy_noop_when_no_skills_present(monkeypatch):
     enabled flag must NOT inject a fresh SkillogyMiddleware — that would add
     a skill surface the stack opted out of."""
     monkeypatch.setenv("DECEPTICON_USE_SKILLOGY", "1")
-    monkeypatch.setenv("DECEPTICON_SKILLOGY_URL", "http://fake")
     from langchain.agents.middleware import AgentMiddleware
 
     other = AgentMiddleware()
@@ -146,6 +140,5 @@ def test_maybe_install_skillogy_noop_when_no_skills_present(monkeypatch):
 def test_maybe_install_skillogy_noop_on_empty_stack(monkeypatch):
     """No SkillsMiddleware to replace -> no-op even on an empty stack."""
     monkeypatch.setenv("DECEPTICON_USE_SKILLOGY", "1")
-    monkeypatch.setenv("DECEPTICON_SKILLOGY_URL", "http://fake")
     out = maybe_install_skillogy([])
     assert out == []

@@ -29,6 +29,23 @@ A **Phase 0 corpus cleanup** precedes Phase 1a: 251 `SKILL.md` files are normali
 
 ---
 
+## Amendment v0.2.2 — Tool surface + prompt-assembly refinements
+
+**Date**: 2026-06-03 (mid-Phase-1a, applied during PR #538)
+**Supersedes**: §5.7.3 (`run_cypher_read`) and the second half of §5.10 (workflow.md auto-load + MoC summary mechanism).
+
+Three refinements emerged from dogfooding the four-tool middleware against the live graph (commit 6ba761da on `feat/skillogy-phase1a-service`). All three preserve the brain metaphor while trimming runtime surface and improving where context lives.
+
+1. **`run_cypher_read` is removed from the agent tool surface.** The original argument — "agents need raw Cypher for associative navigation" — is satisfied by `find_skill(query?, subdomain?, mitre_id?, tag?, tactic_id?)` AND-combining over the five edge types and `traverse(from_path, edge_types?, depth?)` doing variable-length BFS over the whitelist. The remaining queries `run_cypher_read` would have enabled are aggregate/statistical (`count(*) GROUP BY`, etc.) — not load-bearing for kill-chain execution. Removing the tool eliminates the largest attack surface in Phase 1a (Cypher injection, write-keyword bypass) and shrinks the agent prompt. `Neo4jBackend.run_cypher_read` + `assert_read_only` + the `_WRITE_KEYWORDS` denylist are **kept in the server backend** for internal diagnostics, Phase 1b's `recall()` implementation, and test fixtures. Phase 1a agent surface is now **3 tools**: `find_skill`, `load_skill`, `traverse`.
+
+2. **`workflow.md` is inlined at agent prompt assembly, not loaded by the middleware.** Each specialist's phase loop / scope rules / OPSEC discipline / handoff format live in `packages/decepticon/decepticon/skills/standard/<role>/workflow.md` (8 roles have one). The original §5.10 plan kept the deepagents-era `before_agent` hook that read these files into `state.workflow_content` at every turn. That conflates two responsibilities — *agent identity* (static, factory-time) and *skill discovery* (dynamic, per-turn). The amendment splits them: `PromptBuilder` reads `workflow.md` at factory time and concatenates it into the cacheable static prefix, so the workflow body sits inside the prompt-cache boundary and the middleware owns no filesystem behavior. Roles without a `workflow.md` get no extra content (no fallback, no warning — the absence is the contract).
+
+3. **The middleware now injects two prompt fragments, not one.** A **static graph schema cheat-sheet** (node labels, edge types, key properties, two example queries) explains what the `find_skill` filters and the `traverse` whitelist actually walk — making the three remaining tools self-documenting. A **dynamic per-phase MoC summary** (≈300 tokens) primes the agent on the concept areas available in its current phase, queried at request time via a new `Neo4jBackend.query_moc_summary(phase)` method. This requires `SkillogyMiddleware.__init__(*, agent_phase: str, ...)` and a `role → phase` mapping in `agents/build.py`; the original §5.10 sketch already specified `agent_phase` but did not wire it.
+
+Net effect on the runtime: agent boot prompt = (PromptBuilder static prefix, including workflow.md if present) + (middleware-injected schema cheat-sheet, static) + (middleware-injected MoC summary for this phase, dynamic). The four-tool sketch in §5.10 is replaced by the three-tool surface above; `build_run_cypher_read_tool` is deleted from the middleware (not the backend).
+
+---
+
 ## 1. Motivation
 
 ### 1.1 Where we are today
@@ -107,7 +124,7 @@ Two findings change the design vs. the 2026-05-28 v0.1 draft:
 1. **Decepticon's `SkillsMiddleware` overrides `_format_skills_list` and `SKILLS_SYSTEM_PROMPT` from the deepagents base**, so any frontmatter the base parses but the override doesn't re-read is invisible to the agent. `allowed-tools` falls into this trap.
 2. **`SkillogyMiddleware` is built fresh on `langchain.agents.middleware.AgentMiddleware`**, not subclassed from `deepagents.middleware.skills.SkillsMiddleware`. We are not inheriting its frontmatter parsing decisions or its `SkillMetadata` shape — the graph is the canonical schema, with raw frontmatter preserved on the node for round-trip.
 
-`workflow.md` auto-load (current Decepticon middleware reads `<source>/workflow.md` into `state.workflow_content`) is **preserved** in `SkillogyMiddleware`. It is orthogonal to the skill graph and load-bearing for agent loop behavior; see §5.10.
+`workflow.md` auto-load (current Decepticon middleware reads `<source>/workflow.md` into `state.workflow_content`) is **preserved as agent-boot context** — orthogonal to the skill graph and load-bearing for agent loop behavior. Originally planned to remain in `SkillogyMiddleware` (see §5.10); the v0.2.2 amendment relocates it to `PromptBuilder` so the workflow body sits inside the static cache prefix and the middleware owns no filesystem behavior. See "Amendment v0.2.2" at the top of this document.
 
 ---
 
@@ -480,6 +497,8 @@ Determinism is enforced: the dump is checked into git; CI re-builds and asserts 
 
 ### 5.7 Agent tool surface (Phase 1a — 3 tools)
 
+> **Amended (v0.2.2):** the three tools are now `find_skill`, `load_skill`, and `traverse`. §5.7.3 `run_cypher_read` is **removed from the agent surface** (the backend method is retained for internal use). See "Amendment v0.2.2" at the top of this document for rationale.
+
 #### 5.7.1 `load_skill(name_or_path: str) -> str`
 
 Fetch a single skill node and return its body + metadata as a structured envelope. Replaces the existing `load_skill` semantics; signature compatible with current SkillsMiddleware so agent prompts do not need re-training.
@@ -599,6 +618,8 @@ R1–R6 fail the build; W1 is informational on the PR diff comment.
 > Note on R3: the rule treats "offensive" as a path attribute rather than a frontmatter field because `metadata.kind` is dead in production (4/251 occurrences, 0 readers). The path inference is concrete, derivable from existing data, and survives any future authoring rename without an extra frontmatter migration. The "non-empty raw mapping" leg of the rule lets ICS / ATLAS / AATMF-tagged skills pass even though Phase 1a only emits `IMPLEMENTS` edges for Enterprise.
 
 ### 5.10 Runtime middleware (`SkillogyMiddleware`)
+
+> **Amended (v0.2.2):** `workflow.md` is **no longer loaded by the middleware** — it is concatenated into the cacheable static prefix by `PromptBuilder` at agent factory time. The middleware injects two fragments only: a static graph schema cheat-sheet and a dynamic per-phase MoC summary queried via `Neo4jBackend.query_moc_summary(phase)`. The four-tool `get_tools()` example below is reduced to three (`run_cypher_read` removed). See "Amendment v0.2.2" at the top of this document for rationale.
 
 `SkillogyMiddleware` extends `langchain.agents.middleware.AgentMiddleware` directly — **not** a subclass of `deepagents.middleware.skills.SkillsMiddleware`. The graph is the canonical schema; we do not inherit deepagents' frontmatter parsing, `SkillMetadata` TypedDict, or three-stage progressive disclosure scheme.
 

@@ -179,8 +179,8 @@ def test_skill_loader_name_resolved_from_registry():
 
 
 def test_skill_loader_rename_is_picked_up_dynamically(monkeypatch):
-    # Simulate Skillogy renaming its loader tool: the resolver must follow the
-    # new ``.name`` with no edit to this module — proving it is registry-driven.
+    # Simulate Skillogy renaming its tools: the resolver must follow the new
+    # ``.name`` values with no edit to this module — proving it is registry-driven.
     import decepticon.tools.skills as skills_tools
     from decepticon.middleware import skillogy
 
@@ -195,16 +195,22 @@ def test_skill_loader_rename_is_picked_up_dynamically(monkeypatch):
         skillogy, "_make_load_skill_tool", lambda *_a, **_k: _RenamedTool("fetch_skill")
     )
     monkeypatch.setattr(
-        skillogy, "_make_list_skills_tool", lambda *_a, **_k: _RenamedTool("browse_skills")
+        skillogy, "_make_find_skill_tool", lambda *_a, **_k: _RenamedTool("browse_skills")
+    )
+    monkeypatch.setattr(
+        skillogy, "_make_traverse_tool", lambda *_a, **_k: _RenamedTool("walk_graph")
     )
     _skill_tool_names.cache_clear()
 
     resolved = _skill_tool_names()
-    assert resolved == frozenset({"fetch_skill", "browse_skills"})
+    assert resolved == frozenset({"fetch_skill", "browse_skills", "walk_graph"})
     assert _is_trusted_internal_tool("fetch_skill") is True
     assert _is_trusted_internal_tool("browse_skills") is True
-    # The old literal name is no longer trusted once the registry renames it.
+    assert _is_trusted_internal_tool("walk_graph") is True
+    # The old literal names are no longer trusted once the registry renames them.
     assert _is_trusted_internal_tool("load_skill") is False
+    assert _is_trusted_internal_tool("find_skill") is False
+    assert _is_trusted_internal_tool("traverse") is False
 
 
 def test_external_tools_are_wrapped():
@@ -231,7 +237,7 @@ def test_untrusted_network_tools_are_skipped_by_shield():
 
 def test_fallback_when_registry_unavailable(monkeypatch):
     # Both registries fail to resolve -> documented fallback keeps the historical
-    # skill-loader names trusted so default behavior is unchanged.
+    # skill-tool names trusted so default behavior is unchanged.
     import decepticon.tools.skills as skills_tools
     from decepticon.middleware import skillogy
 
@@ -240,12 +246,14 @@ def test_fallback_when_registry_unavailable(monkeypatch):
 
     monkeypatch.setattr(skills_tools, "build_load_skill_tool", _boom)
     monkeypatch.setattr(skillogy, "_make_load_skill_tool", _boom)
-    monkeypatch.setattr(skillogy, "_make_list_skills_tool", _boom)
+    monkeypatch.setattr(skillogy, "_make_find_skill_tool", _boom)
+    monkeypatch.setattr(skillogy, "_make_traverse_tool", _boom)
     _skill_tool_names.cache_clear()
 
     assert _skill_tool_names() == _FALLBACK_SKILL_TOOL_NAMES
     assert _is_trusted_internal_tool("load_skill") is True
-    assert _is_trusted_internal_tool("list_skills") is True
+    assert _is_trusted_internal_tool("find_skill") is True
+    assert _is_trusted_internal_tool("traverse") is True
     # Fallback is exactly framework set + last-known skill names.
     assert PromptInjectionShieldMiddleware._SAFE_TOOL_NAMES == (
         _FRAMEWORK_TOOL_NAMES | _FALLBACK_SKILL_TOOL_NAMES

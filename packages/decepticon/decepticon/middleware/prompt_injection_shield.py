@@ -295,23 +295,25 @@ _FRAMEWORK_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
-# Last-known skill-loader/lister tool names. Used ONLY as a documented fallback
-# when neither skill registry can be imported (e.g. a minimal runtime); the live
-# names are resolved from the registry by ``_skill_tool_names``.
-_FALLBACK_SKILL_TOOL_NAMES: frozenset[str] = frozenset({"load_skill", "list_skills"})
+# Last-known skill-loader tool names. Used ONLY as a documented fallback when
+# neither skill registry can be imported (e.g. a minimal runtime); the live
+# names are resolved from the registry by ``_skill_tool_names``. Mirrors the
+# Skillogy three-tool surface from Amendment v0.2.2 plus the legacy
+# ``SkillsMiddleware`` loader.
+_FALLBACK_SKILL_TOOL_NAMES: frozenset[str] = frozenset({"load_skill", "find_skill", "traverse"})
 
 
 @lru_cache(maxsize=1)
 def _skill_tool_names() -> frozenset[str]:
-    """Resolve the skill-system loader/lister tool names from the registry.
+    """Resolve the skill-system tool names from the registry.
 
     Both ``SkillsMiddleware`` (filesystem-backed) and ``SkillogyMiddleware``
-    (service-backed) construct their loader tools as ``@tool``-decorated
-    closures whose ``.name`` is the single source of truth for the tool name the
-    model sees. The builders only close over their arguments — they do not touch
-    them at construction time — so throwaway instances built with no backend
-    expose the correct ``.name``. Reading it here keeps the trusted set correct
-    across a Skillogy rename without editing this module.
+    (graph-backed) construct their tools as ``@tool``-decorated closures whose
+    ``.name`` is the single source of truth for the tool name the model sees.
+    The builders only close over their arguments — they do not touch them at
+    construction time — so throwaway instances built with no backend expose the
+    correct ``.name``. Reading it here keeps the trusted set correct across a
+    Skillogy rename without editing this module.
 
     Returns the documented fallback when neither registry is importable.
     """
@@ -325,8 +327,12 @@ def _skill_tool_names() -> frozenset[str]:
     try:
         from decepticon.middleware import skillogy
 
-        names.add(skillogy._make_list_skills_tool(None).name)
+        # Skillogy's three-tool surface (Amendment v0.2.2): find_skill,
+        # load_skill, traverse. Each factory takes a backend, but does not
+        # touch it at construction time, so passing ``None`` is fine here.
+        names.add(skillogy._make_find_skill_tool(None).name)
         names.add(skillogy._make_load_skill_tool(None).name)
+        names.add(skillogy._make_traverse_tool(None).name)
     except Exception as e:  # noqa: BLE001 - skillogy optional; fall back below
         log.debug("skillogy registry unavailable for trusted-tool resolution: %s", e)
 
