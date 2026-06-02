@@ -27,9 +27,13 @@ Reading the RoE:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import random
+import re
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,6 +82,26 @@ def _load_rules_for_workspace(workspace_path: str | None) -> MachineEnforcement:
     return MachineEnforcement.from_dict(block)
 
 
+def _abort_marker_present(workspace_path: str | None) -> bool:
+    if not workspace_path:
+        return False
+    try:
+        return (Path(workspace_path) / ".abort").exists()
+    except OSError:
+        return False
+
+
+def _halted_message(tool_name: str, tool_call_id: str | None) -> ToolMessage:
+    body = (
+        f"[AGENT_HALTED] code=EMERGENCY_ABORT tool={tool_name}\n"
+        "An out-of-band emergency abort was signalled by the operator "
+        "(.abort marker in the workspace). This gated call was NOT executed.\n"
+        "Stop work immediately and await operator instructions - do NOT "
+        "retry or attempt alternative commands this turn."
+    )
+    return ToolMessage(content=body, tool_call_id=tool_call_id or "", status="error")
+
+
 def _refused_message(decision: Decision, tool_name: str, tool_call_id: str | None) -> ToolMessage:
     body = (
         f"[ROE_REFUSED] code={decision.reason_code} tool={tool_name}\n"
@@ -122,6 +146,50 @@ def _to_text(content: Any) -> str:
     return str(content)
 
 
+_REDACT_MASK = "***"
+
+_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)(sshpass\s+-p\s+)('[^']*'|\"[^\"]*\"|\S+)"),
+    re.compile(r"(?i)(\bPGPASSWORD=)('[^']*'|\"[^\"]*\"|\S+)"),
+    re.compile(
+        r"(?i)((?:--password|--pass|--token)(?:[=\s]+)|-p\s+)"
+        r"('[^']*'|\"[^\"]*\"|\S+)"
+    ),
+    re.compile(r"(?i)((?:-u|--user)\s+)('[^']*'|\"[^\"]*\"|[^\s:]+):(\S+)"),
+    re.compile(
+        r"(?i)((?:-H|--header)(?:[=\s]+))"
+        r"('(?:[^']*(?:authorization|bearer|api-key|apikey|x-api-key)[^']*)'"
+        r"|\"(?:[^\"]*(?:authorization|bearer|api-key|apikey|x-api-key)[^\"]*)\")",
+    ),
+    re.compile(r"(?i)([^\s/@:]+/[^\s/@:]+:)([^\s@]+)(@)"),
+    re.compile(r"(?i)([A-Za-z][\w.-]*:)([^\s@:]+)(@[\w.-]+)"),
+)
+
+
+def _redact_header_value(match: re.Match[str]) -> str:
+    flag, raw = match.group(1), match.group(2)
+    quote = raw[0]
+    inner = raw[1:-1]
+    if ":" in inner:
+        name, _, _value = inner.partition(":")
+        return f"{flag}{quote}{name}: {_REDACT_MASK}{quote}"
+    return f"{flag}{quote}{_REDACT_MASK}{quote}"
+
+
+def _redact_secrets(cmd: str) -> str:
+    if not cmd:
+        return cmd
+    out = cmd
+    out = _SECRET_PATTERNS[0].sub(lambda m: f"{m.group(1)}{_REDACT_MASK}", out)
+    out = _SECRET_PATTERNS[1].sub(lambda m: f"{m.group(1)}{_REDACT_MASK}", out)
+    out = _SECRET_PATTERNS[2].sub(lambda m: f"{m.group(1)}{_REDACT_MASK}", out)
+    out = _SECRET_PATTERNS[3].sub(lambda m: f"{m.group(1)}{m.group(2)}:{_REDACT_MASK}", out)
+    out = _SECRET_PATTERNS[4].sub(_redact_header_value, out)
+    out = _SECRET_PATTERNS[5].sub(lambda m: f"{m.group(1)}{_REDACT_MASK}{m.group(3)}", out)
+    out = _SECRET_PATTERNS[6].sub(lambda m: f"{m.group(1)}{_REDACT_MASK}{m.group(3)}", out)
+    return out
+
+
 def _command_from_tool_call(request) -> str:
     args = getattr(request, "tool_call_args", None)
     if not isinstance(args, dict):
@@ -143,6 +211,9 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         gated_tools: Override the default tool-name set. Use this to
             extend enforcement to additional tools (e.g. an HTTP
             request tool).
+        jitter_frac: Fraction of ``min_inter_request_delay_ms`` added as
+            random OPSEC jitter on top of the floor when a gated call is
+            paced (0 disables jitter; the floor is still honoured).
     """
 
     def __init__(
@@ -151,11 +222,15 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         sink: RoEAuditSink | None = None,
         gated_tools: frozenset[str] | None = None,
         now: Callable[[], datetime] | None = None,
+        jitter_frac: float = 0.25,
     ) -> None:
         super().__init__()
         self._sink = sink
         self._gated = gated_tools or GATED_TOOL_NAMES
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self._jitter_frac = max(0.0, jitter_frac)
+        self._pace_lock = threading.Lock()
+        self._last_gated_monotonic = 0.0
 
     @override
     def wrap_tool_call(self, request, handler) -> ToolMessage | Command:
@@ -166,10 +241,17 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         return await self._dispatch_async(request, handler)
 
     def _dispatch_sync(self, request, handler):
+        halt = self._check_abort(request)
+        if halt is not None:
+            return halt
         decision, rules, tool_name = self._evaluate(request)
         self._record(request, tool_name, decision, rules.mode)
         if not decision.allow and rules.mode == EnforcementMode.ENFORCE:
             return _refused_message(decision, tool_name, _tcid(request))
+        wait = self._pace_wait_seconds(rules)
+        if wait > 0:
+            self._record_throttle(request, tool_name, wait)
+            time.sleep(wait)
         result = handler(request)
         if (
             not decision.allow
@@ -180,10 +262,17 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         return result
 
     async def _dispatch_async(self, request, handler):
+        halt = self._check_abort(request)
+        if halt is not None:
+            return halt
         decision, rules, tool_name = self._evaluate(request)
         self._record(request, tool_name, decision, rules.mode)
         if not decision.allow and rules.mode == EnforcementMode.ENFORCE:
             return _refused_message(decision, tool_name, _tcid(request))
+        wait = self._pace_wait_seconds(rules)
+        if wait > 0:
+            self._record_throttle(request, tool_name, wait)
+            await asyncio.sleep(wait)
         result = await handler(request)
         if (
             not decision.allow
@@ -192,6 +281,41 @@ class RoEEnforcementMiddleware(AgentMiddleware):
         ):
             return _warn_message(decision, result)
         return result
+
+    def _check_abort(self, request) -> ToolMessage | None:
+        tool = getattr(request, "tool", None)
+        tool_name = getattr(tool, "name", "unknown") if tool else "unknown"
+        if tool_name not in self._gated:
+            return None
+        state = getattr(request, "state", {}) or {}
+        get = state.get if hasattr(state, "get") else (lambda _k, _d=None: None)
+        workspace = get("workspace_path") or None
+        if not _abort_marker_present(workspace):
+            return None
+        self._record_abort(request, tool_name)
+        return _halted_message(tool_name, _tcid(request))
+
+    def _record_abort(self, request, tool_name: str) -> None:
+        if self._sink is None:
+            return
+        state = getattr(request, "state", {}) or {}
+        get = state.get if hasattr(state, "get") else (lambda _k, _d=None: None)
+        engagement = get("engagement_name") or "unknown-engagement"
+        objective = get("active_objective_id") or get("current_objective") or ""
+        record = {
+            "ts": time.time(),
+            "event": "abort",
+            "engagement": engagement,
+            "objective_id": objective,
+            "tool": tool_name,
+            "decision": "refuse",
+            "reason_code": "EMERGENCY_ABORT",
+            "command_excerpt": _command_from_tool_call(request)[:512],
+        }
+        try:
+            self._sink.append(record)
+        except Exception as exc:  # noqa: BLE001 - audit must never break tool execution
+            log.error("roe: audit sink write failed: %s", exc)
 
     def _evaluate(self, request) -> tuple[Decision, MachineEnforcement, str]:
         tool = getattr(request, "tool", None)
@@ -240,12 +364,51 @@ class RoEEnforcementMiddleware(AgentMiddleware):
             "risk": decision.risk,
             "matched_targets": list(decision.matched_targets),
             "mode": mode.value,
-            "command_excerpt": _command_from_tool_call(request)[:512],
+            "command_excerpt": _redact_secrets(_command_from_tool_call(request))[:512],
         }
         try:
             self._sink.append(record)
         except Exception as exc:  # noqa: BLE001 - audit must never break tool execution
             log.error("roe: audit sink write failed: %s", exc)
+
+    def _pace_wait_seconds(self, rules: MachineEnforcement) -> float:
+        """Seconds to sleep before a gated call to honour ``min_inter_request_delay_ms``.
+
+        The first runtime request-cadence control (opplan only prints an OPSEC
+        label). Isolated calls never wait; bursts are spaced to the floor plus
+        up to ``jitter_frac`` of it, so the cadence is not a fixed-interval IOC.
+        Never goes below the configured minimum; returns 0 when unset.
+        """
+        floor = rules.min_inter_request_delay_ms / 1000.0
+        if floor <= 0:
+            return 0.0
+        now = time.monotonic()
+        with self._pace_lock:
+            start_at = max(now, self._last_gated_monotonic + floor)
+            self._last_gated_monotonic = start_at
+        wait = start_at - now
+        if wait > 0 and self._jitter_frac > 0:
+            wait += random.uniform(0.0, floor * self._jitter_frac)
+        return wait
+
+    def _record_throttle(self, request, tool_name: str, wait_seconds: float) -> None:
+        if self._sink is None:
+            return
+        state = getattr(request, "state", {}) or {}
+        get = state.get if hasattr(state, "get") else (lambda _k, _d=None: None)
+        record = {
+            "ts": time.time(),
+            "engagement": get("engagement_name") or "unknown-engagement",
+            "objective_id": get("active_objective_id") or get("current_objective") or "",
+            "tool": tool_name,
+            "event": "throttle",
+            "reason_code": "MIN_INTER_REQUEST_DELAY",
+            "delay_seconds": round(wait_seconds, 3),
+        }
+        try:
+            self._sink.append(record)
+        except Exception as exc:  # noqa: BLE001 - audit must never break tool execution
+            log.error("roe: throttle audit write failed: %s", exc)
 
 
 def _tcid(request) -> str | None:
