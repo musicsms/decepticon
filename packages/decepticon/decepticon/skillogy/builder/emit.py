@@ -48,9 +48,7 @@ def cypher_literal(value: Any) -> str:
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(cypher_literal(v) for v in value) + "]"
     if isinstance(value, dict):
-        inner = ", ".join(
-            f"{k}: {cypher_literal(v)}" for k, v in sorted(value.items())
-        )
+        inner = ", ".join(f"{k}: {cypher_literal(v)}" for k, v in sorted(value.items()))
         return "{" + inner + "}"
     raise TypeError(f"unsupported Cypher literal type: {type(value).__name__}")
 
@@ -66,9 +64,7 @@ def _node_merge(node: Node) -> str:
     extra_props = {k: v for k, v in node.properties.items() if k != node.key_field}
     if not extra_props:
         return head + ";"
-    set_clause = ", ".join(
-        f"n.{k} = {cypher_literal(v)}" for k, v in sorted(extra_props.items())
-    )
+    set_clause = ", ".join(f"n.{k} = {cypher_literal(v)}" for k, v in sorted(extra_props.items()))
     return f"{head}\nSET {set_clause};"
 
 

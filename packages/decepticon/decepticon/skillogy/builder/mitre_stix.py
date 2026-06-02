@@ -34,7 +34,6 @@ from typing import Any
 
 from decepticon.skillogy.builder.model import Edge, Node
 
-
 _ATTCK_VERSION = "19.1"
 
 

@@ -44,7 +44,6 @@ from decepticon.skill_audit.mitre import MitreMatrix, classify_mitre_id, coerce_
 from decepticon.skillogy.builder.model import Edge, Node
 from decepticon.skillogy.builder.seeds import load_mocs
 
-
 _SKILL_ROOT_RE = re.compile(r"(?:^|/)skills/.*$")
 
 
@@ -116,7 +115,8 @@ def emit_skill_records(
             raise RuntimeError(
                 f"{skill_md}: missing name or description (Phase 0 validator should have caught this)"
             )
-        metadata = meta.get("metadata") if isinstance(meta.get("metadata"), dict) else {}
+        metadata_raw = meta.get("metadata")
+        metadata: dict[str, Any] = metadata_raw if isinstance(metadata_raw, dict) else {}
         raw_subdomain = str(metadata.get("subdomain") or "").strip()
         subdomain = resolve_subdomain(raw_subdomain) if raw_subdomain else ""
 

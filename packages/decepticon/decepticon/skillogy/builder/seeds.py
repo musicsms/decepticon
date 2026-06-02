@@ -144,7 +144,6 @@ def load_mocs() -> list[MocSeed]:
     for moc in out:
         if moc.parent_phase not in phase_names:
             raise ValueError(
-                f"{MOC_YAML}: MoC {moc.name!r} references unknown parent_phase "
-                f"{moc.parent_phase!r}"
+                f"{MOC_YAML}: MoC {moc.name!r} references unknown parent_phase {moc.parent_phase!r}"
             )
     return out
