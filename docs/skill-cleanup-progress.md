@@ -1,4 +1,8 @@
-# Phase 0 Cleanup Progress
+# Phase 0 Cleanup Progress — **COMPLETE** (2026-06-03)
+
+`make audit-skills-strict` exits 0 on all 251 SKILL.md files. CI is
+flipped to strict mode in the same PR. Phase 1a (graph builder) is
+unblocked.
 
 Baseline scan (2026-06-03 right after Task 11 wired CI):
 
@@ -8,6 +12,12 @@ Baseline scan (2026-06-03 right after Task 11 wired CI):
   R-no-attribution:     52
   R-bad-subdomain:      36
   R-bad-mitre-format:   10
+```
+
+Final scan (2026-06-03 after Phase 0 cleanup):
+
+```
+251 files scanned, 0 violations
 ```
 
 ## Batches
