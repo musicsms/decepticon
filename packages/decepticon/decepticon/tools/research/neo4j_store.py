@@ -159,6 +159,7 @@ def _read_engagement(all_engagements: bool) -> str | None:
         return None
     return get_active_engagement()
 
+
 class Neo4jStore:
     """Load/query/upsert knowledge graph nodes and edges in Neo4j.
 
