@@ -14,10 +14,10 @@ from decepticon.middleware.hitl import (
     HITLApprovalMiddleware,
     InProcessApprovalTransport,
 )
+from decepticon.middleware.kg import KGMiddleware
 from decepticon.middleware.notifications import (
     SandboxNotificationMiddleware,
 )
-from decepticon.middleware.kg import KGMiddleware
 from decepticon.middleware.opplan import OPPLANMiddleware
 from decepticon.middleware.prompt_injection_shield import (
     PromptInjectionShieldMiddleware,
