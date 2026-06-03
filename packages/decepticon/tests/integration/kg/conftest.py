@@ -43,21 +43,21 @@ def kgstore() -> Iterator[KGStore]:
     open / round-trip a trivial query.
     """
     _maybe_seed_defaults()
+
+    # Single try-block keeps ``store`` definition + smoke check together
+    # so CodeQL doesn't flag ``store.close()`` as touching a possibly
+    # uninitialised local.
+    store: KGStore | None = None
     try:
         store = KGStore.from_env()
-    except KGStoreConfigError as exc:
-        pytest.skip(f"DECEPTICON_NEO4J_* not configured: {exc}")
-    except Exception as exc:
-        pytest.skip(f"KGStore construction failed: {exc}")
-
-    # Connectivity smoke + result-shape sanity. ``schema`` is the
-    # reserved label the runner uses; re-using it matches production.
-    # The shape check catches CI environments where the ``neo4j`` driver
-    # is somehow stubbed (e.g. by an in-process mock that returns
-    # ``MagicMock`` for every Cypher call). Without this, those stubs
-    # silently pass the connectivity smoke and the integration tests
-    # then fail against a fake graph instead of skipping.
-    try:
+        # Connectivity smoke + result-shape sanity. ``schema`` is the
+        # reserved label the runner uses; re-using it matches production.
+        # The shape check catches CI environments where the ``neo4j``
+        # driver is somehow stubbed (e.g. by an in-process mock that
+        # returns ``MagicMock`` for every Cypher call). Without this,
+        # those stubs silently pass the connectivity smoke and the
+        # integration tests then fail against a fake graph instead of
+        # skipping.
         rows = store.execute_read("RETURN 1 AS ok", {}, engagement="schema")
         if not (
             isinstance(rows, list)
@@ -67,13 +67,23 @@ def kgstore() -> Iterator[KGStore]:
         ):
             raise RuntimeError(
                 f"Neo4j smoke returned an unexpected shape "
-                f"(type={type(rows).__name__}, len={len(rows) if hasattr(rows, '__len__') else 'N/A'}); "
+                f"(type={type(rows).__name__}, "
+                f"len={len(rows) if hasattr(rows, '__len__') else 'N/A'}); "
                 f"the driver is probably stubbed."
             )
+    except KGStoreConfigError as exc:
+        if store is not None:
+            store.close()
+        pytest.skip(f"DECEPTICON_NEO4J_* not configured: {exc}")
     except Exception as exc:  # pragma: no cover — depends on live service
-        store.close()
+        if store is not None:
+            store.close()
         pytest.skip(f"Neo4j not reachable for KG integration tests: {exc}")
 
+    # ``store`` is guaranteed non-None here: every except path above
+    # calls ``pytest.skip`` which raises. The assert narrows the type
+    # for static checkers that don't model ``pytest.skip`` as NoReturn.
+    assert store is not None
     try:
         yield store
     finally:
