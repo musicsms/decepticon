@@ -131,6 +131,8 @@ def _adapt_nmap_xml(
         root = ET.parse(str(path)).getroot()
     except (OSError, ET.ParseError) as exc:
         return {"error": f"nmap xml parse failed: {exc}", "hosts": 0, "services": 0}
+    if root is None:
+        return {"error": "nmap xml parse failed: empty document", "hosts": 0, "services": 0}
 
     observations: list[dict[str, Any]] = []
     hosts_count = 0
