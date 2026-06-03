@@ -14,6 +14,7 @@ from decepticon.middleware.hitl import (
     HITLApprovalMiddleware,
     InProcessApprovalTransport,
 )
+from decepticon.middleware.kg import KGMiddleware
 from decepticon.middleware.notifications import (
     SandboxNotificationMiddleware,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "FilesystemMiddleware",
     "HITLApprovalMiddleware",
     "InProcessApprovalTransport",
+    "KGMiddleware",
     "OPPLANMiddleware",
     "PromptInjectionShieldMiddleware",
     "RoEEnforcementMiddleware",

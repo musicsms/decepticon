@@ -36,6 +36,7 @@ class MiddlewareSlot(StrEnum):
     FILESYSTEM = "filesystem"
     SUBAGENT = "subagent"
     OPPLAN = "opplan"
+    KG = "kg"
     EVENT_LOG = "event-log"
     SANDBOX_NOTIFICATION = "sandbox-notification"
     BUDGET = "budget"
@@ -159,7 +160,12 @@ SLOTS_PER_ROLE: dict[str, frozenset[MiddlewareSlot]] = {
     "recon": _BASH_AGENT_SLOTS,
     "exploit": _BASH_AGENT_SLOTS,
     "postexploit": _BASH_AGENT_SLOTS,
-    "analyst": _BASH_AGENT_SLOTS,
+    # Analyst is the only OSS role that runs the KG middleware — its
+    # workflow is the persistent-graph use case the spec calls out
+    # (docs/design/2026-06-03-kg-middleware-redesign.md § 4.10).
+    # ad_operator and contract_auditor stayed narrow in the prior
+    # cutover; their KG slot adoption is a follow-up.
+    "analyst": _BASH_AGENT_SLOTS | {MiddlewareSlot.KG},
     "reverser": _BASH_AGENT_SLOTS,
     "contract_auditor": _BASH_AGENT_SLOTS,
     "cloud_hunter": _BASH_AGENT_SLOTS,
