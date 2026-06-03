@@ -1,4 +1,13 @@
-"""LangChain @tool wrappers for the reporting package."""
+"""LangChain @tool wrappers for the reporting package.
+
+The reporting tools read the engagement KG that ``KGMiddleware`` and
+``kg_record`` / ``kg_ingest`` write to (the post-#545 backend) — they
+no longer use the legacy ``tools/research/_state`` shim. The
+engagement label is resolved from the ``EngagementContextMiddleware``
+contextvar; if it is not set (e.g. agent invoked outside the standard
+middleware stack), every report tool returns the structure for an
+empty graph and the agent can recover.
+"""
 
 from __future__ import annotations
 
@@ -11,9 +20,29 @@ from langchain_core.tools import tool
 from decepticon.tools.reporting.bugcrowd import render_bugcrowd_csv
 from decepticon.tools.reporting.executive import render_executive_summary
 from decepticon.tools.reporting.hackerone import render_hackerone_markdown
+from decepticon.tools.reporting.kg_adapter import load_engagement_graph
 from decepticon.tools.reporting.sarif import render_sarif
 from decepticon.tools.reporting.timeline import extract_timeline
-from decepticon.tools.research._state import _load
+from decepticon_core.types.kg import KnowledgeGraph
+from decepticon_core.utils.engagement_scope import get_active_engagement
+
+
+def _load() -> tuple[KnowledgeGraph, None]:
+    """Load the engagement KG for reporting.
+
+    Reads the engagement label from the contextvar
+    (``EngagementContextMiddleware`` sets it for every tool dispatch).
+    Returns an empty graph when no engagement is active so the renderer
+    sees a well-formed (but empty) shape.
+
+    Kept under this name so the existing ``mock.patch(
+    "decepticon.tools.reporting.tools._load", ...)`` test surface
+    continues to work — only the implementation changed.
+    """
+    engagement = get_active_engagement()
+    if not engagement:
+        return KnowledgeGraph(), None
+    return load_engagement_graph(engagement), None
 
 
 def _json(data: Any) -> str:
