@@ -40,6 +40,7 @@ from decepticon.agents._benchmark_mode import benchmark_skill_sources
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
+    KGMiddleware,
     OPPLANMiddleware,
     RoEEnforcementMiddleware,
     SkillsMiddleware,
@@ -164,6 +165,31 @@ def _make_subagent(*, backend: Any, subagents: list | None = None, **_: Any):
 
 def _make_opplan(*, backend: Any, **_: Any):
     return OPPLANMiddleware(backend=backend)
+
+
+def _make_kg(**_: Any):
+    """Conditional slot — returns None when the KGStore can't be built.
+
+    Mirrors :func:`_make_model_fallback`: the agent factory keeps
+    building, the KG slot is just absent for that run. Operators see
+    a single warning identifying which env var or driver call failed.
+
+    Agent factory call sites import analyst.py at module load to build
+    the LangGraph platform graph (`if is_bundle_enabled("standard"):
+    graph = create_analyst_agent()`); raising here would block every
+    dev box and CI runner that doesn't have Neo4j env vars set, even
+    for pytest invocations that never touch the KG path.
+    """
+    from decepticon.middleware.kg_internal.store import (
+        KGStoreConfigError,
+        KGStoreUnavailableError,
+    )
+
+    try:
+        return KGMiddleware()
+    except (KGStoreConfigError, KGStoreUnavailableError) as exc:
+        logging.getLogger(__name__).warning("KG slot skipped: %s", exc)
+        return None
 
 
 def _make_sandbox_notification(*, sandbox: Any = None, **_: Any):
@@ -312,6 +338,7 @@ DEFAULT_SLOT_FACTORIES: dict[MiddlewareSlot, SlotFactory] = {
     MiddlewareSlot.FILESYSTEM: _make_filesystem,
     MiddlewareSlot.SUBAGENT: _make_subagent,
     MiddlewareSlot.OPPLAN: _make_opplan,
+    MiddlewareSlot.KG: _make_kg,
     MiddlewareSlot.EVENT_LOG: _make_event_log,
     MiddlewareSlot.SANDBOX_NOTIFICATION: _make_sandbox_notification,
     MiddlewareSlot.BUDGET: _make_budget,

@@ -586,6 +586,7 @@ def test_middleware_slot_enum_order_is_assembly_order():
         "filesystem",
         "subagent",
         "opplan",
+        "kg",
         "event-log",
         "sandbox-notification",
         "budget",
