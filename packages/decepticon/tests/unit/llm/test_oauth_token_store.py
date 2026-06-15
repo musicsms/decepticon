@@ -147,6 +147,10 @@ def test_write_json_atomic_uses_unique_temp_paths(
 
 
 @pytest.mark.skipif(os.name == "nt", reason="chmod-based directory locking is a no-op on Windows")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root bypasses directory write permissions, so the 0o500 lock is a no-op",
+)
 def test_write_json_atomic_returns_false_when_target_dir_unwritable(tmp_path: Path) -> None:
     locked = tmp_path / "locked"
     locked.mkdir()
