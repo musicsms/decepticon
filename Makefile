@@ -23,6 +23,17 @@ COMPOSE_WATCH := docker compose -f docker-compose.yml -f docker-compose.dev.yml 
 PROFILES_ALL  := --profile cli --profile c2-sliver
 WEB_DIR       := clients/web
 
+# ── Local dev Node pin ───────────────────────────────────────────
+# The app is built and tested on Node 24 (CI + cli.Dockerfile; web prod image
+# is node:22). A Node shim earlier in PATH — e.g. a Hermes-bundled Node — can
+# silently override the shell to an untested version (Node 26 was observed),
+# which breaks native addons like node-pty through ABI drift. Prefer the
+# system Node at $(NODE_BIN_DIR) for dev targets, scoped to those recipes so
+# the user's global environment is left untouched. Override if needed:
+#   make web-dev NODE_BIN_DIR=/path/to/node24/bin
+NODE_BIN_DIR ?= /usr/bin
+web-dev cli-dev node-install: export PATH := $(NODE_BIN_DIR):$(PATH)
+
 # Dogfood: isolated $DECEPTICON_HOME so the launcher can onboard, write .env,
 # and stand up the stack without touching the user's real ~/.decepticon. The
 # launcher resolves all relative paths against the compose file's directory,
@@ -360,7 +371,14 @@ clean:
 # ── Internal idempotent helpers ──────────────────────────────────
 
 node-install:
-	@test -d node_modules || npm install
+	@abi=$$(node -p process.versions.modules 2>/dev/null); \
+	stamp=node_modules/.node-abi; \
+	if [ ! -d node_modules ] || [ "$$(cat $$stamp 2>/dev/null)" != "$$abi" ]; then \
+	  echo "[node-install] Node $$(node -v) (ABI $$abi) — installing deps + rebuilding native addons..."; \
+	  npm install && printf '%s\n' "$$abi" > $$stamp; \
+	else \
+	  echo "[node-install] deps up to date for Node $$(node -v) (ABI $$abi)"; \
+	fi
 
 # Create the web-local .env from the tracked example on first run so the
 # host-run Next.js dev server and Prisma pick up DATABASE_URL.
