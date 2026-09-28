@@ -362,15 +362,21 @@ clean:
 node-install:
 	@test -d node_modules || npm install
 
+# Create the web-local .env from the tracked example on first run so the
+# host-run Next.js dev server and Prisma pick up DATABASE_URL.
+web-env-ensure:
+	@test -f $(WEB_DIR)/.env || { cp $(WEB_DIR)/.env.example $(WEB_DIR)/.env; echo "[web-env-ensure] created $(WEB_DIR)/.env from .env.example"; }
+
 # postgres-init/01-create-web-db.sql auto-creates decepticon_web on fresh
-# volumes. This target only waits for postgres readiness and applies
-# Prisma migrations.
-web-db-ensure:
+# volumes. This target waits for postgres readiness, generates the Prisma
+# client (output: clients/web/src/generated/prisma), and applies migrations.
+web-db-ensure: node-install web-env-ensure
 	@echo "[web-db-ensure] Waiting for PostgreSQL..."
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
 		docker exec decepticon$${DECEPTICON_STACK_NAME:+-$${DECEPTICON_STACK_NAME}}-postgres pg_isready -U decepticon -q 2>/dev/null && break; \
 		sleep 1; \
 	done
+	@cd $(WEB_DIR) && npx prisma generate 2>&1 | tail -1
 	@cd $(WEB_DIR) && npx prisma migrate deploy 2>&1 | tail -1
 
 # ── Benchmark ────────────────────────────────────────────────────

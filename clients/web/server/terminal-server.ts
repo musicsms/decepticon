@@ -222,7 +222,10 @@ wss.on("connection", async (ws: WebSocket, req) => {
 
   let term: pty.IPty;
   try {
-    term = pty.spawn("node", ["--import", "tsx/esm", CLI_PATH], {
+    // Use the full `tsx` loader (CJS + ESM hooks), not `tsx/esm` alone: the
+    // ESM-only hook mis-transforms `require('*.json')` from CJS deps (e.g.
+    // cli-boxes) into ESM, which then fails JSON.parse on Node >= 24.
+    term = pty.spawn("node", ["--import", "tsx", CLI_PATH], {
       name: "xterm-256color",
       cols: 120,
       rows: 30,
