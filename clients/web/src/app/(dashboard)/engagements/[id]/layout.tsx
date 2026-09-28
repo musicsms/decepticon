@@ -63,19 +63,26 @@ export default function EngagementLayout({
         // Seed the observer from the persisted thread so the dashboard attaches
         // to the engagement's real thread on load, not a brand-new empty one.
         // The `langgraph dev` server keeps threads in memory, so a backend
-        // restart leaves a dead threadId here. Validate it first; if it's gone,
-        // clear it so the terminal opens a fresh thread instead of 404-ing.
+        // restart leaves a dead threadId here.
+        //
+        // Only a 404 proves the thread is gone — that is LangGraph answering
+        // "Thread with ID … not found" for an id it does not hold. Anything
+        // else (the proxy's 502 while the backend restarts, a dropped
+        // connection, a timeout) means we could not ask, which is not the same
+        // as an answer: clearing on those cost a live engagement its stored
+        // thread. Keep the link and attach; the observer just fails until the
+        // backend is reachable again.
         if (eng.threadId) {
           const lgUrl = langgraphApiUrl();
-          let alive = true;
+          let gone = false;
           try {
             const res = await fetch(`${lgUrl}/threads/${eng.threadId}/state`);
-            alive = res.ok;
+            gone = res.status === 404;
           } catch {
-            alive = false;
+            gone = false;
           }
           if (cancelled) return;
-          if (alive) {
+          if (!gone) {
             setThreadId(eng.threadId);
           } else {
             fetch(`/api/engagements/${engagementId}`, {
