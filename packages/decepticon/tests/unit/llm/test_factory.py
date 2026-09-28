@@ -268,6 +268,46 @@ class TestLLMFactory:
         factory = LLMFactory(self.proxy, mapping)
         assert factory.get_fallback_models("recon") == []
 
+    def test_fallback_models_keep_thinking_for_reasoning_roles(self):
+        """MID/HIGH roles fall back into DeepSeek's thinking mode: the turn
+        DeepSeek inherits is the one the primary just refused."""
+        from decepticon.llm.factory import _DeepSeekThinkingChatOpenAI
+
+        models = self.factory.get_fallback_models("decepticon")
+        by_name = {m.model_name: m for m in models}
+
+        assert isinstance(by_name["deepseek/deepseek-v4-pro"], _DeepSeekThinkingChatOpenAI)
+
+    def test_fallback_models_disable_thinking_for_low_tier_roles(self):
+        """LOW-tier recon/triage roles run the fallback non-thinking: the
+        inherited history has no reasoning_content to hand back, and those
+        turns are tool execution rather than attack-chain design."""
+        from decepticon.llm.factory import _DeepSeekNonThinkingChatOpenAI
+
+        models = self.factory.get_fallback_models("recon")
+        by_name = {m.model_name: m for m in models}
+
+        assert isinstance(by_name["deepseek/deepseek-v4-flash"], _DeepSeekNonThinkingChatOpenAI)
+
+    def test_unknown_role_falls_back_to_the_default_role_tier(self):
+        from decepticon.llm.factory import _DeepSeekNonThinkingChatOpenAI
+
+        models = self.factory.get_fallback_models("apt", default_role="recon")
+        by_name = {m.model_name: m for m in models}
+
+        assert isinstance(by_name["deepseek/deepseek-v4-flash"], _DeepSeekNonThinkingChatOpenAI)
+
+    def test_primary_deepseek_model_keeps_thinking(self):
+        """Only the fallback path varies — a DeepSeek primary owns the whole
+        conversation and round-trips reasoning_content itself."""
+        from decepticon.llm.factory import _DeepSeekThinkingChatOpenAI
+
+        creds = Credentials(methods=[AuthMethod.DEEPSEEK_API])
+        mapping = LLMModelMapping.from_credentials_and_profile(creds, ModelProfile.ECO)
+        factory = LLMFactory(self.proxy, mapping)
+
+        assert isinstance(factory.get_model("recon"), _DeepSeekThinkingChatOpenAI)
+
     def test_explicit_credentials_param(self):
         # Constructor accepts a Credentials object instead of a full mapping.
         creds = Credentials(methods=[AuthMethod.OPENAI_API])
@@ -1526,3 +1566,126 @@ class TestLLMTimeout:
         with pytest.raises(ValueError, match="greater than 0"):
             asyncio.run(model.ainvoke("hi"))
         assert called is False, "upstream request coroutine must not be created on bad timeout"
+
+
+class TestModelHandoffNotice:
+    """A turn served by a different model than the one before it is a handoff:
+    the incoming model never saw the previous one's reasoning, only its text."""
+
+    @staticmethod
+    def _payload_for(current_model: str, messages: list) -> dict:
+        from unittest.mock import patch
+
+        from decepticon.llm.factory import _ProxiedChatOpenAI
+
+        upstream = {
+            "model": current_model,
+            "messages": [
+                {"role": "system", "content": "you are decepticon"},
+                {"role": "user", "content": "continue the engagement"},
+            ],
+        }
+        with patch.object(
+            _ProxiedChatOpenAI.__bases__[0],
+            "_get_request_payload",
+            return_value=upstream,
+        ):
+            instance = object.__new__(_ProxiedChatOpenAI)
+            object.__setattr__(instance, "model_name", current_model)
+            return instance._get_request_payload(messages)
+
+    @staticmethod
+    def _assistant(model: str) -> object:
+        from langchain_core.messages import AIMessage
+
+        return AIMessage(content="prior work", response_metadata={"model_name": model})
+
+    def test_notice_added_when_provider_changes(self, monkeypatch) -> None:
+        monkeypatch.delenv("DECEPTICON_LLM_HANDOFF_NOTICE", raising=False)
+
+        payload = self._payload_for(
+            "deepseek/deepseek-v4-pro", [self._assistant("auth/claude-opus-4-8")]
+        )
+
+        system = payload["messages"][0]
+        assert "auth/claude-opus-4-8" in system["content"]
+        assert "deepseek/deepseek-v4-pro" in system["content"]
+        # Attached to the existing system turn — the message shape must not
+        # grow, or Anthropic routes reject a system turn mid-conversation.
+        assert len(payload["messages"]) == 2
+        assert [m["role"] for m in payload["messages"]] == ["system", "user"]
+
+    def test_no_notice_for_same_model_reached_differently(self, monkeypatch) -> None:
+        monkeypatch.delenv("DECEPTICON_LLM_HANDOFF_NOTICE", raising=False)
+
+        payload = self._payload_for(
+            "auth/claude-opus-4-8", [self._assistant("anthropic/claude-opus-4-8")]
+        )
+
+        assert "model handoff" not in payload["messages"][0]["content"]
+
+    def test_no_notice_without_recorded_served_model(self, monkeypatch) -> None:
+        """A thread checkpointed before attribution existed carries no model
+        metadata — silence beats guessing."""
+        monkeypatch.delenv("DECEPTICON_LLM_HANDOFF_NOTICE", raising=False)
+
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        payload = self._payload_for(
+            "deepseek/deepseek-v4-pro",
+            [HumanMessage(content="hi"), AIMessage(content="prior work")],
+        )
+
+        assert "model handoff" not in payload["messages"][0]["content"]
+
+    def test_no_notice_on_first_turn(self, monkeypatch) -> None:
+        monkeypatch.delenv("DECEPTICON_LLM_HANDOFF_NOTICE", raising=False)
+
+        from langchain_core.messages import HumanMessage
+
+        payload = self._payload_for("deepseek/deepseek-v4-pro", [HumanMessage(content="hi")])
+
+        assert "model handoff" not in payload["messages"][0]["content"]
+
+    def test_notice_can_be_disabled(self, monkeypatch) -> None:
+        monkeypatch.setenv("DECEPTICON_LLM_HANDOFF_NOTICE", "0")
+
+        payload = self._payload_for(
+            "deepseek/deepseek-v4-pro", [self._assistant("auth/claude-opus-4-8")]
+        )
+
+        assert "model handoff" not in payload["messages"][0]["content"]
+
+    def test_invalid_switch_fails_loudly(self, monkeypatch) -> None:
+        monkeypatch.setenv("DECEPTICON_LLM_HANDOFF_NOTICE", "maybe")
+
+        with pytest.raises(ValueError, match="must be a boolean"):
+            self._payload_for("deepseek/deepseek-v4-pro", [self._assistant("auth/claude-opus-4-8")])
+
+    def test_structured_system_content_gets_a_text_part(self, monkeypatch) -> None:
+        """Some routes serialize the system prompt as content blocks."""
+        monkeypatch.delenv("DECEPTICON_LLM_HANDOFF_NOTICE", raising=False)
+
+        from unittest.mock import patch
+
+        from decepticon.llm.factory import _ProxiedChatOpenAI
+
+        upstream = {
+            "model": "deepseek/deepseek-v4-pro",
+            "messages": [
+                {"role": "system", "content": [{"type": "text", "text": "sys"}]},
+                {"role": "user", "content": "go"},
+            ],
+        }
+        with patch.object(
+            _ProxiedChatOpenAI.__bases__[0],
+            "_get_request_payload",
+            return_value=upstream,
+        ):
+            instance = object.__new__(_ProxiedChatOpenAI)
+            object.__setattr__(instance, "model_name", "deepseek/deepseek-v4-pro")
+            payload = instance._get_request_payload([self._assistant("auth/claude-opus-4-8")])
+
+        blocks = payload["messages"][0]["content"]
+        assert blocks[0] == {"type": "text", "text": "sys"}
+        assert "model handoff" in blocks[-1]["text"]

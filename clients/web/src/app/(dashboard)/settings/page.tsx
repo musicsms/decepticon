@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { langgraphApiUrl } from "@/lib/langgraph-url";
 import { Badge } from "@/components/ui/badge";
 import {
   Activity,
@@ -219,7 +220,7 @@ export default function SettingsPage() {
           <div className="space-y-2 text-sm">
             {[
               ["Edition", "Open Source (OSS)"],
-              ["LangGraph API (internal)", process.env.NEXT_PUBLIC_LANGGRAPH_API_URL ?? "http://localhost:2024"],
+              ["LangGraph API (browser)", langgraphApiUrl()],
               ["Model Profile", "eco (per-agent tier)"],
               ["C2 Framework", "Sliver"],
             ].map(([label, value]) => (

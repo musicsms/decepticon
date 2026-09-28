@@ -440,6 +440,33 @@ class ClaudeCodeCustomHandler(CustomLLM):
         for msg in messages:
             role = msg.get("role")
 
+            # Drop empty assistant turns (no text, no tool_use). A zero-output
+            # completion can get persisted into the thread as an assistant
+            # message with empty content; Anthropic then sees an empty assistant
+            # turn in the history and replies empty again, poisoning every
+            # subsequent turn on that thread. Skipping them lets a poisoned
+            # thread self-heal and breaks the empty→empty loop.
+            if role == "assistant" and not msg.get("tool_calls"):
+                c = msg.get("content")
+                if isinstance(c, str):
+                    meaningful = bool(c.strip())
+                elif isinstance(c, list):
+                    meaningful = any(
+                        (
+                            isinstance(b, dict)
+                            and (
+                                (b.get("type") == "text" and str(b.get("text", "")).strip())
+                                or b.get("type") == "tool_use"
+                            )
+                        )
+                        or (isinstance(b, str) and b.strip())
+                        for b in c
+                    )
+                else:
+                    meaningful = bool(c)
+                if not meaningful:
+                    continue
+
             if role == "system":
                 content = msg["content"]
                 if isinstance(content, str):
@@ -553,6 +580,29 @@ class ClaudeCodeCustomHandler(CustomLLM):
                 # Anthropic doesn't support "name" field on any message
                 cleaned_msg = {k: v for k, v in msg.items() if k != "name"}
                 api_messages.append(cleaned_msg)
+
+        # Merge consecutive same-role messages. Dropping empty assistant turns
+        # above can leave two user messages adjacent (e.g. a tool_result user
+        # message followed by a real user message), which Anthropic rejects —
+        # roles must alternate. Concatenate their content blocks instead.
+        def _as_blocks(c: Any) -> list[dict[str, Any]]:
+            if isinstance(c, list):
+                return [
+                    b if isinstance(b, dict) else {"type": "text", "text": str(b)}
+                    for b in c
+                ]
+            return [{"type": "text", "text": str(c)}]
+
+        merged_messages: list[dict[str, Any]] = []
+        for m in api_messages:
+            if merged_messages and merged_messages[-1].get("role") == m.get("role"):
+                prev = merged_messages[-1]
+                prev["content"] = _as_blocks(prev.get("content")) + _as_blocks(
+                    m.get("content")
+                )
+            else:
+                merged_messages.append(dict(m))
+        api_messages = merged_messages
 
         # Build Anthropic Messages API request body
         opts = optional_params or {}
@@ -751,6 +801,21 @@ class ClaudeCodeCustomHandler(CustomLLM):
                         },
                     }
                 )
+
+        # A provider refusal (empty content + stop_reason "refusal") is raised as
+        # a content-policy error so LiteLLM's content_policy_fallbacks and the
+        # agent's ModelFallbackMiddleware route the turn to a provider not
+        # subject to this safeguard (e.g. DeepSeek) instead of ending on a blank
+        # turn. If every fallback also declines, the error surfaces normally.
+        if not response_text and not tool_calls and data.get("stop_reason") == "refusal":
+            _sd = data.get("stop_details") or {}
+            raise litellm.ContentPolicyViolationError(
+                message=_format_refusal(
+                    _sd.get("explanation") if isinstance(_sd, dict) else None
+                ),
+                model=actual_model,
+                llm_provider="auth",
+            )
 
         # Build message dict
         message: dict[str, Any] = {"role": "assistant"}
@@ -983,7 +1048,7 @@ class ClaudeCodeCustomHandler(CustomLLM):
                         resp.read()
                         continue
                     _raise_for_stream_status(resp, model)
-                    yield from _anthropic_sse_to_chunks(resp.iter_lines())
+                    yield from _anthropic_sse_to_chunks(resp.iter_lines(), model)
                     return
 
     async def astreaming(
@@ -1023,7 +1088,7 @@ class ClaudeCodeCustomHandler(CustomLLM):
                     await _araise_for_stream_status(resp, model)
                     # The SSE parser is a pure sync generator over decoded lines;
                     # drive it by feeding one line at a time so nothing buffers.
-                    feed = _AnthropicSseAccumulator()
+                    feed = _AnthropicSseAccumulator(model)
                     async for line in resp.aiter_lines():
                         for chunk in feed.push(line):
                             yield chunk
@@ -1086,7 +1151,8 @@ class _AnthropicSseAccumulator:
     LiteLLM's stream wrapper sees one contract from both paths.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, model: str = "auth") -> None:
+        self._model = model
         self._usage: dict[str, Any] = {
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -1098,6 +1164,11 @@ class _AnthropicSseAccumulator:
         self._tool_count = 0
         self._stop_reason = ""
         self._finished = False
+        # Track whether any assistant text streamed, and any refusal detail, so
+        # a provider refusal (empty content + stop_reason "refusal") surfaces as
+        # visible text instead of a silent blank turn that ends the agent loop.
+        self._text_emitted = False
+        self._refusal_explanation = ""
 
     def push(self, line: str) -> list[dict[str, Any]]:
         line = line.strip()
@@ -1144,13 +1215,31 @@ class _AnthropicSseAccumulator:
             return self._on_block_stop(int(event.get("index", 0)))
 
         if kind == "message_delta":
-            stop = (event.get("delta") or {}).get("stop_reason")
+            delta = event.get("delta") or {}
+            stop = delta.get("stop_reason")
             if isinstance(stop, str):
                 self._stop_reason = stop
+            details = delta.get("stop_details")
+            if isinstance(details, dict) and details.get("type") == "refusal":
+                self._refusal_explanation = str(details.get("explanation") or "")
             self._absorb_usage(event.get("usage"))
             return []
 
         if kind == "message_stop":
+            # A refusal with no streamed text/tool_use is raised as a
+            # content-policy error so the fallback layer can retry on a provider
+            # not subject to this safeguard (e.g. DeepSeek). No content streamed
+            # before this point, so the retry starts from a clean turn.
+            if (
+                self._stop_reason == "refusal"
+                and not self._text_emitted
+                and not self._tool_count
+            ):
+                raise litellm.ContentPolicyViolationError(
+                    message=_format_refusal(self._refusal_explanation),
+                    model=self._model,
+                    llm_provider="auth",
+                )
             self._finished = True
             return [self._final_chunk()]
 
@@ -1164,6 +1253,7 @@ class _AnthropicSseAccumulator:
             text = delta.get("text")
             if not isinstance(text, str) or not text:
                 return []
+            self._text_emitted = True
             return [
                 {
                     "text": text,
@@ -1238,9 +1328,11 @@ class _AnthropicSseAccumulator:
         }
 
 
-def _anthropic_sse_to_chunks(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
+def _anthropic_sse_to_chunks(
+    lines: Iterable[str], model: str = "auth"
+) -> Iterator[dict[str, Any]]:
     """Drive :class:`_AnthropicSseAccumulator` over a sync line iterator."""
-    accumulator = _AnthropicSseAccumulator()
+    accumulator = _AnthropicSseAccumulator(model)
     for line in lines:
         yield from accumulator.push(line)
     yield from accumulator.close()
@@ -1253,6 +1345,19 @@ def _map_stop_reason(anthropic_reason: str) -> str:
         "max_tokens": "length",
         "stop_sequence": "stop",
     }.get(anthropic_reason, "stop")
+
+
+def _format_refusal(explanation: str | None) -> str:
+    """Human-readable text for a provider ``stop_reason == "refusal"`` turn.
+
+    Anthropic's real-time safeguards can decline a request and return an empty
+    completion (``content: []``, zero output tokens). Surfacing this as visible
+    assistant text stops the agent loop from silently ending on a blank turn —
+    the operator sees *why* the run stalled instead of a mysterious idle agent.
+    """
+    detail = (explanation or "").strip()
+    base = "⚠️ The model provider's safety system refused to complete this turn."
+    return f"{base}\n\n{detail}" if detail else base
 
 
 # ── Module-level instance ────────────────────────────────────────────

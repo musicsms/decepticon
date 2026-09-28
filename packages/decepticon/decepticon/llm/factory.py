@@ -896,6 +896,103 @@ def auth_inventory() -> AuthInventory:
     )
 
 
+# ── Model handoff notice ─────────────────────────────────────────────
+#
+# Decepticon runs a *chain* of models per role (primary → fallbacks →
+# LiteLLM content-policy hop). Whichever model answers, it only sees the
+# text the previous one left behind: reasoning traces never cross a
+# provider boundary (DeepSeek's ``reasoning_content`` is dropped by
+# LangChain, Claude's extended thinking is regenerated per call). A turn
+# served by a different model than the one before it is therefore a
+# handoff, and the incoming model needs its bearings back — the engagement
+# notes on disk plus an explicit restatement of the plan.
+
+HANDOFF_NOTICE_ENV = "DECEPTICON_LLM_HANDOFF_NOTICE"
+
+
+def _resolve_handoff_notice() -> bool:
+    """Whether to inject the model-handoff notice (default: on).
+
+    Raises on a non-boolean value: a typo'd opt-out that silently keeps the
+    notice would be worse than a loud failure at first request.
+    """
+    raw = os.getenv(HANDOFF_NOTICE_ENV, "").strip().lower()
+    if not raw or raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{HANDOFF_NOTICE_ENV} must be a boolean")
+
+
+def _model_slug(model: str) -> str:
+    """Last path segment of a model id, lowercased.
+
+    ``auth/claude-opus-4-8`` and ``anthropic/claude-opus-4-8`` are the same
+    underlying model reached two ways, so the notice must not fire between
+    them; equally, ``deepseek/deepseek-v4-pro`` and ``deepseek-v4-flash``
+    must not be mistaken for each other.
+    """
+    return model.rsplit("/", 1)[-1].lower()
+
+
+def _same_model(left: str, right: str) -> bool:
+    return left == right or _model_slug(left) == _model_slug(right)
+
+
+def _last_served_model(messages: list[Any]) -> str | None:
+    """Model that produced the most recent assistant turn, if recorded.
+
+    LiteLLM reports the served model as ``model_name`` inside the response
+    metadata LangChain attaches to every ``AIMessage`` (the same field
+    ``_log_served_model`` reads for attribution). Messages that predate this
+    mechanism — or that a tool synthesized — carry nothing, so we walk back
+    to the newest turn that does.
+    """
+    for message in reversed(messages):
+        if not isinstance(message, AIMessage):
+            continue
+        metadata = getattr(message, "response_metadata", None) or {}
+        served = metadata.get("model_name") or metadata.get("model")
+        if served:
+            return str(served)
+    return None
+
+
+def _handoff_notice(current_model: str, served_model: str) -> str:
+    return (
+        "[model handoff] The most recent assistant turn was produced by "
+        f"{served_model}, not by you ({current_model}), so you did not see how "
+        "it reached its conclusions — only the messages it left behind. Before "
+        "acting: re-read the engagement notes on disk (plan/, recon/SUMMARY.md, "
+        "findings/) and restate your next step and the reason for it in your "
+        "visible reply, so the plan outlives the next handoff."
+    )
+
+
+def _append_handoff_notice(payload: dict, notice: str) -> None:
+    """Attach ``notice`` to the leading system message of an outbound payload.
+
+    It goes on the system message rather than as an extra one so the
+    conversation keeps its system/user/assistant shape — Anthropic-backed
+    routes reject a system turn in the middle of the message list.
+    """
+    messages = payload.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return
+    for message in messages:
+        if message.get("role") not in ("system", "developer"):
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            message["content"] = f"{content}\n\n{notice}"
+        elif isinstance(content, list):
+            content.append({"type": "text", "text": notice})
+        else:
+            continue
+        return
+    messages.insert(0, {"role": "system", "content": notice})
+
+
 class _ProxiedChatOpenAI(ChatOpenAI):
     """Translate opaque transport/upstream errors into actionable RuntimeError
     messages so LangGraph's serde surfaces something the user can fix instead
@@ -923,6 +1020,34 @@ class _ProxiedChatOpenAI(ChatOpenAI):
             raise
         _log_served_model(self.model_name, result)
         return result
+
+    def _get_request_payload(
+        self,
+        input_: Any,
+        *,
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict:
+        """Inject a handoff notice when another model wrote the last turn.
+
+        LiteLLM answers with the model it *actually* served in
+        ``response_metadata["model_name"]``, so every AIMessage records who
+        produced it — including the ones a fallback or a
+        ``content_policy_fallbacks`` hop produced. When that differs from
+        the model about to run, the conversation has changed hands and the
+        private reasoning of the previous turn is gone for good (only
+        ``content`` survives a provider switch). The notice tells the model
+        to re-anchor on the engagement notes on disk and to state its plan
+        in visible text, which is the only channel that survives the *next*
+        handoff.
+        """
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        if not _resolve_handoff_notice() or not isinstance(input_, list):
+            return payload
+        served = _last_served_model(input_)
+        if served and not _same_model(served, self.model_name):
+            _append_handoff_notice(payload, _handoff_notice(self.model_name, served))
+        return payload
 
     async def ainvoke(self, *args, **kwargs):
         # Resolve the timeout *before* creating the request coroutine. A
@@ -1010,6 +1135,27 @@ def _model_is_deepseek_thinking(model: str) -> bool:
     """
     slug = model.rsplit("/", 1)[-1].lower()
     return slug in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-reasoner")
+
+
+def _fallback_keeps_deepseek_thinking(role: str, default_role: str | None) -> bool:
+    """Whether a fallback turn for ``role`` may run DeepSeek in thinking mode.
+
+    ``AGENT_TIERS`` already draws the line we want: LOW roles are
+    "high-throughput, low reasoning depth" recon/triage work, where a
+    fallback turn is tool execution rather than attack-chain design — and
+    where non-thinking also removes the reasoning_content round-trip the
+    inherited history can never satisfy. MID/HIGH roles keep thinking: those
+    are the turns the provider refusal (and therefore the handoff) lands on,
+    and reasoning depth is the whole point of paying for them.
+
+    Unknown roles — plugin-shipped ones outside ``AGENT_TIERS`` — resolve
+    through ``default_role``, then default to thinking: erring towards the
+    richer model on an unfamiliar role is the safer mistake.
+    """
+    tier = AGENT_TIERS.get(role)
+    if tier is None and default_role:
+        tier = AGENT_TIERS.get(default_role)
+    return (tier or Tier.HIGH) is not Tier.LOW
 
 
 def _model_is_nvidia_nim(model: str) -> bool:
@@ -1186,6 +1332,43 @@ class _DeepSeekThinkingChatOpenAI(_ProxiedChatOpenAI):
                 msg.additional_kwargs["reasoning_content"] = rc
 
         return result
+
+
+class _DeepSeekNonThinkingChatOpenAI(_ProxiedChatOpenAI):
+    """DeepSeek V4 with thinking explicitly **off** — for handoff turns.
+
+    DeepSeek requires every prior assistant turn to hand back its
+    ``reasoning_content`` while thinking mode is active. That holds for a
+    history this client built itself (``_DeepSeekThinkingChatOpenAI``), but
+    not for one that arrived from another provider: Claude's turns carry no
+    reasoning trace, so thinking mode makes LiteLLM inject a one-space
+    placeholder into each of them and log "assistant message is missing
+    `reasoning_content`" once per turn, while the model reasons against
+    blank chains anyway.
+
+    Disabling thinking removes the requirement instead of papering over it.
+    The flag has to travel in ``extra_body``: LiteLLM's DeepSeek param
+    mapping only recognises ``thinking={"type": "enabled"}`` and drops every
+    other value, and ``reasoning_effort="none"`` is not forwarded upstream
+    either. Verified against api.deepseek.com — the response carries neither
+    ``reasoning_content`` nor reasoning tokens.
+    """
+
+    def _get_request_payload(
+        self,
+        input_: Any,
+        *,
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict:
+        payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+        extra_body = payload.get("extra_body") or {}
+        extra_body["thinking"] = {"type": "disabled"}
+        payload["extra_body"] = extra_body
+        # Any reasoning_effort but "none" maps back onto thinking enabled, so
+        # drop it: the explicit flag above is the only lever that sticks.
+        payload.pop("reasoning_effort", None)
+        return payload
 
 
 class _NvidiaNIMChatOpenAI(_ProxiedChatOpenAI):
@@ -1704,10 +1887,20 @@ class LLMFactory:
             assignment.fallbacks,
         )
         return [
-            self._create_chat_model(model, assignment.temperature) for model in assignment.fallbacks
+            # thinking only ever changes DeepSeek routes: LOW-tier roles run
+            # the fallback non-thinking, everyone else keeps the reasoning
+            # depth (see _fallback_keeps_deepseek_thinking).
+            self._create_chat_model(
+                model,
+                assignment.temperature,
+                thinking=_fallback_keeps_deepseek_thinking(role, default_role),
+            )
+            for model in assignment.fallbacks
         ]
 
-    def _create_chat_model(self, model: str, temperature: float) -> BaseChatModel:
+    def _create_chat_model(
+        self, model: str, temperature: float, *, thinking: bool = True
+    ) -> BaseChatModel:
         """Create a proxied ChatOpenAI instance routed through LiteLLM proxy.
 
         Claude Opus 4.7+ rejects ``temperature`` with a 400 invalid_request
@@ -1723,6 +1916,11 @@ class LLMFactory:
         ``additional_drop_params`` (config/litellm.yaml) — that's the
         belt-and-suspenders for any future client that bypasses this
         factory.
+
+        ``thinking`` only affects DeepSeek routes and is decided by the
+        caller: ``get_model`` keeps thinking on (this client owns the whole
+        conversation and round-trips ``reasoning_content``), while
+        ``get_fallback_models`` turns it off for LOW-tier roles.
         """
         disable_streaming = _resolve_disable_streaming()
         extra_headers = _resolve_extra_headers()
@@ -1764,7 +1962,9 @@ class LLMFactory:
         else:
             kwargs["temperature"] = temperature
         if _model_is_deepseek_thinking(model):
-            return _DeepSeekThinkingChatOpenAI(**kwargs)
+            if thinking:
+                return _DeepSeekThinkingChatOpenAI(**kwargs)
+            return _DeepSeekNonThinkingChatOpenAI(**kwargs)
         if _model_is_nvidia_nim(model):
             return _NvidiaNIMChatOpenAI(**kwargs)
         return _ProxiedChatOpenAI(**kwargs)

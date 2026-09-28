@@ -17,7 +17,20 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 
-const TERMINAL_WS_URL = process.env.NEXT_PUBLIC_TERMINAL_WS_URL ?? "ws://localhost:3003";
+// The PTY server runs as its own process on its own port, so it cannot be
+// reached through this app's origin — a WebSocket upgrade needs a proxy that
+// Next's route handlers cannot provide. Derive the host from the page instead
+// of hardcoding localhost: same-machine dev is unchanged, and a remote browser
+// (tailnet, tunnel) reaches the server on the host it is actually talking to.
+// TERMINAL_ALLOWED_ORIGINS on that server still gates who may connect.
+function terminalWsUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_TERMINAL_WS_URL;
+  if (explicit) return explicit;
+  const port = process.env.NEXT_PUBLIC_TERMINAL_PORT ?? "3003";
+  if (typeof window === "undefined") return `ws://localhost:${port}`;
+  const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${scheme}//${window.location.hostname}:${port}`;
+}
 const MAX_RECONNECT_DELAY = 4000;
 const INITIAL_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_ATTEMPTS = 15;
@@ -99,6 +112,34 @@ export function WebTerminal({
   const retryListenerRef = useRef<{ dispose: () => void } | null>(null);
   // Track the main onData listener so we can dispose it on reconnect
   const onDataDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  // ── xterm write flow control ──
+  // xterm throws "write data discarded, use flow control to avoid losing data"
+  // when data is pushed into term.write() faster than its VT parser drains it —
+  // e.g. a large scrollback replay on reattach or a burst of CLI output. Queue
+  // inbound chunks and release the next only after xterm's write callback fires,
+  // so its internal buffer holds at most one chunk and never overflows.
+  const writeQueueRef = useRef<string[]>([]);
+  const writingRef = useRef(false);
+
+  // Feed queued output into xterm one chunk at a time, waiting for the parse
+  // callback before releasing the next. This is xterm's recommended flow-control
+  // pattern; our own JS array absorbs the backlog instead of xterm's buffer.
+  const enqueueWrite = useCallback((data: string) => {
+    if (!data) return;
+    writeQueueRef.current.push(data);
+    if (writingRef.current) return;
+    writingRef.current = true;
+    const pump = () => {
+      const term = termRef.current;
+      const chunk = writeQueueRef.current.shift();
+      if (!term || chunk === undefined) {
+        writingRef.current = false;
+        return;
+      }
+      term.write(chunk, pump);
+    };
+    pump();
+  }, []);
 
   const cleanup = useCallback(() => {
     disposedRef.current = true;
@@ -108,6 +149,8 @@ export function WebTerminal({
     retryListenerRef.current = null;
     onDataDisposableRef.current?.dispose();
     onDataDisposableRef.current = null;
+    writeQueueRef.current = [];
+    writingRef.current = false;
     resizeObserverRef.current?.disconnect();
     wsRef.current?.close();
     termRef.current?.dispose();
@@ -139,7 +182,7 @@ export function WebTerminal({
     const authorizationConfirmed = authorizationConfirmedRef.current;
 
     let wsUrl =
-      `${TERMINAL_WS_URL}?engagementId=${encodeURIComponent(eid)}` +
+      `${terminalWsUrl()}?engagementId=${encodeURIComponent(eid)}` +
       `&engagementSlug=${encodeURIComponent(slug)}` +
       `&agentId=${encodeURIComponent(aid)}` +
       `&targetType=${encodeURIComponent(targetType)}` +
@@ -178,6 +221,8 @@ export function WebTerminal({
           if (msg.type === "reattached") {
             // Server reattached us to an existing PTY — full reset then
             // scrollback replay arrives as raw text right after this message.
+            // Drop any stale queued output so the replay starts from a clean slate.
+            writeQueueRef.current = [];
             term.reset();
             return;
           }
@@ -185,7 +230,7 @@ export function WebTerminal({
           // Not valid JSON — pass through as terminal output
         }
       }
-      term.write(sanitizeTermBytes(data));
+      enqueueWrite(sanitizeTermBytes(data));
     };
 
     ws.onclose = (ev) => {

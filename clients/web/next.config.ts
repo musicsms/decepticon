@@ -1,8 +1,27 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+// Remote dev access — a tailnet host, a tunnel, an IP — needs the hostname the
+// browser actually uses in two places: `allowedDevOrigins`, so the dev server
+// serves its own chunks instead of 403-ing them (Next blocks cross-origin
+// requests to dev assets by default), and `connect-src`, so the page may open
+// the LangGraph and terminal sockets there. Entries are bare hostnames: the
+// Origin match ignores scheme and port. Empty by default, which keeps the
+// local-only behaviour. Set in clients/web/.env, e.g.
+//   DECEPTICON_DEV_ORIGINS="100.82.166.88,kali.example.ts.net"
+const devOrigins = (process.env.DECEPTICON_DEV_ORIGINS ?? "")
+  .split(",")
+  .map((host) => host.trim())
+  .filter(Boolean);
+
+const devConnectSrc = devOrigins.flatMap((host) => [
+  `http://${host}:*`,
+  `ws://${host}:*`,
+]);
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  allowedDevOrigins: devOrigins,
   async headers() {
     return [
       {
@@ -20,7 +39,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' ws://localhost:* http://localhost:*",
+              ["connect-src", "'self'", "ws://localhost:*", "http://localhost:*", ...devConnectSrc].join(" "),
               "frame-ancestors 'none'",
             ].join("; "),
           },
