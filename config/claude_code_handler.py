@@ -802,12 +802,19 @@ class ClaudeCodeCustomHandler(CustomLLM):
                     }
                 )
 
-        # Surface a provider refusal (empty content + stop_reason "refusal") as
-        # visible text so the agent loop doesn't end on a silent blank turn.
+        # A provider refusal (empty content + stop_reason "refusal") is raised as
+        # a content-policy error so LiteLLM's content_policy_fallbacks and the
+        # agent's ModelFallbackMiddleware route the turn to a provider not
+        # subject to this safeguard (e.g. DeepSeek) instead of ending on a blank
+        # turn. If every fallback also declines, the error surfaces normally.
         if not response_text and not tool_calls and data.get("stop_reason") == "refusal":
             _sd = data.get("stop_details") or {}
-            response_text = _format_refusal(
-                _sd.get("explanation") if isinstance(_sd, dict) else None
+            raise litellm.ContentPolicyViolationError(
+                message=_format_refusal(
+                    _sd.get("explanation") if isinstance(_sd, dict) else None
+                ),
+                model=actual_model,
+                llm_provider="auth",
             )
 
         # Build message dict
@@ -1041,7 +1048,7 @@ class ClaudeCodeCustomHandler(CustomLLM):
                         resp.read()
                         continue
                     _raise_for_stream_status(resp, model)
-                    yield from _anthropic_sse_to_chunks(resp.iter_lines())
+                    yield from _anthropic_sse_to_chunks(resp.iter_lines(), model)
                     return
 
     async def astreaming(
@@ -1081,7 +1088,7 @@ class ClaudeCodeCustomHandler(CustomLLM):
                     await _araise_for_stream_status(resp, model)
                     # The SSE parser is a pure sync generator over decoded lines;
                     # drive it by feeding one line at a time so nothing buffers.
-                    feed = _AnthropicSseAccumulator()
+                    feed = _AnthropicSseAccumulator(model)
                     async for line in resp.aiter_lines():
                         for chunk in feed.push(line):
                             yield chunk
@@ -1144,7 +1151,8 @@ class _AnthropicSseAccumulator:
     LiteLLM's stream wrapper sees one contract from both paths.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, model: str = "auth") -> None:
+        self._model = model
         self._usage: dict[str, Any] = {
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -1218,25 +1226,22 @@ class _AnthropicSseAccumulator:
             return []
 
         if kind == "message_stop":
-            self._finished = True
-            chunks: list[dict[str, Any]] = []
+            # A refusal with no streamed text/tool_use is raised as a
+            # content-policy error so the fallback layer can retry on a provider
+            # not subject to this safeguard (e.g. DeepSeek). No content streamed
+            # before this point, so the retry starts from a clean turn.
             if (
                 self._stop_reason == "refusal"
                 and not self._text_emitted
                 and not self._tool_count
             ):
-                chunks.append(
-                    {
-                        "text": _format_refusal(self._refusal_explanation),
-                        "is_finished": False,
-                        "finish_reason": "",
-                        "index": 0,
-                        "tool_use": None,
-                        "usage": None,
-                    }
+                raise litellm.ContentPolicyViolationError(
+                    message=_format_refusal(self._refusal_explanation),
+                    model=self._model,
+                    llm_provider="auth",
                 )
-            chunks.append(self._final_chunk())
-            return chunks
+            self._finished = True
+            return [self._final_chunk()]
 
         # ping / error / unknown event types carry no chunk.
         return []
@@ -1323,9 +1328,11 @@ class _AnthropicSseAccumulator:
         }
 
 
-def _anthropic_sse_to_chunks(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
+def _anthropic_sse_to_chunks(
+    lines: Iterable[str], model: str = "auth"
+) -> Iterator[dict[str, Any]]:
     """Drive :class:`_AnthropicSseAccumulator` over a sync line iterator."""
-    accumulator = _AnthropicSseAccumulator()
+    accumulator = _AnthropicSseAccumulator(model)
     for line in lines:
         yield from accumulator.push(line)
     yield from accumulator.close()

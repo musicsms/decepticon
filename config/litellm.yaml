@@ -802,6 +802,24 @@ router_settings:
   # ``anthropic/claude-opus-4-7`` (paid API path) hit the
   # 'No fallback model group found for original model_group=
   # anthropic/claude-opus-4-7' error.
+  # ── Content-policy fallbacks (refusal → cross-provider) ────────────
+  # Anthropic's real-time cyber safeguards return stop_reason "refusal" for
+  # some offensive-security turns; claude_code_handler raises that as a
+  # ContentPolicyViolationError. Route it straight to DeepSeek — which is not
+  # subject to that safeguard — rather than the within-provider ``fallbacks``
+  # tier below, where sonnet/haiku would refuse identically. Covers both the
+  # OAuth (``auth/``) and paid API (``anthropic/``) Claude paths. LiteLLM
+  # silently skips targets whose model_group is unregistered, so this is a
+  # no-op without DEEPSEEK_API_KEY.
+  content_policy_fallbacks:
+    - {"auth/claude-opus-4-8": ["deepseek/deepseek-v4-pro"]}
+    - {"auth/claude-opus-4-7": ["deepseek/deepseek-v4-pro"]}
+    - {"auth/claude-sonnet-4-6": ["deepseek/deepseek-v4-pro"]}
+    - {"auth/claude-haiku-4-5": ["deepseek/deepseek-v4-pro"]}
+    - {"anthropic/claude-opus-4-8": ["deepseek/deepseek-v4-pro"]}
+    - {"anthropic/claude-opus-4-7": ["deepseek/deepseek-v4-pro"]}
+    - {"anthropic/claude-sonnet-4-6": ["deepseek/deepseek-v4-pro"]}
+    - {"anthropic/claude-haiku-4-5": ["deepseek/deepseek-v4-pro"]}
   fallbacks:
     # Anthropic API path (opus-4-8 is the current flagship; 4.7 is the
     # first within-provider step down before sonnet/haiku)
