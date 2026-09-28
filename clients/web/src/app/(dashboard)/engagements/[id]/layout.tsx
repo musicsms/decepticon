@@ -6,6 +6,7 @@ import { EngagementProvider } from "@/lib/engagement-context";
 import { useRunObserver } from "@/hooks/useRunObserver";
 import { WebTerminal } from "@/components/terminal/web-terminal";
 import { cn } from "@/lib/utils";
+import { langgraphApiUrl } from "@/lib/langgraph-url";
 
 const REQUIRED_PLAN_DOCS = ["roe", "conops", "deconfliction"] as const;
 
@@ -65,8 +66,7 @@ export default function EngagementLayout({
         // restart leaves a dead threadId here. Validate it first; if it's gone,
         // clear it so the terminal opens a fresh thread instead of 404-ing.
         if (eng.threadId) {
-          const lgUrl =
-            process.env.NEXT_PUBLIC_LANGGRAPH_API_URL ?? "http://localhost:2024";
+          const lgUrl = langgraphApiUrl();
           let alive = true;
           try {
             const res = await fetch(`${lgUrl}/threads/${eng.threadId}/state`);

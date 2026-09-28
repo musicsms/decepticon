@@ -19,6 +19,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Client } from "@langchain/langgraph-sdk";
 import { type SubagentCustomEvent, STREAM_OPTIONS } from "@decepticon/streaming";
+import { langgraphApiUrl } from "@/lib/langgraph-url";
 
 const POLL_INTERVAL = 2000;
 
@@ -40,9 +41,7 @@ export function useRunObserver({ threadId }: UseRunObserverOptions): UseRunObser
   const [isRunning, setIsRunning] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
-  const apiUrl = typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_LANGGRAPH_API_URL ?? "http://localhost:2024")
-    : (process.env.LANGGRAPH_API_URL ?? "http://localhost:2024");
+  const apiUrl = langgraphApiUrl();
 
   const clientRef = useRef(new Client({ apiUrl }));
   const observingRunRef = useRef<string | null>(null);

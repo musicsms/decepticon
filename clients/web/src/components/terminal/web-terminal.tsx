@@ -17,7 +17,20 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 
-const TERMINAL_WS_URL = process.env.NEXT_PUBLIC_TERMINAL_WS_URL ?? "ws://localhost:3003";
+// The PTY server runs as its own process on its own port, so it cannot be
+// reached through this app's origin — a WebSocket upgrade needs a proxy that
+// Next's route handlers cannot provide. Derive the host from the page instead
+// of hardcoding localhost: same-machine dev is unchanged, and a remote browser
+// (tailnet, tunnel) reaches the server on the host it is actually talking to.
+// TERMINAL_ALLOWED_ORIGINS on that server still gates who may connect.
+function terminalWsUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_TERMINAL_WS_URL;
+  if (explicit) return explicit;
+  const port = process.env.NEXT_PUBLIC_TERMINAL_PORT ?? "3003";
+  if (typeof window === "undefined") return `ws://localhost:${port}`;
+  const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${scheme}//${window.location.hostname}:${port}`;
+}
 const MAX_RECONNECT_DELAY = 4000;
 const INITIAL_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_ATTEMPTS = 15;
@@ -169,7 +182,7 @@ export function WebTerminal({
     const authorizationConfirmed = authorizationConfirmedRef.current;
 
     let wsUrl =
-      `${TERMINAL_WS_URL}?engagementId=${encodeURIComponent(eid)}` +
+      `${terminalWsUrl()}?engagementId=${encodeURIComponent(eid)}` +
       `&engagementSlug=${encodeURIComponent(slug)}` +
       `&agentId=${encodeURIComponent(aid)}` +
       `&targetType=${encodeURIComponent(targetType)}` +
