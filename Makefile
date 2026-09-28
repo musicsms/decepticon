@@ -375,7 +375,7 @@ node-install:
 	stamp=node_modules/.node-abi; \
 	if [ ! -d node_modules ] || [ "$$(cat $$stamp 2>/dev/null)" != "$$abi" ]; then \
 	  echo "[node-install] Node $$(node -v) (ABI $$abi) — installing deps + rebuilding native addons..."; \
-	  npm install && printf '%s\n' "$$abi" > $$stamp; \
+	  npm install && npm rebuild && printf '%s\n' "$$abi" > $$stamp; \
 	else \
 	  echo "[node-install] deps up to date for Node $$(node -v) (ABI $$abi)"; \
 	fi
