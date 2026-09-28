@@ -202,7 +202,10 @@ web-dev: infra web-db-ensure node-install
 	npm run build --workspace=@decepticon/streaming
 	@$(COMPOSE_WATCH) watch --no-up --quiet langgraph &
 	@echo "[web-dev] Starting terminal server (ws://localhost:3003)..."
-	@cd $(WEB_DIR) && npx tsx server/terminal-server.ts &
+	# Next loads $(WEB_DIR)/.env itself; this PTY server does not, so anything
+	# set there for remote access (TERMINAL_ALLOWED_ORIGINS, TERMINAL_PORT)
+	# would be ignored.
+	@cd $(WEB_DIR) && { set -a; [ -f .env ] && . ./.env; set +a; exec npx tsx server/terminal-server.ts; } &
 	@echo "[web-dev] Starting Next.js dev server (http://localhost:3000)..."
 	cd $(WEB_DIR) && npm run dev
 

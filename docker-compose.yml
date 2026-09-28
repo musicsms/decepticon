@@ -371,7 +371,11 @@ services:
         VERSION: ${VERSION:-0.0.0}
     container_name: decepticon${DECEPTICON_STACK_NAME:+-${DECEPTICON_STACK_NAME}}-langgraph
     ports:
-      - "127.0.0.1:${LANGGRAPH_PORT:-2024}:2024"
+      # Bound to loopback by default. Remote UI access (e.g. over a tailnet)
+      # needs the browser to reach LangGraph directly, so set
+      # DECEPTICON_BIND_HOST to that interface's address — never 0.0.0.0,
+      # the API has no authentication of its own.
+      - "${DECEPTICON_BIND_HOST:-127.0.0.1}:${LANGGRAPH_PORT:-2024}:2024"
     env_file: .env
     environment:
       - DECEPTICON_LLM__PROXY_URL=http://litellm:4000
