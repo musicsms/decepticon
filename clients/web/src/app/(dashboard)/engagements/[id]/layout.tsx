@@ -110,15 +110,23 @@ export default function EngagementLayout({
     if (!isRunning || statusPatchedRef.current) return;
     if (!engagement || engagement.status !== "draft") return;
     statusPatchedRef.current = true;
-    setEngagement((prev) => (prev ? { ...prev, status: "running" } : prev));
     fetch(`/api/engagements/${engagementId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "running" }),
-    }).catch((err) => {
-      console.error("[EngagementLayout] Failed to advance status:", err);
-      statusPatchedRef.current = false;
-    });
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`PATCH status failed: ${res.status}`);
+        // Reflect the persisted transition locally only after it lands.
+        setEngagement((prev) => (prev ? { ...prev, status: "running" } : prev));
+      })
+      .catch((err) => {
+        console.error("[EngagementLayout] Failed to advance status:", err);
+        // Keep local status at "draft" and re-arm: an optimistic flip to
+        // "running" here would trip the `status !== "draft"` guard above and
+        // permanently block the retry, leaving the UI ahead of a draft DB row.
+        statusPatchedRef.current = false;
+      });
   }, [isRunning, engagement, engagementId]);
 
   const isLivePath = pathname.endsWith("/live");

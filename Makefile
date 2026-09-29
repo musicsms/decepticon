@@ -32,7 +32,7 @@ WEB_DIR       := clients/web
 # the user's global environment is left untouched. Override if needed:
 #   make web-dev NODE_BIN_DIR=/path/to/node24/bin
 NODE_BIN_DIR ?= /usr/bin
-web-dev cli-dev node-install: export PATH := $(NODE_BIN_DIR):$(PATH)
+web-dev cli-dev node-install web-db-ensure: export PATH := $(NODE_BIN_DIR):$(PATH)
 
 # Dogfood: isolated $DECEPTICON_HOME so the launcher can onboard, write .env,
 # and stand up the stack without touching the user's real ~/.decepticon. The

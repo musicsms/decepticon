@@ -120,6 +120,10 @@ export function WebTerminal({
   // so its internal buffer holds at most one chunk and never overflows.
   const writeQueueRef = useRef<string[]>([]);
   const writingRef = useRef(false);
+  // Bumped whenever the queue is reset (reattach/cleanup). An in-flight pump
+  // captures the epoch it started on and abandons the drain once it changes, so
+  // a write issued before a term.reset() can't keep feeding the reset terminal.
+  const writeEpochRef = useRef(0);
 
   // Feed queued output into xterm one chunk at a time, waiting for the parse
   // callback before releasing the next. This is xterm's recommended flow-control
@@ -129,7 +133,11 @@ export function WebTerminal({
     writeQueueRef.current.push(data);
     if (writingRef.current) return;
     writingRef.current = true;
+    const epoch = writeEpochRef.current;
     const pump = () => {
+      // A reset bumped the epoch — abandon this stale drain. Ownership of
+      // writingRef has already passed to the reset handler / a fresh pump.
+      if (epoch !== writeEpochRef.current) return;
       const term = termRef.current;
       const chunk = writeQueueRef.current.shift();
       if (!term || chunk === undefined) {
@@ -151,6 +159,7 @@ export function WebTerminal({
     onDataDisposableRef.current = null;
     writeQueueRef.current = [];
     writingRef.current = false;
+    writeEpochRef.current++;
     resizeObserverRef.current?.disconnect();
     wsRef.current?.close();
     termRef.current?.dispose();
@@ -221,8 +230,12 @@ export function WebTerminal({
           if (msg.type === "reattached") {
             // Server reattached us to an existing PTY — full reset then
             // scrollback replay arrives as raw text right after this message.
-            // Drop any stale queued output so the replay starts from a clean slate.
+            // Drop stale queued output and retire any in-flight drain (epoch
+            // bump) so the replay starts from a genuinely clean slate; a fresh
+            // pump owns writingRef from here.
             writeQueueRef.current = [];
+            writeEpochRef.current++;
+            writingRef.current = false;
             term.reset();
             return;
           }

@@ -6,7 +6,7 @@
     "clients/shared/*"
   ],
   "engines": {
-    "node": "24.x"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "npm run dev --workspace=clients/web",
