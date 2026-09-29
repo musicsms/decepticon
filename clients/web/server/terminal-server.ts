@@ -121,6 +121,11 @@ async function createThread(engagementId: string, agentId: string): Promise<stri
 // drops them while the browser may still hold the old id. Verify a thread is
 // still live before reusing it — otherwise the CLI, browser, and DB drift onto
 // different threads and the live graph freezes.
+//
+// Only a 404 proves the thread is gone (LangGraph answering "not found" for an
+// id it does not hold). A timeout, a 5xx, or a dropped connection means we
+// could not ask — discarding the thread on those transient misses would create
+// the very CLI/browser/DB drift this check exists to prevent, so we keep it.
 async function threadExists(threadId: string): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
@@ -128,9 +133,9 @@ async function threadExists(threadId: string): Promise<boolean> {
     const res = await fetch(`${LANGGRAPH_API_URL}/threads/${threadId}`, {
       signal: controller.signal,
     });
-    return res.ok;
+    return res.status !== 404;
   } catch {
-    return false;
+    return true;
   } finally {
     clearTimeout(timer);
   }
